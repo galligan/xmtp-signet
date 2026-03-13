@@ -1,0 +1,63 @@
+import { z } from "zod";
+
+export const XmtpEnvSchema: z.ZodEnum<["local", "dev", "production"]> = z
+  .enum(["local", "dev", "production"])
+  .describe("XMTP network environment");
+
+export type XmtpEnv = z.infer<typeof XmtpEnvSchema>;
+
+export const IdentityModeSchema: z.ZodEnum<["per-group", "shared"]> = z
+  .enum(["per-group", "shared"])
+  .describe("Whether each group gets a unique identity or shares one");
+
+export type IdentityMode = z.infer<typeof IdentityModeSchema>;
+
+/** Parsed broker core configuration (all defaults applied). */
+export type BrokerCoreConfig = {
+  dataDir: string;
+  env: XmtpEnv;
+  identityMode: IdentityMode;
+  heartbeatIntervalMs: number;
+  syncTimeoutMs: number;
+  appVersion: string;
+};
+
+/** Input to BrokerCoreConfigSchema (fields with defaults are optional). */
+type BrokerCoreConfigInput = {
+  dataDir: string;
+  env?: XmtpEnv | undefined;
+  identityMode?: IdentityMode | undefined;
+  heartbeatIntervalMs?: number | undefined;
+  syncTimeoutMs?: number | undefined;
+  appVersion?: string | undefined;
+};
+
+export const BrokerCoreConfigSchema: z.ZodType<
+  BrokerCoreConfig,
+  z.ZodTypeDef,
+  BrokerCoreConfigInput
+> = z
+  .object({
+    dataDir: z.string().describe("Base directory for all broker data"),
+    env: XmtpEnvSchema.default("dev").describe("XMTP network environment"),
+    identityMode: IdentityModeSchema.default("per-group").describe(
+      "Identity isolation strategy",
+    ),
+    heartbeatIntervalMs: z
+      .number()
+      .int()
+      .positive()
+      .default(30_000)
+      .describe("Heartbeat emission interval in milliseconds"),
+    syncTimeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .default(30_000)
+      .describe("Maximum time to wait for initial sync"),
+    appVersion: z
+      .string()
+      .default("xmtp-broker/0.1.0")
+      .describe("App version string sent to XMTP network"),
+  })
+  .describe("Broker core configuration");

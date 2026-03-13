@@ -15,7 +15,13 @@
     "lint": "oxlint .",
     "test": "bun test"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@xmtp-broker/contracts": "workspace:*",
+    "@xmtp-broker/schemas": "workspace:*",
+    "better-result": "catalog:",
+    "viem": "^2.47.4",
+    "zod": "catalog:"
+  },
   "devDependencies": {
     "bun-types": "catalog:",
     "typescript": "catalog:"

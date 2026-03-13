@@ -1,0 +1,136 @@
+import { describe, expect, test, beforeEach } from "bun:test";
+import { SqliteIdentityStore } from "../identity-store.js";
+
+let store: SqliteIdentityStore;
+
+beforeEach(() => {
+  // In-memory SQLite for test isolation
+  store = new SqliteIdentityStore(":memory:");
+});
+
+describe("SqliteIdentityStore", () => {
+  describe("create", () => {
+    test("creates identity with null groupId for shared mode", async () => {
+      const result = await store.create(null);
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      const identity = result.value;
+      expect(identity.id).toMatch(/^[a-f0-9]{64}$/);
+      expect(identity.inboxId).toBeNull();
+      expect(identity.groupId).toBeNull();
+      expect(identity.createdAt).toBeTruthy();
+    });
+
+    test("creates identity bound to a groupId", async () => {
+      const result = await store.create("group-abc");
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value.groupId).toBe("group-abc");
+    });
+
+    test("generates unique IDs", async () => {
+      const r1 = await store.create(null);
+      const r2 = await store.create(null);
+      expect(r1.isOk()).toBe(true);
+      expect(r2.isOk()).toBe(true);
+      if (!r1.isOk() || !r2.isOk()) return;
+
+      expect(r1.value.id).not.toBe(r2.value.id);
+    });
+  });
+
+  describe("getById", () => {
+    test("returns identity by id", async () => {
+      const created = await store.create("group-1");
+      if (!created.isOk()) return;
+
+      const found = await store.getById(created.value.id);
+      expect(found).not.toBeNull();
+      expect(found?.id).toBe(created.value.id);
+      expect(found?.groupId).toBe("group-1");
+    });
+
+    test("returns null for unknown id", async () => {
+      const found = await store.getById("nonexistent");
+      expect(found).toBeNull();
+    });
+  });
+
+  describe("getByGroupId", () => {
+    test("returns identity bound to group", async () => {
+      const created = await store.create("group-xyz");
+      if (!created.isOk()) return;
+
+      const found = await store.getByGroupId("group-xyz");
+      expect(found).not.toBeNull();
+      expect(found?.id).toBe(created.value.id);
+    });
+
+    test("returns null for unknown group", async () => {
+      const found = await store.getByGroupId("no-such-group");
+      expect(found).toBeNull();
+    });
+  });
+
+  describe("list", () => {
+    test("returns empty array when no identities", async () => {
+      const list = await store.list();
+      expect(list).toHaveLength(0);
+    });
+
+    test("returns all identities", async () => {
+      await store.create("group-1");
+      await store.create("group-2");
+      await store.create(null);
+
+      const list = await store.list();
+      expect(list).toHaveLength(3);
+    });
+  });
+
+  describe("setInboxId", () => {
+    test("updates inboxId on existing identity", async () => {
+      const created = await store.create("group-1");
+      if (!created.isOk()) return;
+
+      const result = await store.setInboxId(created.value.id, "inbox-123");
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value.inboxId).toBe("inbox-123");
+
+      // Verify persisted
+      const found = await store.getById(created.value.id);
+      expect(found?.inboxId).toBe("inbox-123");
+    });
+
+    test("returns NotFoundError for unknown id", async () => {
+      const result = await store.setInboxId("nonexistent", "inbox-1");
+      expect(result.isErr()).toBe(true);
+      if (!result.isErr()) return;
+      expect(result.error._tag).toBe("NotFoundError");
+    });
+  });
+
+  describe("remove", () => {
+    test("removes existing identity", async () => {
+      const created = await store.create("group-1");
+      if (!created.isOk()) return;
+
+      const result = await store.remove(created.value.id);
+      expect(result.isOk()).toBe(true);
+
+      const found = await store.getById(created.value.id);
+      expect(found).toBeNull();
+    });
+
+    test("returns NotFoundError for unknown id", async () => {
+      const result = await store.remove("nonexistent");
+      expect(result.isErr()).toBe(true);
+      if (!result.isErr()) return;
+      expect(result.error._tag).toBe("NotFoundError");
+    });
+  });
+});
