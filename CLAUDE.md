@@ -18,6 +18,9 @@ Tests live alongside code in `src/__tests__/` with `*.test.ts` files.
 ## Commands
 
 ```bash
+# Bootstrap
+bun run bootstrap              # install deps, hooks, and local CLI tools
+
 # Build
 bun run build
 
@@ -67,12 +70,12 @@ blz query -s xmtp "your query" -C all --text       # search + expand sections
 
 ### Blessed Dependencies
 
-| Concern           | Package           |
-| ----------------- | ----------------- |
-| Result type       | `better-result`   |
-| Schema validation | `zod`             |
-| Testing           | `bun:test`        |
-| XMTP SDK          | `@xmtp/node-sdk`  |
+| Concern           | Package          |
+| ----------------- | ---------------- |
+| Result type       | `better-result`  |
+| Schema validation | `zod`            |
+| Testing           | `bun:test`       |
+| XMTP SDK          | `@xmtp/node-sdk` |
 | Ethereum crypto   | `viem`                      |
 | Elliptic curves   | `@noble/curves`             |
 | Hash functions    | `@noble/hashes`             |
@@ -101,11 +104,13 @@ Handlers receive pre-validated input and a context object. They return `Result`,
 ### Package Tiers (dependency flows downward only)
 
 **Foundation** — Stable types and contracts:
+
 - Schemas (views, grants, attestations, sessions, events)
 - Result/Error types and error taxonomy
 - Shared type utilities
 
 **Runtime** — Core broker functionality:
+
 - XMTP client management (raw plane)
 - Policy engine (view filtering, grant enforcement)
 - Session management
@@ -113,6 +118,7 @@ Handlers receive pre-validated input and a context object. They return `Result`,
 - Key management
 
 **Transport** — Protocol adapters:
+
 - WebSocket (primary, Phase 1)
 - MCP (Phase 2)
 - CLI (Phase 2)
@@ -122,15 +128,15 @@ Handlers receive pre-validated input and a context object. They return `Result`,
 
 Errors are categorized for consistent handling across transports:
 
-| Category   | When to use                                    |
-| ---------- | ---------------------------------------------- |
-| validation | Bad input, schema violation                    |
-| not_found  | Resource doesn't exist                         |
-| permission | Grant denied, insufficient scope               |
-| auth       | Session expired, invalid token                 |
-| internal   | Invariant violation, unexpected state          |
-| timeout    | Operation exceeded time limit                  |
-| cancelled  | Cancelled by signal or user                    |
+| Category   | When to use                           |
+| ---------- | ------------------------------------- |
+| validation | Bad input, schema violation           |
+| not_found  | Resource doesn't exist                |
+| permission | Grant denied, insufficient scope      |
+| auth       | Session expired, invalid token        |
+| internal   | Invariant violation, unexpected state |
+| timeout    | Operation exceeded time limit         |
+| cancelled  | Cancelled by signal or user           |
 
 Each category maps to exit codes (CLI), status codes (HTTP), and JSON-RPC codes (MCP). Only `timeout` errors are retryable.
 
@@ -139,6 +145,7 @@ Each category maps to exit codes (CLI), status codes (HTTP), and JSON-RPC codes 
 ### TypeScript
 
 Strict mode with maximum safety:
+
 - `strict: true` with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`
 - `verbatimModuleSyntax`, `isolatedDeclarations`
 - No `any`, no `as` casts — narrow instead of assert
@@ -170,14 +177,14 @@ oxlint with `correctness` and `suspicious` categories at error level.
 
 The `.reference/` directory (gitignored) contains source material from related projects. These are read-only context — do not modify them.
 
-| Directory | What it is | Why it matters |
-|---|---|---|
-| `.reference/keypo-cli/` | Hardware-bound key management CLI (Secure Enclave P-256 + encrypted vault). Swift signer, Rust wallet, Solidity smart account. | Reference architecture for the broker's key management layer. The PRD calls out keypo-cli's Secure Enclave patterns as direct inspiration for the derived key hierarchy (root -> operational -> session). |
-| `.reference/xmtp-js/` | Official XMTP TypeScript monorepo: browser SDK, node SDK, agent SDK, content types, and CLI. | The broker wraps the XMTP client that these SDKs provide. Understanding the node SDK and agent SDK interfaces is essential for designing the broker's raw plane and the harness-facing derived plane. |
-| `.reference/skills/` | Claude Code agent skills for XMTP: documentation lookup (`xmtp-docs`) and agent identity/messaging (`xmtp-agent`). | Useful for querying current XMTP SDK patterns and methods during development. |
+| Directory                     | What it is                                                                                                                                          | Why it matters                                                                                                                                                                                                                              |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.reference/keypo-cli/`       | Hardware-bound key management CLI (Secure Enclave P-256 + encrypted vault). Swift signer, Rust wallet, Solidity smart account.                      | Reference architecture for the broker's key management layer. The PRD calls out keypo-cli's Secure Enclave patterns as direct inspiration for the derived key hierarchy (root -> operational -> session).                                   |
+| `.reference/xmtp-js/`         | Official XMTP TypeScript monorepo: browser SDK, node SDK, agent SDK, content types, and CLI.                                                        | The broker wraps the XMTP client that these SDKs provide. Understanding the node SDK and agent SDK interfaces is essential for designing the broker's raw plane and the harness-facing derived plane.                                       |
+| `.reference/skills/`          | Claude Code agent skills for XMTP: documentation lookup (`xmtp-docs`) and agent identity/messaging (`xmtp-agent`).                                  | Useful for querying current XMTP SDK patterns and methods during development.                                                                                                                                                               |
 | `.reference/convos-node-sdk/` | Convos Node SDK by XMTP Labs. Opinionated wrapper around `@xmtp/node-sdk` with per-group identity keys, agent runtime, and conversation management. | Key patterns for the broker: separate identity keys per group chat, agent lifecycle management, and how an opinionated client layer sits above the raw XMTP SDK. Per-group identity is a strong candidate for a first-class broker feature. |
-| `.reference/convos-cli/` | Convos CLI by XMTP Labs. Command-line interface for Convos agent operations. | Reference for CLI patterns around XMTP agent management, conversation commands, and how a CLI surfaces XMTP operations. |
-| `.reference/convos-agents/` | Convos Agents by XMTP Labs. Agent runtime, pool management, and dashboard for running XMTP agents at scale. | Reference for agent orchestration patterns: runtime lifecycle, pool scaling, monitoring, and multi-agent coordination. |
+| `.reference/convos-cli/`      | Convos CLI by XMTP Labs. Command-line interface for Convos agent operations.                                                                        | Reference for CLI patterns around XMTP agent management, conversation commands, and how a CLI surfaces XMTP operations.                                                                                                                     |
+| `.reference/convos-agents/`   | Convos Agents by XMTP Labs. Agent runtime, pool management, and dashboard for running XMTP agents at scale.                                         | Reference for agent orchestration patterns: runtime lifecycle, pool scaling, monitoring, and multi-agent coordination.                                                                                                                      |
 
 ## Research Notes
 

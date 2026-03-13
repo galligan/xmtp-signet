@@ -16,6 +16,20 @@ The broker is the real XMTP client. Agent harnesses never touch raw credentials,
 
 Early development. No runnable code yet.
 
+# Check status
+bun run packages/cli/src/bin.ts broker status --json
+
+# Create a group and invite someone
+bun run packages/cli/src/bin.ts conversation create --name "test" --as my-agent
+bun run packages/cli/src/bin.ts conversation invite <group-id> --as my-agent
+
+# Issue a session for an agent harness
+bun run packages/cli/src/bin.ts session issue --agent <inbox-id> --view @view.json --grant @grant.json
+```
+
+This installs workspace dependencies, installs git hooks, and verifies that
+the local CLI tools used by the repo are available.
+
 ## Planning
 
 See [.agents/docs/init/xmtp-broker.md](.agents/docs/init/xmtp-broker.md) for the full product requirements document.
