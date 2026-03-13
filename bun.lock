@@ -15,6 +15,13 @@
     "packages/attestations": {
       "name": "@xmtp-broker/attestations",
       "version": "0.0.0",
+      "dependencies": {
+        "@xmtp-broker/contracts": "workspace:*",
+        "@xmtp-broker/policy": "workspace:*",
+        "@xmtp-broker/schemas": "workspace:*",
+        "better-result": "catalog:",
+        "zod": "catalog:",
+      },
       "devDependencies": {
         "bun-types": "catalog:",
         "typescript": "catalog:",
