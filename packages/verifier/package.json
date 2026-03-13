@@ -1,0 +1,23 @@
+{
+  "name": "@xmtp-broker/verifier",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun && tsc --declaration --emitDeclarationOnly --outDir ./dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "test": "bun test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "bun-types": "catalog:",
+    "typescript": "catalog:"
+  }
+}

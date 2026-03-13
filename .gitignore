@@ -1,2 +1,11 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Turbo cache
+.turbo/
+
 # Reference material (read-only context from related projects)
 .reference/
