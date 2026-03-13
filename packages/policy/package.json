@@ -15,7 +15,11 @@
     "lint": "oxlint .",
     "test": "bun test"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@xmtp-broker/contracts": "workspace:*",
+    "@xmtp-broker/schemas": "workspace:*",
+    "better-result": "catalog:"
+  },
   "devDependencies": {
     "bun-types": "catalog:",
     "typescript": "catalog:"
