@@ -58,6 +58,12 @@
     "packages/keys": {
       "name": "@xmtp-broker/keys",
       "version": "0.0.0",
+      "dependencies": {
+        "@xmtp-broker/contracts": "workspace:*",
+        "@xmtp-broker/schemas": "workspace:*",
+        "better-result": "catalog:",
+        "zod": "catalog:",
+      },
       "devDependencies": {
         "bun-types": "catalog:",
         "typescript": "catalog:",
