@@ -81,3 +81,12 @@ export {
   formatOutput,
   formatNdjsonLine,
 } from "./output/formatter.js";
+
+export type { CliMode, ModeDetectionResult } from "./direct/detector.js";
+export { detectMode } from "./direct/detector.js";
+export type {
+  DirectClient,
+  DirectModeConfig,
+  DirectModeDeps,
+} from "./direct/client.js";
+export { createDirectClient, DirectModeConfigSchema } from "./direct/client.js";
