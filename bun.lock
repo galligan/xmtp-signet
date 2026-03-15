@@ -55,6 +55,25 @@
         "typescript": "catalog:",
       },
     },
+    "packages/integration": {
+      "name": "@xmtp-broker/integration",
+      "dependencies": {
+        "@xmtp-broker/attestations": "workspace:*",
+        "@xmtp-broker/contracts": "workspace:*",
+        "@xmtp-broker/core": "workspace:*",
+        "@xmtp-broker/keys": "workspace:*",
+        "@xmtp-broker/policy": "workspace:*",
+        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp-broker/sessions": "workspace:*",
+        "@xmtp-broker/ws": "workspace:*",
+        "better-result": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/keys": {
       "name": "@xmtp-broker/keys",
       "version": "0.0.0",
@@ -227,6 +246,8 @@
     "@xmtp-broker/contracts": ["@xmtp-broker/contracts@workspace:packages/contracts"],
 
     "@xmtp-broker/core": ["@xmtp-broker/core@workspace:packages/core"],
+
+    "@xmtp-broker/integration": ["@xmtp-broker/integration@workspace:packages/integration"],
 
     "@xmtp-broker/keys": ["@xmtp-broker/keys@workspace:packages/keys"],
 
