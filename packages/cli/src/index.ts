@@ -1,9 +1,27 @@
 import { Command } from "commander";
+import { createBrokerCommands } from "./commands/broker.js";
+import { createIdentityCommands } from "./commands/identity.js";
+import { createSessionCommands } from "./commands/session.js";
+import { createGrantCommands } from "./commands/grant.js";
+import { createAttestationCommands } from "./commands/attestation.js";
+import { createMessageCommands } from "./commands/message.js";
+import { createConversationCommands } from "./commands/conversation.js";
+import { createAdminCommands } from "./commands/admin.js";
 
 const program: Command = new Command()
   .name("xmtp-broker")
   .version("0.1.0")
   .description("Agent broker for XMTP");
+
+// Wire all command groups
+program.addCommand(createBrokerCommands());
+program.addCommand(createIdentityCommands());
+program.addCommand(createSessionCommands());
+program.addCommand(createGrantCommands());
+program.addCommand(createAttestationCommands());
+program.addCommand(createMessageCommands());
+program.addCommand(createConversationCommands());
+program.addCommand(createAdminCommands());
 
 export { program };
 
@@ -46,3 +64,20 @@ export type {
   JsonRpcNotification,
   AdminAuthFrame,
 } from "./admin/protocol.js";
+
+export { createBrokerCommands } from "./commands/broker.js";
+export { createIdentityCommands } from "./commands/identity.js";
+export { createSessionCommands } from "./commands/session.js";
+export { createGrantCommands } from "./commands/grant.js";
+export { createAttestationCommands } from "./commands/attestation.js";
+export { createMessageCommands } from "./commands/message.js";
+export { createConversationCommands } from "./commands/conversation.js";
+export { createAdminCommands } from "./commands/admin.js";
+
+export { exitCodeFromCategory, EXIT_SUCCESS } from "./output/exit-codes.js";
+export type { OutputFormatter, FormatOptions } from "./output/formatter.js";
+export {
+  createOutputFormatter,
+  formatOutput,
+  formatNdjsonLine,
+} from "./output/formatter.js";
