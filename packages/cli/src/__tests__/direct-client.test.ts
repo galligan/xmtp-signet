@@ -6,8 +6,6 @@ import { tmpdir } from "node:os";
 import {
   createDirectClient,
   DirectModeConfigSchema,
-  type DirectClient,
-  type DirectModeConfig,
   type DirectModeDeps,
 } from "../direct/client.js";
 
@@ -48,7 +46,7 @@ function makeMockDeps(): DirectModeDeps {
   const closeFns: Array<() => void> = [];
 
   return {
-    createKeyManager: async (config) => {
+    createKeyManager: async (_config) => {
       return Result.ok({
         async initialize() {
           return Result.ok({ fingerprint: "test-root-fp" });

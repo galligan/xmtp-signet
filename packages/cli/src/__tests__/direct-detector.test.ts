@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach, beforeAll } from "bun:test";
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { detectMode, type ModeDetectionResult } from "../direct/detector.js";
+import { detectMode } from "../direct/detector.js";
 import type { ResolvedPaths } from "../config/paths.js";
 
 // ---------------------------------------------------------------------------
