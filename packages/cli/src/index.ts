@@ -24,3 +24,25 @@ export { createPidFile } from "./daemon/pid.js";
 export { setupSignalHandlers } from "./daemon/signals.js";
 export type { DaemonStatus } from "./daemon/status.js";
 export { DaemonStatusSchema } from "./daemon/status.js";
+
+export type { AdminServer, AdminServerDeps } from "./admin/server.js";
+export { createAdminServer } from "./admin/server.js";
+export type { AdminClient } from "./admin/client.js";
+export { createAdminClient } from "./admin/client.js";
+export type { AdminDispatcher } from "./admin/dispatcher.js";
+export { createAdminDispatcher } from "./admin/dispatcher.js";
+export {
+  JsonRpcRequestSchema,
+  JsonRpcSuccessSchema,
+  JsonRpcErrorSchema,
+  JsonRpcNotificationSchema,
+  AdminAuthFrameSchema,
+  JSON_RPC_ERRORS,
+} from "./admin/protocol.js";
+export type {
+  JsonRpcRequest,
+  JsonRpcSuccess,
+  JsonRpcError,
+  JsonRpcNotification,
+  AdminAuthFrame,
+} from "./admin/protocol.js";
