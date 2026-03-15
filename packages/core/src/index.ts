@@ -48,3 +48,23 @@ export type {
   GroupStream,
   SignerProviderLike,
 } from "./xmtp-client-factory.js";
+
+// SDK integration (production XmtpClientFactory implementation)
+export {
+  createSdkClientFactory,
+  createSdkClient,
+  createXmtpSigner,
+  wrapSdkCall,
+  wrapMessageStream,
+  wrapGroupStream,
+  toGroupInfo,
+  toDecodedMessage,
+} from "./sdk/index.js";
+export type {
+  SdkClientFactoryOptions,
+  SdkClientOptions,
+  SdkEoaSigner,
+  SdkIdentifier,
+  XmtpSignerConfig,
+  WrapSdkCallHints,
+} from "./sdk/index.js";

@@ -18,6 +18,7 @@
   "dependencies": {
     "@xmtp-broker/contracts": "workspace:*",
     "@xmtp-broker/schemas": "workspace:*",
+    "@xmtp/node-sdk": "6.0.0",
     "better-result": "catalog:",
     "viem": "^2.47.4",
     "zod": "catalog:"

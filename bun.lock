@@ -46,6 +46,7 @@
       "dependencies": {
         "@xmtp-broker/contracts": "workspace:*",
         "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/node-sdk": "6.0.0",
         "better-result": "catalog:",
         "viem": "^2.47.4",
         "zod": "catalog:",
@@ -261,6 +262,12 @@
 
     "@xmtp-broker/ws": ["@xmtp-broker/ws@workspace:packages/ws"],
 
+    "@xmtp/content-type-primitives": ["@xmtp/content-type-primitives@3.0.0", "", { "dependencies": { "@xmtp/node-bindings": "1.8.0" } }, "sha512-gxK6+k0ywOz39LFJjrUF3fOXWXR3aAmIkF7e0rFz7c27izDimZC5E2oja9iz/CYyzDS6lf9Pm31qRcGTMSYaHg=="],
+
+    "@xmtp/node-bindings": ["@xmtp/node-bindings@1.10.0", "", {}, "sha512-US/YvMP7RL1DkNeiZ75ZjEyvMwLIrEPn12dBj5h7lAesM2N5snwnstJ2NNk3LpW3kCNDdzwhe/G0ZSb0PhwNeg=="],
+
+    "@xmtp/node-sdk": ["@xmtp/node-sdk@6.0.0", "", { "dependencies": { "@xmtp/content-type-primitives": "3.0.0", "@xmtp/node-bindings": "1.10.0" } }, "sha512-UMClg1+WkC3pfeHffJoZMYzhqsUa2wZpSJtIrpvBqUD+n1VYVQTfhTqGyaavVIPgITxjHBi/uMS/K18E4qDbPA=="],
+
     "abitype": ["abitype@1.2.3", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3.22.0 || ^4.0.0" }, "optionalPeers": ["typescript", "zod"] }, "sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg=="],
 
     "better-result": ["better-result@2.7.0", "", { "dependencies": { "@clack/prompts": "^0.11.0" }, "bin": { "better-result": "bin/cli.mjs" } }, "sha512-7zrmXjAK8u8Z6SOe4R65XObOR5X+Y2I/VVku3t5cPOGQ8/WsBcfFmfnIPiEl5EBMDOzPHRwbiPbMtQBKYdw7RA=="],
@@ -322,5 +329,7 @@
     "ws": ["ws@8.18.3", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="],
 
     "zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+
+    "@xmtp/content-type-primitives/@xmtp/node-bindings": ["@xmtp/node-bindings@1.8.0", "", {}, "sha512-dyppg1pQNsEdGH13RfsbkbXdnUdjufak6ea1YahjCROgmaJClDpMHcMcSfMzoJzASanU58MwEdCgYUF638NKgw=="],
   }
 }
