@@ -1,8 +1,10 @@
 import { existsSync, statSync, unlinkSync } from "node:fs";
 import type { ResolvedPaths } from "../config/paths.js";
 
+/** CLI execution mode: daemon (via admin socket) or direct (standalone). */
 export type CliMode = "daemon" | "direct";
 
+/** Result of daemon detection, including the socket path when in daemon mode. */
 export interface ModeDetectionResult {
   readonly mode: CliMode;
   readonly socketPath?: string;

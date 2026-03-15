@@ -20,12 +20,19 @@ import { dirname } from "node:path";
 // Types
 // ---------------------------------------------------------------------------
 
+/** Admin Unix socket server with JWT authentication and JSON-RPC dispatch. */
 export interface AdminServer {
+  /** Begin listening on the Unix domain socket. */
   start(): Promise<Result<void, InternalError>>;
+
+  /** Stop listening and clean up the socket file. */
   stop(): Promise<Result<void, InternalError>>;
+
+  /** Current server state. */
   readonly state: "idle" | "listening" | "stopped";
 }
 
+/** Dependencies injected into the AdminServer. */
 export interface AdminServerDeps {
   readonly keyManager: {
     admin: {

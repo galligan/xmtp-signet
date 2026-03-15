@@ -8,8 +8,11 @@ Dependencies flow downward only across tiers. No package may import from a highe
 
 ```
 ┌─────────────────────────────────────────────────┐
+│                    Client                        │
+│                    handler                       │
+├─────────────────────────────────────────────────┤
 │                   Transport                      │
-│                      ws                          │
+│               ws · mcp · cli                     │
 ├─────────────────────────────────────────────────┤
 │                    Runtime                       │
 │  core · keys · sessions · attestations · policy  │
@@ -17,6 +20,8 @@ Dependencies flow downward only across tiers. No package may import from a highe
 ├─────────────────────────────────────────────────┤
 │                   Foundation                     │
 │              schemas · contracts                  │
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│              integration (test-only)             │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -24,17 +29,17 @@ Dependencies flow downward only across tiers. No package may import from a highe
 
 Stable types and contracts that change infrequently.
 
-**`@xmtp-broker/schemas`** — Zod schemas are the single source of truth. All TypeScript types are derived via `z.infer<>`. Covers content types, views, grants, attestations, sessions, events, requests, responses, and the error taxonomy.
+**`@xmtp-broker/schemas`** — Zod schemas are the single source of truth. All TypeScript types are derived via `z.infer<>`. Covers content types, views, grants, attestations, sessions, events, requests, responses, and the error taxonomy. Phase 2 added action result schemas (`ActionResultSchema`, `ActionErrorResultSchema`) and pagination for structured command output.
 
-**`@xmtp-broker/contracts`** — Service and provider interfaces that define the boundaries between packages. Includes `BrokerCore`, `SessionManager`, `AttestationManager`, `SignerProvider`, and wire format types. Runtime packages implement these contracts; transport packages consume them.
+**`@xmtp-broker/contracts`** — Service and provider interfaces that define the boundaries between packages. Includes `BrokerCore`, `SessionManager`, `AttestationManager`, `SignerProvider`, and wire format types. Phase 2 added the action system: `ActionSpec` (define-once action descriptors with per-surface metadata), `ActionRegistry` (type-safe registry of all broker actions), `ActionResult` (structured result envelope), and `HandlerContext` (canonical handler context with `requestId`, `signal`, optional `adminAuth` and `sessionId`). Runtime packages implement these contracts; transport packages consume them.
 
 ### Runtime
 
 Core broker functionality. Each package has a focused responsibility.
 
-**`@xmtp-broker/core`** — The XMTP client abstraction layer. Defines the `XmtpClient` interface and manages client lifecycle, identity store (one inbox per agent via `bun:sqlite`), group and message streams, and raw event emission. `@xmtp/node-sdk` integration is planned but not yet present as a dependency.
+**`@xmtp-broker/core`** — The XMTP client abstraction layer. Defines the `XmtpClient` interface and manages client lifecycle, identity store (one inbox per agent via `bun:sqlite`), group and message streams, and raw event emission. Phase 2 wired `@xmtp/node-sdk` as a real dependency via `createSdkClientFactory` — the production `XmtpClientFactory` implementation that creates SDK clients, signers, and Result-wrapped stream adapters (`wrapMessageStream`, `wrapGroupStream`, `wrapSdkCall`).
 
-**`@xmtp-broker/keys`** — Three-tier key hierarchy inspired by [keypo-cli](https://github.com/xmtp/keypo-cli). v0 currently uses the encrypted software vault path on every platform; Secure Enclave and TPM-backed root keys are planned follow-on work. Operational keys handle day-to-day signing. Session keys are ephemeral and scoped to individual harness connections. All keys live in an encrypted vault.
+**`@xmtp-broker/keys`** — Three-tier key hierarchy inspired by [keypo-cli](https://github.com/xmtp/keypo-cli). v0 currently uses the encrypted software vault path on every platform; Secure Enclave and TPM-backed root keys are planned follow-on work. Operational keys handle day-to-day signing. Session keys are ephemeral and scoped to individual harness connections. All keys live in an encrypted vault. Phase 2 added **admin keys** — a separate key type (peer to the root→operational→session hierarchy) for authenticating CLI and admin socket operations. Includes `createAdminKeyManager`, JWT encode/decode/sign/verify, and base64url utilities.
 
 **`@xmtp-broker/sessions`** — Session lifecycle management. Generates cryptographically secure tokens, tracks session state, computes policy hashes, and detects material changes that require reauthorization.
 
@@ -48,9 +53,51 @@ Core broker functionality. Each package has a focused responsibility.
 
 Protocol adapters. Each transport is a thin layer that maps protocol concerns to the handler contract.
 
-**`@xmtp-broker/ws`** — WebSocket transport built on `Bun.serve()`. Implements a connection state machine (connecting → authenticating → active → draining → closed), session resumption via circular replay buffers, backpressure tracking, frame sequencing, and auth handshake. This is the primary transport for Phase 1.
+**`@xmtp-broker/ws`** — WebSocket transport built on `Bun.serve()`. Implements a connection state machine (connecting → authenticating → active → draining → closed), session resumption via circular replay buffers, backpressure tracking, frame sequencing, and auth handshake. This is the primary harness-facing transport.
 
-Future transports (MCP, CLI, HTTP) will follow the same pattern: parse protocol input → call handler → format protocol output.
+**`@xmtp-broker/mcp`** — MCP (Model Context Protocol) transport for harness-facing tool integration. Converts `ActionSpec` definitions into MCP tools via `actionSpecToMcpTool`. Session-scoped authentication ensures each MCP session receives only the tools its grant allows. Supports stdio and embedded server modes. Dependencies: `@modelcontextprotocol/sdk`, `zod-to-json-schema`.
+
+**`@xmtp-broker/cli`** — Composition root and command-line interface. Provides the `xmtp-broker` command with 8 command groups (broker, identity, session, grant, attestation, message, conversation, admin). Handles config/TOML loading, daemon lifecycle (PID files, signal handling, graceful shutdown), and an admin Unix socket using JSON-RPC 2.0. Includes direct mode fallback for vault-based key access when no daemon is running. Dependencies: `commander`, `smol-toml`.
+
+### Client
+
+SDK for harness developers. Lives outside the broker's runtime boundary.
+
+**`@xmtp-broker/handler`** — Client SDK for agent harnesses. Provides `BrokerHandler`, a WebSocket client with typed events (`AsyncIterable<BrokerEvent>`), Result-based request methods (`sendMessage`, `sendReaction`, `listConversations`), automatic reconnection with exponential backoff, and a connection state machine (disconnected → connecting → authenticating → connected → reconnecting → closed). No runtime dependencies beyond `@xmtp-broker/schemas` and `better-result`.
+
+### Test
+
+**`@xmtp-broker/integration`** — Test-only package (not published). 7 test suites validating Phase 1 cross-package composition: key hierarchy, session lifecycle, contract verification, policy enforcement, happy path flows, attestation lifecycle, and WebSocket edge cases.
+
+## Action registry
+
+The action registry is the define-once-expose-everywhere pattern for broker operations. Each action is defined as an `ActionSpec` — a descriptor that includes:
+
+- A unique action name and description
+- A Zod input schema
+- A handler function (`Handler<TInput, TOutput, TError>`)
+- Per-surface metadata: `CliSurface` (command path, options, output format) and `McpSurface` (tool name, annotations)
+
+The registry (`createActionRegistry`) collects all action specs. Each transport reads the registry and exposes actions in its native format:
+
+- **CLI** reads `CliSurface` to generate commander commands with flags, options, and output formatting
+- **MCP** reads `McpSurface` to register MCP tools with JSON Schema input validation
+- **WebSocket** routes action names to handlers directly
+
+This means adding a new broker operation requires defining one `ActionSpec`. All transports pick it up automatically.
+
+## Admin authentication
+
+Admin operations (daemon control, direct-mode CLI commands) use a separate authentication path from harness sessions. The `AdminKeyManager` in `@xmtp-broker/keys` manages admin key pairs and issues JWTs for authentication.
+
+The flow:
+
+1. Admin key pair is generated and stored in the vault alongside agent keys
+2. CLI commands authenticate via JWT signed with the admin key
+3. The admin Unix socket validates JWTs before dispatching JSON-RPC requests
+4. `AdminAuthContext` on `HandlerContext` carries the authenticated admin identity
+
+Admin keys are peers to the root→operational→session hierarchy, not derived from it. They serve a different purpose: authorizing management operations rather than signing messages or establishing harness sessions.
 
 ## Handler contract
 
@@ -63,7 +110,7 @@ type Handler<TInput, TOutput, TError extends BrokerError> = (
 ) => Promise<Result<TOutput, TError>>;
 ```
 
-Note: `HandlerContext` is the planned canonical type. The current implementation uses `CoreContext` from `@xmtp-broker/contracts`.
+`HandlerContext` is defined in `@xmtp-broker/contracts` and includes `requestId`, `signal` (for cancellation), and optional `adminAuth` and `sessionId` fields. `CoreContext` remains available for core-specific operations.
 
 Handlers:
 
@@ -133,7 +180,9 @@ Raw XMTP Message
 
 Each stage can reject the message. A message that passes all stages is delivered as a typed event over the transport.
 
-## WebSocket transport
+## Transports
+
+### WebSocket
 
 The WebSocket transport implements a connection state machine:
 
@@ -148,6 +197,25 @@ Key features:
 - **Session resumption** — circular replay buffer allows reconnecting clients to catch up on missed events
 - **Backpressure** — tracks per-connection send buffer depth and notifies the harness when it should slow down
 - **Graceful shutdown** — draining phase allows in-flight messages to complete before closing
+
+### MCP
+
+The MCP transport exposes broker actions as MCP tools for LLM-driven harnesses:
+
+- **Tool registration** — `actionSpecToMcpTool` converts each `ActionSpec` into an MCP tool definition with JSON Schema input validation (via `zod-to-json-schema`)
+- **Session scoping** — each MCP session authenticates and receives only the tools its grant allows
+- **Output formatting** — `ActionResult` values are formatted as MCP content responses
+- **Modes** — stdio (for CLI-launched tool servers) and embedded (for in-process use)
+
+### CLI
+
+The CLI is the composition root that wires everything together:
+
+- **8 command groups** — broker (start/stop/status), identity, session, grant, attestation, message, conversation, admin
+- **Daemon lifecycle** — PID files, signal handlers (SIGINT/SIGTERM for graceful shutdown), status reporting
+- **Admin socket** — Unix domain socket with JSON-RPC 2.0 protocol for out-of-band management
+- **Direct mode** — fallback for when no daemon is running; accesses the vault directly for key operations
+- **Config** — TOML-based configuration with path resolution and environment overrides
 
 ## Data flow
 
@@ -183,12 +251,16 @@ XMTP Network                     Broker                          Harness
 
 The project uses a minimal, deliberate set of dependencies:
 
-| Concern           | Package          | Why                                                      |
-| ----------------- | ---------------- | -------------------------------------------------------- |
-| Result type       | `better-result`  | Typed success/failure without exceptions                 |
-| Schema validation | `zod`            | Runtime validation with TypeScript type inference        |
-| Runtime           | `bun`            | Native APIs for crypto, SQLite, HTTP server, test runner |
-| XMTP SDK          | `@xmtp/node-sdk` | The XMTP client this broker wraps (planned, not yet a dependency) |
+| Concern           | Package                    | Why                                                      |
+| ----------------- | -------------------------- | -------------------------------------------------------- |
+| Result type       | `better-result`            | Typed success/failure without exceptions                 |
+| Schema validation | `zod`                      | Runtime validation with TypeScript type inference        |
+| Runtime           | `bun`                      | Native APIs for crypto, SQLite, HTTP server, test runner |
+| XMTP SDK          | `@xmtp/node-sdk`          | The XMTP client this broker wraps (used by `core`)      |
+| CLI framework     | `commander`                | Command parsing and help generation (used by `cli`)      |
+| TOML parsing      | `smol-toml`                | Config file loading (used by `cli`)                      |
+| MCP SDK           | `@modelcontextprotocol/sdk`| MCP server and tool protocol (used by `mcp`)             |
+| Schema→JSON       | `zod-to-json-schema`       | Convert Zod schemas to JSON Schema for MCP (used by `mcp`)|
 
 Build tooling: TypeScript, Turbo, oxlint, oxfmt, Lefthook.
 

@@ -13,14 +13,15 @@ from a Zod schema in this package.
 - Content types: `TextPayload`, `ReactionPayload`, `ReplyPayload`, `ReadReceiptPayload`, `GroupUpdatedPayload`, `BASELINE_CONTENT_TYPES`, `CONTENT_TYPE_SCHEMAS`
 - Views: `ViewMode`, `ContentTypeAllowlist`, `ThreadScope`, `ViewConfig`
 - Grants: `MessagingGrant`, `GroupManagementGrant`, `ToolScope`, `ToolGrant`, `EgressGrant`, `GrantConfig`
-- Attestations: `InferenceMode`, `HostingMode`, `TrustTier`, `RevocationRules`, `AttestationSchema`
+- Attestations: `InferenceMode`, `ContentEgressScope`, `RetentionAtProvider`, `HostingMode`, `TrustTier`, `RevocationRules`, `AttestationSchema`, `Attestation`
 - Sessions: `SessionConfig`, `SessionToken`, `SessionState`
 - Reveal: `RevealScope`, `RevealRequest`, `RevealGrant`, `RevealState`
 - Revocation: `AgentRevocationReason`, `SessionRevocationReason`, `RevocationAttestation`
 - Events: `MessageEvent`, `AttestationEvent`, `SessionStartedEvent`, `SessionExpiredEvent`, `BrokerEvent` (union), and others
 - Requests: `SendMessageRequest`, `SendReactionRequest`, `UpdateViewRequest`, and others
 - Responses: `RequestSuccess`, `RequestFailure`, `RequestResponse`
-- Errors: `ErrorCategory`, `ErrorCategoryMeta`, `ERROR_CATEGORY_META`, `errorCategoryMeta`, `BrokerError` (union), `AnyBrokerError`, `matchError`, `ValidationError`, `AttestationError`, `NotFoundError`, `PermissionError`, `GrantDeniedError`, `AuthError`, `SessionExpiredError`, `InternalError`, `TimeoutError`, `CancelledError`
+- Action results: `ActionResultMetaSchema`, `ActionErrorSchema`, `PaginationSchema`, `ActionResultSchema`, `ActionErrorResultSchema` (and inferred types)
+- Errors: `ErrorCategory`, `ErrorCategoryMetaSchema`, `ErrorCategoryMeta`, `ERROR_CATEGORY_META`, `errorCategoryMeta`, `BrokerError` (union), `AnyBrokerError`, `matchError`, `ValidationError`, `AttestationError`, `NotFoundError`, `PermissionError`, `GrantDeniedError`, `AuthError`, `SessionExpiredError`, `InternalError`, `TimeoutError`, `CancelledError`, `NetworkError`
 
 **Dependencies:** `zod`, `better-result`
 
@@ -28,25 +29,27 @@ from a Zod schema in this package.
 
 ### @xmtp-broker/contracts
 
-Service interfaces and wire format schemas that define boundaries between packages.
+Service interfaces, action system, and wire format schemas that define boundaries between packages.
 
 **Exports:**
 - Core types: `CoreState`, `CoreContext`, `GroupInfo`, `RawMessage`, `RawEvent`
 - Session types: `SessionRecord`, `MaterialityCheck`
 - Policy types: `PolicyDelta`, `GrantError`
 - Attestation types: `SignedAttestation`, `SignedAttestationEnvelope`, `SignedRevocationEnvelope`, `MessageProvenanceMetadata`
+- Handler types: `HandlerContext` (with `requestId`, `signal`, optional `adminAuth`, `sessionId`), `Handler`, `AdminAuthContext`
+- Action system: `ActionSpec`, `CliSurface`, `McpSurface`, `CliOption`, `ActionRegistry`, `createActionRegistry`, `ActionResult`, `toActionResult`
 - Service interfaces: `BrokerCore`, `SessionManager`, `AttestationManager`
 - Provider interfaces: `SignerProvider`, `AttestationSigner`, `AttestationPublisher`, `RevealStateStore`
 
 **Dependencies:** `@xmtp-broker/schemas`
 
-**Extending:** When a new service needs to be consumed across packages, define its interface here. Runtime packages implement these contracts.
+**Extending:** When a new service needs to be consumed across packages, define its interface here. Runtime packages implement these contracts. New broker operations should be defined as `ActionSpec` and registered with `createActionRegistry`.
 
 ## Runtime Tier
 
 ### @xmtp-broker/core
 
-The XMTP client abstraction layer. Defines the `XmtpClient` interface for client lifecycle management. `@xmtp/node-sdk` integration is planned but not yet present as a dependency.
+The XMTP client abstraction layer. Defines the `XmtpClient` interface for client lifecycle management. `@xmtp/node-sdk` is now wired as a real dependency.
 
 **Exports:**
 - Config: `BrokerCoreConfigSchema`, `XmtpEnvSchema`, `IdentityModeSchema`
@@ -54,26 +57,29 @@ The XMTP client abstraction layer. Defines the `XmtpClient` interface for client
 - Identity: `SqliteIdentityStore`, `AgentIdentity`
 - Registry: `ClientRegistry`, `ManagedClient`
 - Events: `CoreEventEmitter`, `RawMessageEvent`, `RawGroupJoinedEvent`, etc.
-- XMTP abstraction: `XmtpClient`, `XmtpClientFactory` (interfaces for testing)
+- XMTP abstraction: `XmtpClient`, `XmtpClientFactory`, `XmtpClientCreateOptions`, `XmtpGroupInfo`, `XmtpDecodedMessage`, `MessageStream`, `GroupStream`, `SignerProviderLike`
+- SDK integration: `createSdkClientFactory`, `createSdkClient`, `createXmtpSigner`, `wrapSdkCall`, `wrapMessageStream`, `wrapGroupStream`, `toGroupInfo`, `toDecodedMessage`
 
-**Dependencies:** `@xmtp-broker/contracts`, `@xmtp-broker/schemas`
+**Dependencies:** `@xmtp-broker/contracts`, `@xmtp-broker/schemas`, `@xmtp/node-sdk`
 
-**Extending:** To support new XMTP features, extend `XmtpClient` interface and update `BrokerCoreImpl`.
+**Extending:** To support new XMTP features, extend `XmtpClient` interface and update `BrokerCoreImpl`. SDK integration lives in `src/sdk/`.
 
 ### @xmtp-broker/keys
 
-Three-tier key hierarchy with encrypted vault.
+Key hierarchy with encrypted vault. Three tiers (root, operational, session) plus admin keys.
 
 **Exports:**
 - Config: `KeyPolicySchema`, `PlatformCapabilitySchema`, `KeyManagerConfigSchema`
 - Types: `RootKeyHandle`, `OperationalKey`, `SessionKey`
 - Platform: `detectPlatform`, `platformToTrustTier`
-- Manager: `createKeyManager` (central orchestrator)
+- Manager: `createKeyManager` (central orchestrator, `KeyManager` has `.admin` property)
 - Vault: `createVault`
 - Signers: `createSignerProvider`, `createAttestationSigner`
 - Sub-managers: `createOperationalKeyManager`, `createSessionKeyManager`
-- Root key: `initializeRootKey`
-- Crypto: P-256/Ed25519 key gen, signing, verification, import/export
+- Admin keys: `createAdminKeyManager`, `AdminKeyManager`, `AdminKeyRecord`, `AdminAuthContext`, `AdminAuthMethod`, `AdminJwtOptions`
+- JWT: `AdminJwtConfigSchema`, `AdminJwtPayloadSchema`, `base64urlEncode`, `base64urlDecode`
+- Root key: `initializeRootKey`, `signWithRootKey`
+- Crypto: P-256/Ed25519 key gen, signing, verification, import/export, `fingerprint`, `toHex`
 
 **Dependencies:** `@xmtp-broker/contracts`, `@xmtp-broker/schemas`
 
@@ -154,4 +160,58 @@ WebSocket transport built on `Bun.serve()`.
 
 **Dependencies:** `@xmtp-broker/contracts`, `@xmtp-broker/schemas`
 
-**Extending:** Future transports (MCP, CLI, HTTP) follow this same pattern: parse protocol input → validate auth → route to handlers → format output.
+### @xmtp-broker/mcp
+
+MCP transport. Converts ActionSpecs to MCP tools with session-scoped auth.
+
+**Exports:**
+- Config: `McpServerConfigSchema`, `McpServerConfig`
+- Server: `createMcpServer`, `McpServerDeps`, `McpServerInstance`, `McpServerState`
+- Tool registration: `actionSpecToMcpTool`, `McpToolRegistration`
+- Call handler: `handleCallTool`, `CallToolRequest`
+- Output: `formatActionResult`, `McpContentResponse`
+- Context: `createHandlerContext`
+- Session: `validateSession`, `checkSessionLiveness`
+
+**Dependencies:** `@xmtp-broker/contracts`, `@xmtp-broker/schemas`, `@modelcontextprotocol/sdk`, `zod-to-json-schema`
+
+### @xmtp-broker/cli
+
+Composition root. CLI entry point, daemon lifecycle, admin socket, config loading.
+
+**Exports:**
+- CLI entry: `program` (Commander instance with 8 command groups)
+- Config: `CliConfigSchema`, `CliConfig`, `AdminServerConfigSchema`, `AdminServerConfig`, `resolvePaths`, `ResolvedPaths`, `loadConfig`
+- Daemon: `createDaemonLifecycle`, `DaemonState`, `DaemonLifecycle`, `createPidFile`, `PidFile`, `setupSignalHandlers`, `DaemonStatusSchema`, `DaemonStatus`
+- Admin socket: `createAdminServer`, `AdminServer`, `createAdminClient`, `AdminClient`, `createAdminDispatcher`, `AdminDispatcher`
+- Protocol: `JsonRpcRequestSchema`, `JsonRpcSuccessSchema`, `JsonRpcErrorSchema`, `AdminAuthFrameSchema`, `JSON_RPC_ERRORS`
+- Commands: `createBrokerCommands`, `createIdentityCommands`, `createSessionCommands`, `createGrantCommands`, `createAttestationCommands`, `createMessageCommands`, `createConversationCommands`, `createAdminCommands`
+- Output: `exitCodeFromCategory`, `createOutputFormatter`, `formatOutput`, `formatNdjsonLine`
+- Direct mode: `detectMode`, `CliMode`, `createDirectClient`, `DirectModeConfigSchema`
+
+**Dependencies:** `@xmtp-broker/contracts`, `@xmtp-broker/schemas`, `commander`, `smol-toml`
+
+## Client Tier
+
+### @xmtp-broker/handler
+
+Harness-facing client SDK. WebSocket wrapper with typed events and Result-based requests.
+
+**Exports:**
+- Factory: `createBrokerHandler`
+- Config: `BrokerHandlerConfigSchema`, `BrokerHandlerConfig`
+- Types: `BrokerHandler`, `HandlerState`, `SessionInfo`, `StateChangeCallback`, `ErrorCallback`, `MessageContent`, `MessageSent`, `ReactionSent`, `Conversation`, `ConversationInfo`
+
+**Dependencies:** `@xmtp-broker/schemas`, `better-result`
+
+**Key interface:** `BrokerHandler` provides `connect()`, `disconnect()`, `events` (async iterable), `sendMessage()`, `sendReaction()`, `listConversations()`, `getConversationInfo()`, `onStateChange()`, `onError()`. State machine: disconnected -> connecting -> authenticating -> connected -> reconnecting -> closed.
+
+## Test
+
+### @xmtp-broker/integration
+
+Test-only package (private, not published). Cross-package integration tests.
+
+**Test suites:** key-hierarchy, session-lifecycle, contract-verification, policy-enforcement, happy-path, attestation-lifecycle, ws-edge-cases
+
+**Dependencies:** All Phase 1 runtime and transport packages

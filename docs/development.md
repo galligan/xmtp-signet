@@ -23,15 +23,18 @@ This installs workspace dependencies and sets up git hooks via Lefthook.
 xmtp-broker/
 ├── packages/
 │   ├── schemas/          # Zod schemas, types, error taxonomy
-│   ├── contracts/        # Service interfaces, wire formats
-│   ├── core/             # XMTP client lifecycle, identity store
-│   ├── keys/             # Key hierarchy, vault, signers
+│   ├── contracts/        # Service interfaces, action specs, wire formats
+│   ├── core/             # XMTP client lifecycle, SDK integration
+│   ├── keys/             # Key hierarchy, vault, signers, admin keys
 │   ├── sessions/         # Session lifecycle, token generation
 │   ├── attestations/     # Attestation lifecycle, signing
 │   ├── policy/           # View projection, grant validation
 │   ├── verifier/         # 6-check verification service
-│   └── ws/               # WebSocket transport (Bun.serve)
-├── apps/                 # Application entry points (planned)
+│   ├── ws/               # WebSocket transport (Bun.serve)
+│   ├── mcp/              # MCP transport (Model Context Protocol)
+│   ├── cli/              # CLI entry point, daemon, admin socket
+│   ├── handler/          # Harness client SDK (WebSocket)
+│   └── integration/      # Cross-package integration tests
 ├── docs/                 # Documentation
 └── .agents/              # Planning docs and working notes
 ```
@@ -242,11 +245,15 @@ mkdir -p packages/<name>/src/__tests__
 
 Check the blessed dependencies list before adding anything new:
 
-| Concern           | Package          |
-| ----------------- | ---------------- |
-| Result type       | `better-result`  |
-| Schema validation | `zod`            |
-| Testing           | `bun:test`       |
-| XMTP SDK          | `@xmtp/node-sdk` |
+| Concern           | Package                     |
+| ----------------- | --------------------------- |
+| Result type       | `better-result`             |
+| Schema validation | `zod`                       |
+| Testing           | `bun:test`                  |
+| XMTP SDK          | `@xmtp/node-sdk`           |
+| CLI framework     | `commander`                 |
+| TOML parsing      | `smol-toml`                 |
+| MCP SDK           | `@modelcontextprotocol/sdk` |
+| Schema→JSON       | `zod-to-json-schema`        |
 
 Prefer Bun-native APIs (`Bun.hash()`, `Bun.Glob`, `bun:sqlite`, `Bun.serve()`) over npm packages. If a concern isn't covered by the blessed list or Bun, discuss before pulling in a new dependency.
