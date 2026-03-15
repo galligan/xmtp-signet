@@ -6,8 +6,11 @@ Dependencies flow downward only. No package may import from a higher tier.
 
 ```
 ┌─────────────────────────────────────────────────┐
+│                    Client                        │
+│                    handler                       │
+├─────────────────────────────────────────────────┤
 │                   Transport                      │
-│                      ws                          │
+│               ws · mcp · cli                     │
 ├─────────────────────────────────────────────────┤
 │                    Runtime                       │
 │  core · keys · sessions · attestations · policy  │
@@ -15,24 +18,35 @@ Dependencies flow downward only. No package may import from a higher tier.
 ├─────────────────────────────────────────────────┤
 │                   Foundation                     │
 │              schemas · contracts                  │
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│              integration (test-only)             │
 └─────────────────────────────────────────────────┘
 ```
 
 **Foundation** — Stable types and contracts. Changes here ripple everywhere, so
 they change slowly and deliberately. `schemas` defines all Zod schemas and
-inferred types. `contracts` defines service and provider interfaces that
-runtime packages implement.
+inferred types (including action result and pagination schemas). `contracts`
+defines service interfaces, provider interfaces, the `ActionSpec`/`ActionRegistry`
+system, `HandlerContext`, and `ActionResult` envelope.
 
 **Runtime** — Core broker functionality. Each package has a focused
-responsibility. `core` is the only package that touches the XMTP SDK. `policy`
-handles all filtering and grant enforcement. `keys` manages the cryptographic
-hierarchy. `sessions` tracks ephemeral authorization state. `attestations`
-manages the lifecycle of group-visible permission declarations. `verifier`
-provides the 6-check trust verification service.
+responsibility. `core` is the only package that touches the XMTP SDK (now wired
+via `createSdkClientFactory`). `policy` handles all filtering and grant
+enforcement. `keys` manages the cryptographic hierarchy plus admin keys and JWT.
+`sessions` tracks ephemeral authorization state. `attestations` manages the
+lifecycle of group-visible permission declarations. `verifier` provides the
+6-check trust verification service.
 
-**Transport** — Protocol adapters. `ws` is the Phase 1 transport (WebSocket via
-Bun.serve). Future transports (MCP, CLI, HTTP) will follow the same adapter
-pattern without duplicating domain logic.
+**Transport** — Protocol adapters. `ws` is the WebSocket transport (Bun.serve).
+`mcp` converts ActionSpecs to MCP tools with session-scoped auth. `cli` is the
+composition root with 8 command groups, daemon lifecycle, admin Unix socket
+(JSON-RPC 2.0), and direct mode fallback.
+
+**Client** — `handler` is the harness-facing SDK. WebSocket client with typed
+events, Result-based requests, automatic reconnection, exponential backoff.
+
+**Test** — `integration` is test-only. 7 suites validating cross-package
+composition.
 
 ## Data flow
 
@@ -77,6 +91,11 @@ HTTP, or CLI. This means adding a new transport requires zero changes to
 existing handlers — just a new adapter that maps protocol frames to handler
 calls and Result values back to protocol responses.
 
+**Define-once actions.** `ActionSpec` bundles handler, input schema, and
+per-surface metadata (CLI flags, MCP tool name). The `ActionRegistry` collects
+specs; each transport reads the registry to generate its native representation.
+One spec = all transports.
+
 **View projection as pipeline.** Message filtering is a composable pipeline of
 independent stages (scope → content-type → visibility → content projection).
 Each stage can reject. New filtering logic is a new stage, not a modification
@@ -88,12 +107,16 @@ and makes packages independently testable.
 
 ## Blessed dependencies
 
-| Concern           | Package           |
-| ----------------- | ----------------- |
-| Result type       | `better-result`   |
-| Schema validation | `zod`             |
-| Testing           | `bun:test`        |
-| XMTP SDK          | `@xmtp/node-sdk`  |
+| Concern           | Package                     |
+| ----------------- | --------------------------- |
+| Result type       | `better-result`             |
+| Schema validation | `zod`                       |
+| Testing           | `bun:test`                  |
+| XMTP SDK          | `@xmtp/node-sdk`           |
+| CLI framework     | `commander`                 |
+| TOML parsing      | `smol-toml`                 |
+| MCP SDK           | `@modelcontextprotocol/sdk` |
+| Schema to JSON    | `zod-to-json-schema`        |
 
 Prefer Bun-native APIs (`Bun.hash()`, `bun:sqlite`, `Bun.serve()`) over npm
 packages. Adding a new dependency requires checking this list first and

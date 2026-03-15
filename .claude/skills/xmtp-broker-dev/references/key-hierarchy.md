@@ -9,6 +9,8 @@ Enclave patterns. Each tier has a different lifetime and security posture.
 Root Key (platform-bound, long-lived)
   └─ Operational Key (daily signing, rotatable)
        └─ Session Key (per-connection, ephemeral)
+
+Admin Key (standalone, peer to root — not derived from it)
 ```
 
 ### Root keys
@@ -66,3 +68,34 @@ manages operational and session key lifecycles, and provides the
 Packages never interact with raw key material directly — they receive
 signing/verification capabilities through the provider interfaces defined in
 `@xmtp-broker/contracts`.
+
+## Admin keys
+
+Admin keys are a separate key type for authenticating CLI and admin socket
+operations. They are **peers** to the root key, not derived from it.
+
+### Purpose
+
+- Authenticate CLI commands against the broker daemon
+- Sign JWTs for admin socket JSON-RPC requests
+- Separate management auth from message signing and harness session auth
+
+### JWT flow
+
+1. `createAdminKeyManager` generates or loads an admin key pair
+2. CLI signs a JWT with the admin private key (`AdminJwtPayloadSchema`)
+3. Admin socket validates the JWT signature before dispatching requests
+4. `AdminAuthContext` on `HandlerContext` carries the verified admin identity
+
+### Key types
+
+- `AdminKeyRecord` — stored admin key with metadata
+- `AdminJwtPayloadSchema` — JWT payload structure (issuer, expiry, etc.)
+- `AdminJwtConfigSchema` — JWT signing config (algorithm, TTL)
+
+### Utilities
+
+`base64urlEncode` / `base64urlDecode` — JWT-safe encoding without padding.
+
+The `KeyManager` exposes admin key management via its `.admin` property
+(`AdminKeyManager`).

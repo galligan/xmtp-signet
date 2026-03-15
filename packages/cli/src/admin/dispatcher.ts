@@ -19,11 +19,14 @@ import { Result } from "better-result";
  * CliSurface.rpcMethod (or derives from CliSurface.command).
  */
 export interface AdminDispatcher {
+  /** Route a JSON-RPC method call to the matching ActionSpec handler. */
   dispatch(
     method: string,
     params: Record<string, unknown>,
     ctx: HandlerContext,
   ): Promise<ActionResult<unknown>>;
+
+  /** Check whether a method name is registered. */
   hasMethod(method: string): boolean;
 }
 

@@ -110,8 +110,10 @@ re-authentication under the updated policy.
 > This section describes the target architecture. The wire protocol and
 > harness SDK are under development.
 
-Your agent connects to the broker over a transport — WebSocket for Phase 1,
-with MCP, CLI, and HTTP following.
+Your agent connects to the broker over a transport — WebSocket (primary) or
+MCP (for LLM-driven harnesses), with HTTP following. A harness client SDK
+(`@xmtp-broker/handler`) provides typed events, Result-based requests, and
+automatic reconnection.
 
 ### Connection lifecycle
 

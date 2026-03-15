@@ -4,6 +4,7 @@ import { z } from "zod";
 // Admin auth frame (client -> server, first message)
 // ---------------------------------------------------------------------------
 
+/** Admin authentication frame sent as the first message on a connection. */
 export type AdminAuthFrame = {
   type: "admin_auth";
   token: string;
@@ -24,6 +25,7 @@ export const AdminAuthFrameSchema: z.ZodType<AdminAuthFrame> = z
 // JSON-RPC 2.0 request
 // ---------------------------------------------------------------------------
 
+/** JSON-RPC 2.0 request sent after authentication. */
 export type JsonRpcRequest = {
   jsonrpc: "2.0";
   id: number | string;
@@ -54,6 +56,7 @@ export const JsonRpcRequestSchema: z.ZodType<
 // JSON-RPC 2.0 success response
 // ---------------------------------------------------------------------------
 
+/** JSON-RPC 2.0 success response. */
 export type JsonRpcSuccess = {
   jsonrpc: "2.0";
   id: number | string;
@@ -73,12 +76,14 @@ export const JsonRpcSuccessSchema: z.ZodType<JsonRpcSuccess> = z.object({
 // JSON-RPC 2.0 error response
 // ---------------------------------------------------------------------------
 
+/** Structured error object inside a JSON-RPC error response. */
 export type JsonRpcErrorDetail = {
   code: number;
   message: string;
   data?: unknown;
 };
 
+/** JSON-RPC 2.0 error response. */
 export type JsonRpcError = {
   jsonrpc: "2.0";
   id: number | string | null;
@@ -102,6 +107,7 @@ export const JsonRpcErrorSchema: z.ZodType<JsonRpcError> = z.object({
 // JSON-RPC 2.0 notification (streaming)
 // ---------------------------------------------------------------------------
 
+/** JSON-RPC 2.0 notification (no id, no response expected). */
 export type JsonRpcNotification = {
   jsonrpc: "2.0";
   method: string;

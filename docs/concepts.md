@@ -146,6 +146,46 @@ This means:
 - When multiple agents share a group, each has its own view, grant, and attestation
 - The broker maintains strict isolation between agents internally
 
+## Action registry
+
+An **action** is a single broker operation (send a message, list conversations, rotate a session) defined once and exposed across all transports. Each action is described by an `ActionSpec` that bundles:
+
+- A name, description, and Zod input schema
+- A transport-agnostic handler function
+- Surface-specific metadata for CLI (command path, flags, output format) and MCP (tool name, annotations)
+
+The **action registry** collects all defined actions. Transport adapters read the registry to generate their native representations — commander subcommands for CLI, MCP tool definitions for MCP, request routes for WebSocket. This eliminates per-transport boilerplate: adding a new operation means defining one `ActionSpec`.
+
+## Admin authentication
+
+The broker distinguishes two authentication domains:
+
+- **Harness sessions** — how agent harnesses connect and prove authorization (session tokens, view/grant binding)
+- **Admin authentication** — how operators and the CLI authenticate for management operations
+
+Admin auth uses dedicated admin key pairs stored in the vault. The CLI signs JWTs with the admin key to authenticate against the broker's admin Unix socket. The `AdminAuthContext` on `HandlerContext` carries the verified admin identity, enabling fine-grained control over which admin operations are permitted.
+
+Admin keys are peers to the root→operational→session key hierarchy, not derived from it. They serve a different purpose: authorizing management operations rather than signing messages.
+
+## Direct mode
+
+When no broker daemon is running, the CLI falls back to **direct mode** — accessing the encrypted vault and key material directly to perform operations like key generation, identity inspection, and configuration management. Direct mode detects whether a daemon is available and routes commands accordingly:
+
+- **Daemon mode** — CLI sends JSON-RPC requests to the admin Unix socket
+- **Direct mode** — CLI accesses the vault directly for key and config operations
+- Operations that require a running broker (message sending, session management) are unavailable in direct mode
+
+## MCP transport
+
+The **MCP transport** exposes broker actions as Model Context Protocol tools, enabling LLM-driven agent harnesses to interact with the broker through the standard MCP tool-calling interface.
+
+Each MCP session is scoped to a harness session — the session's grant determines which tools are visible. When a harness connects via MCP, `actionSpecToMcpTool` converts the permitted `ActionSpec` definitions into MCP tool registrations with JSON Schema input validation.
+
+The MCP transport supports two modes:
+
+- **Stdio** — launched as a subprocess, communicates over stdin/stdout (standard MCP pattern)
+- **Embedded** — runs in-process for tighter integration
+
 ## Security boundary
 
 The core security invariant: **the harness never touches raw keys, raw DB, or raw XMTP SDK.**

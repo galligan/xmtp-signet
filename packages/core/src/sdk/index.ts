@@ -1,3 +1,9 @@
+/**
+ * SDK integration layer. Wraps `@xmtp/node-sdk` behind broker-owned
+ * interfaces so domain code never touches SDK types directly.
+ * @module
+ */
+
 export { createSdkClientFactory } from "./sdk-client-factory.js";
 export type { SdkClientFactoryOptions } from "./sdk-client-factory.js";
 export { createSdkClient } from "./sdk-client.js";

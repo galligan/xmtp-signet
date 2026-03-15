@@ -46,6 +46,7 @@ export interface DaemonLifecycle {
   off(event: "stateChange", listener: StateChangeListener): void;
 }
 
+/** Create a daemon lifecycle state machine with the given callbacks. */
 export function createDaemonLifecycle(
   callbacks: DaemonLifecycleCallbacks,
 ): DaemonLifecycle {

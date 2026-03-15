@@ -28,8 +28,10 @@ import { toActionResult } from "@xmtp-broker/contracts";
 // Types
 // ---------------------------------------------------------------------------
 
+/** MCP server lifecycle states. */
 export type McpServerState = "idle" | "running" | "stopping" | "stopped";
 
+/** Dependencies injected into the MCP server. */
 export interface McpServerDeps {
   readonly registry: ActionRegistry;
   readonly brokerId: string;
@@ -37,10 +39,18 @@ export interface McpServerDeps {
   readonly sessionManager: SessionManager;
 }
 
+/** Session-scoped MCP server instance exposing broker actions as MCP tools. */
 export interface McpServerInstance {
+  /** Start the server: validate session, discover tools, connect transport. */
   start(): Promise<Result<void, InternalError | AuthError>>;
+
+  /** Stop the server and close the underlying MCP SDK server. */
   stop(): Promise<Result<void, InternalError>>;
+
+  /** Current server lifecycle state. */
   readonly state: McpServerState;
+
+  /** Number of registered MCP tools. */
   readonly toolCount: number;
 }
 
@@ -60,6 +70,11 @@ function buildMeta(requestId: string, startTime: number): ActionResultMeta {
 // Factory
 // ---------------------------------------------------------------------------
 
+/**
+ * Create a session-scoped MCP server that exposes broker ActionSpecs
+ * as MCP tools. Validates the session token at startup and checks
+ * liveness on each tool call.
+ */
 export function createMcpServer(
   rawConfig: Partial<McpServerConfig> & { sessionToken: string },
   deps: McpServerDeps,

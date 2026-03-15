@@ -70,12 +70,16 @@ blz query -s xmtp "your query" -C all --text       # search + expand sections
 
 ### Blessed Dependencies
 
-| Concern           | Package          |
-| ----------------- | ---------------- |
-| Result type       | `better-result`  |
-| Schema validation | `zod`            |
-| Testing           | `bun:test`       |
-| XMTP SDK          | `@xmtp/node-sdk` |
+| Concern           | Package                     |
+| ----------------- | --------------------------- |
+| Result type       | `better-result`             |
+| Schema validation | `zod`                       |
+| Testing           | `bun:test`                  |
+| XMTP SDK          | `@xmtp/node-sdk`           |
+| CLI framework     | `commander`                 |
+| TOML parsing      | `smol-toml`                 |
+| MCP SDK           | `@modelcontextprotocol/sdk` |
+| Schema to JSON    | `zod-to-json-schema`        |
 | Ethereum crypto   | `viem`                      |
 | Elliptic curves   | `@noble/curves`             |
 | Hash functions    | `@noble/hashes`             |
@@ -97,7 +101,7 @@ type Handler<TInput, TOutput, TError extends BrokerError> = (
 ) => Promise<Result<TOutput, TError>>;
 ```
 
-Note: `HandlerContext` is the planned canonical type. The current implementation uses `CoreContext` from `@xmtp-broker/contracts`.
+`HandlerContext` is defined in `@xmtp-broker/contracts` with `requestId`, `signal`, and optional `adminAuth`/`sessionId`. `CoreContext` remains available for core-specific operations.
 
 Handlers receive pre-validated input and a context object. They return `Result`, never throw. CLI, WebSocket, MCP, and HTTP are thin adapters over the same handlers.
 

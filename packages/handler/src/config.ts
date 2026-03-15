@@ -34,6 +34,7 @@ type BrokerHandlerConfigInput = {
   requestTimeoutMs?: number | undefined;
 };
 
+/** Broker handler configuration schema. Validates harness-provided config. */
 export const BrokerHandlerConfigSchema: z.ZodType<
   BrokerHandlerConfig,
   z.ZodTypeDef,

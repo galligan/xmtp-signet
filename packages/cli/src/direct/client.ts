@@ -8,6 +8,7 @@ import type { KeyManager } from "@xmtp-broker/keys";
 // Schema
 // ---------------------------------------------------------------------------
 
+/** Configuration for direct mode (no daemon). */
 export type DirectModeConfig = {
   env: "local" | "dev" | "production";
   dataDir: string;
@@ -36,6 +37,7 @@ export const DirectModeConfigSchema: z.ZodType<
 // Types
 // ---------------------------------------------------------------------------
 
+/** One-shot XMTP client for direct mode (no daemon, vault-based keys). */
 export interface DirectClient {
   readonly mode: "direct";
   readonly xmtpClient: XmtpClient;
