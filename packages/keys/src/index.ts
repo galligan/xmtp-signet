@@ -38,7 +38,25 @@ export type { OperationalKeyManager } from "./operational-key.js";
 export { createSessionKeyManager } from "./session-key.js";
 export type { SessionKeyManager } from "./session-key.js";
 
-// Crypto utilities
+// Admin key manager
+export { createAdminKeyManager } from "./admin-key.js";
+export type {
+  AdminKeyManager,
+  AdminKeyRecord,
+  AdminAuthContext,
+  AdminAuthMethod,
+  AdminJwtOptions,
+} from "./admin-key.js";
+
+// JWT utilities
+export {
+  AdminJwtConfigSchema,
+  AdminJwtPayloadSchema,
+  base64urlEncode,
+  base64urlDecode,
+} from "./jwt.js";
+export type { AdminJwtConfig, AdminJwtPayload } from "./jwt.js";
+
 // Root key
 export { initializeRootKey, signWithRootKey } from "./root-key.js";
 export type { RootKeyResult } from "./root-key.js";
