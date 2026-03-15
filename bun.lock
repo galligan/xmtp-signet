@@ -81,6 +81,20 @@
         "typescript": "catalog:",
       },
     },
+    "packages/handler": {
+      "name": "@xmtp-broker/handler",
+      "version": "0.0.0",
+      "dependencies": {
+        "@xmtp-broker/contracts": "workspace:*",
+        "@xmtp-broker/schemas": "workspace:*",
+        "better-result": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/integration": {
       "name": "@xmtp-broker/integration",
       "dependencies": {
@@ -297,6 +311,8 @@
     "@xmtp-broker/contracts": ["@xmtp-broker/contracts@workspace:packages/contracts"],
 
     "@xmtp-broker/core": ["@xmtp-broker/core@workspace:packages/core"],
+
+    "@xmtp-broker/handler": ["@xmtp-broker/handler@workspace:packages/handler"],
 
     "@xmtp-broker/integration": ["@xmtp-broker/integration@workspace:packages/integration"],
 
