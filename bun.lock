@@ -27,6 +27,31 @@
         "typescript": "catalog:",
       },
     },
+    "packages/cli": {
+      "name": "@xmtp-broker/cli",
+      "version": "0.1.0",
+      "bin": {
+        "xmtp-broker": "src/index.ts",
+      },
+      "dependencies": {
+        "@xmtp-broker/attestations": "workspace:*",
+        "@xmtp-broker/contracts": "workspace:*",
+        "@xmtp-broker/core": "workspace:*",
+        "@xmtp-broker/keys": "workspace:*",
+        "@xmtp-broker/policy": "workspace:*",
+        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp-broker/sessions": "workspace:*",
+        "@xmtp-broker/ws": "workspace:*",
+        "better-result": "catalog:",
+        "commander": "14.0.3",
+        "smol-toml": "1.6.0",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/contracts": {
       "name": "@xmtp-broker/contracts",
       "version": "0.0.0",
@@ -244,6 +269,8 @@
 
     "@xmtp-broker/attestations": ["@xmtp-broker/attestations@workspace:packages/attestations"],
 
+    "@xmtp-broker/cli": ["@xmtp-broker/cli@workspace:packages/cli"],
+
     "@xmtp-broker/contracts": ["@xmtp-broker/contracts@workspace:packages/contracts"],
 
     "@xmtp-broker/core": ["@xmtp-broker/core@workspace:packages/core"],
@@ -273,6 +300,8 @@
     "better-result": ["better-result@2.7.0", "", { "dependencies": { "@clack/prompts": "^0.11.0" }, "bin": { "better-result": "bin/cli.mjs" } }, "sha512-7zrmXjAK8u8Z6SOe4R65XObOR5X+Y2I/VVku3t5cPOGQ8/WsBcfFmfnIPiEl5EBMDOzPHRwbiPbMtQBKYdw7RA=="],
 
     "bun-types": ["bun-types@1.3.10", "", { "dependencies": { "@types/node": "*" } }, "sha512-tcpfCCl6XWo6nCVnpcVrxQ+9AYN1iqMIzgrSKYMB/fjLtV2eyAVEg7AxQJuCq/26R6HpKWykQXuSOq/21RYcbg=="],
+
+    "commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
 
     "lefthook": ["lefthook@1.13.6", "", { "optionalDependencies": { "lefthook-darwin-arm64": "1.13.6", "lefthook-darwin-x64": "1.13.6", "lefthook-freebsd-arm64": "1.13.6", "lefthook-freebsd-x64": "1.13.6", "lefthook-linux-arm64": "1.13.6", "lefthook-linux-x64": "1.13.6", "lefthook-openbsd-arm64": "1.13.6", "lefthook-openbsd-x64": "1.13.6", "lefthook-windows-arm64": "1.13.6", "lefthook-windows-x64": "1.13.6" }, "bin": { "lefthook": "bin/index.js" } }, "sha512-ojj4/4IJ29Xn4drd5emqVgilegAPN3Kf0FQM2p/9+lwSTpU+SZ1v4Ig++NF+9MOa99UKY8bElmVrLhnUUNFh5g=="],
 
@@ -305,6 +334,8 @@
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 
     "sisteransi": ["sisteransi@1.0.5", "", {}, "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="],
+
+    "smol-toml": ["smol-toml@1.6.0", "", {}, "sha512-4zemZi0HvTnYwLfrpk/CF9LOd9Lt87kAt50GnqhMpyF9U3poDAP2+iukq2bZsO/ufegbYehBkqINbsWxj4l4cw=="],
 
     "tinypool": ["tinypool@2.1.0", "", {}, "sha512-Pugqs6M0m7Lv1I7FtxN4aoyToKg1C4tu+/381vH35y8oENM/Ai7f7C4StcoK4/+BSw9ebcS8jRiVrORFKCALLw=="],
 
