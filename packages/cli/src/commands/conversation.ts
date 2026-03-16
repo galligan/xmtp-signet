@@ -163,9 +163,11 @@ export function createConversationCommands(
 
   cmd
     .command("invite")
-    .description("Generate an invite QR code for a group conversation")
+    .description("Generate a Convos-compatible invite URL for a group")
     .argument("<group-id>", "Group conversation ID")
     .option("--as <label>", "Identity label")
+    .option("--name <name>", "Override group name in invite")
+    .option("--description <desc>", "Override description in invite")
     .option("--config <path>", "Path to config file")
     .option("--format <type>", "Output format: link, qr, or both", "both")
     .option("--json", "JSON output")
@@ -174,12 +176,18 @@ export function createConversationCommands(
       const format =
         typeof options.format === "string" ? options.format : "both";
 
+      const params: Record<string, unknown> = { groupId };
+      if (typeof options.as === "string") params["identityLabel"] = options.as;
+      if (typeof options.name === "string") params["name"] = options.name;
+      if (typeof options.description === "string")
+        params["description"] = options.description;
+
       const result = await d.withDaemonClient(
         {
           configPath:
             typeof options.config === "string" ? options.config : undefined,
         },
-        (client) => client.request<unknown>("conversation.info", { groupId }),
+        (client) => client.request<unknown>("conversation.invite", params),
       );
 
       if (result.isErr()) {
@@ -187,34 +195,34 @@ export function createConversationCommands(
         return;
       }
 
-      const info = result.value as Record<string, unknown>;
-      const name = typeof info["name"] === "string" ? info["name"] : "unnamed";
-      const inviteData = JSON.stringify({
-        type: "xmtp-broker-invite",
-        groupId,
-        name,
-      });
+      const inviteResult = result.value as Record<string, unknown>;
+      const inviteUrl =
+        typeof inviteResult["inviteUrl"] === "string"
+          ? inviteResult["inviteUrl"]
+          : "";
+      const groupName =
+        typeof inviteResult["groupName"] === "string"
+          ? inviteResult["groupName"]
+          : "unnamed";
 
       if (json) {
         const { renderQrToDataUrl } = await import("../invite/qr.js");
-        const qrDataUrl = await renderQrToDataUrl(inviteData);
+        const qrDataUrl = await renderQrToDataUrl(inviteUrl);
         d.writeStdout(
-          formatOutput({ groupId, name, inviteData, qrDataUrl }, { json }) +
-            "\n",
+          formatOutput({ ...inviteResult, qrDataUrl }, { json }) + "\n",
         );
         return;
       }
 
-      d.writeStdout(`Group: ${name} (${groupId})\n`);
-      d.writeStdout(`Invite data: ${inviteData}\n`);
+      d.writeStdout(`Group: ${groupName} (${groupId})\n`);
 
       if (format === "link" || format === "both") {
-        d.writeStdout(`\nInvite payload:\n${inviteData}\n`);
+        d.writeStdout(`\nInvite URL:\n${inviteUrl}\n`);
       }
 
       if (format === "qr" || format === "both") {
         const { renderQrToTerminal } = await import("../invite/qr.js");
-        const qr = await renderQrToTerminal(inviteData);
+        const qr = await renderQrToTerminal(inviteUrl);
         d.writeStdout(`\n${qr}`);
       }
     });
