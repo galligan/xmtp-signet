@@ -5,7 +5,13 @@ import { NotFoundError } from "@xmtp-broker/schemas";
 import type { BrokerError } from "@xmtp-broker/schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
-import type { XmtpGroupInfo } from "./xmtp-client-factory.js";
+import type {
+  XmtpClientFactory,
+  XmtpGroupInfo,
+} from "./xmtp-client-factory.js";
+import type { BrokerCoreConfig } from "./config.js";
+import { joinConversation } from "./convos/join.js";
+import type { SignerProviderFactory } from "./identity-registration.js";
 
 export interface ConversationActionDeps {
   readonly identityStore: SqliteIdentityStore;
@@ -13,6 +19,9 @@ export interface ConversationActionDeps {
   readonly getGroupInfo: (
     groupId: string,
   ) => Promise<Result<XmtpGroupInfo, BrokerError>>;
+  readonly clientFactory?: XmtpClientFactory;
+  readonly signerProviderFactory?: SignerProviderFactory;
+  readonly config?: Pick<BrokerCoreConfig, "dataDir" | "env" | "appVersion">;
 }
 
 /**
@@ -177,9 +186,77 @@ export function createConversationActions(
     },
   };
 
+  const join: ActionSpec<
+    {
+      inviteUrl: string;
+      label?: string | undefined;
+      timeoutSeconds?: number | undefined;
+    },
+    {
+      groupId: string;
+      identityId: string;
+      inboxId: string;
+      inviteTag: string;
+      groupName: string | undefined;
+      creatorInboxId: string;
+    },
+    BrokerError
+  > = {
+    id: "conversation.join",
+    input: z.object({
+      inviteUrl: z.string(),
+      label: z.string().optional(),
+      timeoutSeconds: z.number().positive().optional(),
+    }),
+    handler: async (input) => {
+      if (!deps.clientFactory || !deps.signerProviderFactory || !deps.config) {
+        return Result.err(
+          NotFoundError.create(
+            "join-deps",
+            "Join requires clientFactory, signerProviderFactory, and config",
+          ) as BrokerError,
+        );
+      }
+
+      const maxPollAttempts = input.timeoutSeconds
+        ? Math.ceil((input.timeoutSeconds * 1000) / 2000)
+        : undefined;
+
+      const joinOptions: {
+        label?: string;
+        maxPollAttempts?: number;
+      } = {};
+      if (input.label !== undefined) joinOptions.label = input.label;
+      if (maxPollAttempts !== undefined)
+        joinOptions.maxPollAttempts = maxPollAttempts;
+
+      return joinConversation(
+        {
+          identityStore: deps.identityStore,
+          clientFactory: deps.clientFactory,
+          signerProviderFactory: deps.signerProviderFactory,
+          config: deps.config,
+        },
+        input.inviteUrl,
+        joinOptions,
+      );
+    },
+    cli: {
+      command: "conversation:join",
+      rpcMethod: "conversation.join",
+      description: "Join a Convos conversation via invite URL",
+    },
+    mcp: {
+      toolName: "broker/conversation/join",
+      description: "Join a Convos conversation via invite URL",
+      readOnly: false,
+    },
+  };
+
   return [
     widenActionSpec(create),
     widenActionSpec(list),
     widenActionSpec(info),
+    widenActionSpec(join),
   ];
 }

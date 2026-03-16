@@ -30,6 +30,15 @@ export interface XmtpClient {
   /** List all groups the client is a member of. */
   listGroups(): Promise<Result<readonly XmtpGroupInfo[], BrokerError>>;
 
+  /** Create a DM conversation with a peer by inbox ID. */
+  createDm(peerInboxId: string): Promise<Result<XmtpDmInfo, BrokerError>>;
+
+  /** Send a text message to a DM conversation. */
+  sendDmMessage(
+    dmId: string,
+    text: string,
+  ): Promise<Result<string, BrokerError>>;
+
   /** Create a new group conversation with the given members. */
   createGroup(
     memberInboxIds: readonly string[],
@@ -59,6 +68,12 @@ export interface XmtpClient {
    * Returns an async iterable and an abort function.
    */
   streamGroups(): Promise<Result<GroupStream, BrokerError>>;
+}
+
+/** DM conversation metadata returned by the XMTP client. */
+export interface XmtpDmInfo {
+  readonly dmId: string;
+  readonly peerInboxId: string;
 }
 
 /** Group metadata returned by the XMTP client. */

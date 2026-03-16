@@ -220,6 +220,45 @@ export function createConversationCommands(
     });
 
   cmd
+    .command("join")
+    .description("Join a Convos conversation via invite URL")
+    .argument("<invite-url>", "Convos invite URL or slug")
+    .option("--label <name>", "Label for the new identity")
+    .option("--timeout <seconds>", "Timeout in seconds", "60")
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(async (inviteUrl: string, options) => {
+      const json = options.json === true;
+      const timeoutSeconds =
+        typeof options.timeout === "string"
+          ? parseInt(options.timeout, 10)
+          : 60;
+
+      const result = await d.withDaemonClient(
+        {
+          configPath:
+            typeof options.config === "string" ? options.config : undefined,
+        },
+        (client) =>
+          client.request<unknown>("conversation.join", {
+            inviteUrl,
+            label:
+              typeof options.label === "string" ? options.label : undefined,
+            timeoutSeconds: Number.isFinite(timeoutSeconds)
+              ? timeoutSeconds
+              : 60,
+          }),
+      );
+
+      if (result.isErr()) {
+        writeError(d, result.error, json);
+        return;
+      }
+
+      d.writeStdout(formatOutput(result.value, { json }) + "\n");
+    });
+
+  cmd
     .command("members")
     .description("List members of a group conversation")
     .argument("<group-id>", "Group conversation ID")

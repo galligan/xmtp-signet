@@ -90,7 +90,105 @@ Steps 1-2 and the dev network tracer have been validated:
 | Session + WS harness (dev) | PASS | Auth, scope enforcement, heartbeat all work |
 | Production daemon | PASS | Daemon starts, connects to production XMTP |
 
-Steps 3b, 3c, and 5 need implementation based on the Convos invite discovery.
+Steps 3b, 3c, and 6 need implementation based on the Convos invite discovery.
+
+---
+
+## Pre-Flight Checklist
+
+Before starting any step, verify the baseline:
+
+```bash
+gt sync -f                    # sync with remote
+bun run build                 # clean build
+bun run test                  # all tests pass
+bun run typecheck             # no type errors
+bun run lint                  # no lint errors
+```
+
+If any check fails, fix it before proceeding.
+
+## Agent Roles
+
+### Implementer (subagent)
+
+Each step dispatches an **implementer subagent** that:
+
+1. Reads this execution plan's step description (current state, changes,
+   pseudocode) and any referenced files
+2. Creates the branch: `gt create 'v0/<name>' -am "feat(<scope>): <message>"`
+3. Writes tests first (TDD: red → green → refactor)
+4. Implements until all tests pass
+5. Runs `bun run build && bun run test && bun run typecheck && bun run lint`
+6. Reports back with: files changed, test count, any deviations from plan
+
+The implementer does NOT:
+- Modify files outside its step's scope
+- Make design decisions — if ambiguous, stop and ask
+- Skip tests or lint
+- Push or submit — that's the orchestrator's job
+
+### Reviewer (subagent)
+
+After each implementer completes, dispatch a **reviewer subagent** that:
+
+1. Reads the step description from this plan
+2. Reads all changed files
+3. Checks:
+   - Does the implementation match the described interfaces?
+   - Are all behaviors described in the step implemented?
+   - Are all error cases handled with correct error taxonomy?
+   - Are test scenarios comprehensive?
+   - Does `bun run build && bun run test && bun run typecheck && bun run lint` pass?
+4. Reports: PASS (ready to submit) or FAIL (with specific issues to fix)
+
+If FAIL, resume the implementer with the reviewer's findings. Re-review
+after fixes.
+
+### Orchestrator (you)
+
+The main conversation thread:
+
+1. Runs pre-flight checks
+2. Dispatches implementer for the current step
+3. Dispatches reviewer when implementer completes
+4. On PASS: `gt submit --no-interactive` and moves to next step
+5. On FAIL: resumes implementer, then re-reviews
+6. After all steps: runs full-stack verification
+
+## Troubleshooting
+
+### Build fails after stacking
+
+```bash
+gt restack                    # rebase all branches onto updated parents
+bun run build                 # verify
+```
+
+### Tests fail in a downstream branch
+
+```bash
+gt top                        # go to top
+gt absorb -a -f               # route fixes to correct branches
+gt submit --stack --no-interactive
+```
+
+### Spec ambiguity during implementation
+
+The implementer should **stop and report** rather than make design
+decisions. This plan is the source of truth. If the plan is ambiguous,
+the orchestrator resolves it by updating the plan, then resumes the
+implementer.
+
+### Reviewer finds issues
+
+Resume the implementer with the reviewer's specific findings. Do not
+start a new implementer — context matters. After fixes, re-run the
+reviewer.
+
+---
+
+## Steps
 
 ---
 
@@ -99,6 +197,17 @@ Steps 3b, 3c, and 5 need implementation based on the Convos invite discovery.
 **Branch:** `v0/identity-registration`
 **Scope:** `packages/core/`, `packages/cli/`
 **Estimated size:** ~250 LOC
+**Commit convention:** `feat(core): XMTP identity registration with network`
+
+**Implementer prompt context:**
+- Read this step's full description including Current State, Changes, and pseudocode
+- Read `packages/core/src/identity-store.ts` for store schema and methods
+- Read `packages/keys/src/signer-provider.ts` for `createSignerProvider()`
+- Read `packages/core/src/sdk/sdk-client-factory.ts` for `createSdkClientFactory()`
+- Read `packages/cli/src/commands/identity.ts` for the current `init` action (lines 28-117)
+- Read `packages/cli/src/start.ts` for how deps are constructed in daemon mode (reference for direct mode)
+- The key manager's `getOrCreateDbKey()` and `getOrCreateXmtpIdentityKey()` auto-provision keys — no separate keygen step needed
+- `identity init` runs without a daemon (direct mode) — construct deps inline
 
 ### Problem
 
@@ -483,6 +592,15 @@ a different inbox ID. `identity list` shows both.
 **Branch:** `v0/core-network-start`
 **Scope:** `packages/cli/`
 **Estimated size:** ~150 LOC
+**Commit convention:** `feat(cli): network startup with real XMTP clients`
+
+**Implementer prompt context:**
+- Read `packages/cli/src/runtime.ts` lines 250-323 for `BrokerRuntime.start()`
+- Read `packages/cli/src/start.ts` lines 130-163 for the `BrokerCore` adapter
+- Read `packages/core/src/broker-core.ts` lines 105-238 for `BrokerCoreImpl.start()`
+- Read `packages/cli/src/daemon/status.ts` for `DaemonStatus` schema
+- The key change is adding `core.initialize()` call after `core.initializeLocal()` in `runtime.ts`
+- Graceful degradation: network failure logs a warning, daemon continues in local mode
 
 ### Problem
 
@@ -602,11 +720,22 @@ inbox IDs. Without identities, daemon stays in local mode.
 
 ---
 
-## Step 3: Conversation Commands
+## Step 3a: Conversation Commands
 
 **Branch:** `v0/conversation-commands`
 **Scope:** `packages/core/`, `packages/cli/`
 **Estimated size:** ~300 LOC
+**Commit convention:** `feat(core): conversation create/list/info commands`
+
+**Implementer prompt context:**
+- Read `packages/cli/src/commands/conversation.ts` for existing stub commands
+- Read `packages/cli/src/commands/session.ts` for the `withDaemonClient` pattern to follow
+- Read `packages/sessions/src/actions.ts` for the ActionSpec pattern to follow
+- Read `packages/core/src/xmtp-client-factory.ts` for `XmtpClient` interface (add `createGroup`)
+- Read `packages/core/src/sdk/sdk-client.ts` for how to implement `createGroup` with `wrapSdkCall`
+- Read `packages/cli/src/runtime.ts` for where to register new ActionSpecs
+- Node.js SDK uses `client.conversations.createGroup(inboxIds: string[], opts?)` — plain strings, NOT typed identifiers
+- `BrokerCoreImpl.#registry` is private — add a public accessor or `getManagedClient(id)` method
 
 ### Problem
 
@@ -936,6 +1065,16 @@ mocked `BrokerCoreImpl` with mock `XmtpClient`:
 **Branch:** `v0/convos-join`
 **Scope:** `packages/core/`, `packages/cli/`
 **Estimated size:** ~350 LOC
+**Commit convention:** `feat(core): Convos invite parsing and join protocol`
+
+**Implementer prompt context:**
+- MUST read `.reference/convos-node-sdk/src/conversations/join.ts` first — this is the reference join flow
+- Read `.reference/convos-node-sdk/src/identities.ts` for identity creation and invite tag storage
+- Read `.reference/convos-node-sdk/src/client.ts` for per-conversation client creation
+- Read `.reference/convos-cli/` for how the CLI exposes the join command
+- Use `xmtp-expert` agent or `blz` to verify any SDK methods before coding
+- The invite URL format is `popup.convos.org/v2?i=<base64url-encoded-binary>`
+- The join protocol involves DM-based handshake — study the reference carefully before implementing
 
 ### Problem
 
@@ -1061,6 +1200,14 @@ Convos app.
 **Branch:** `v0/convos-invite`
 **Scope:** `packages/core/`, `packages/cli/`
 **Estimated size:** ~250 LOC
+**Commit convention:** `feat(core): Convos-compatible invite generation and terminal QR`
+
+**Implementer prompt context:**
+- Read `.reference/convos-node-sdk/src/conversations/create.ts` for how invite tags are generated
+- Read `packages/core/src/convos/invite-parser.ts` (from Step 3b) — generation is the inverse
+- Read the QR rendering pseudocode in this plan's Step 5 section
+- Use `qrcode` package with `type: "terminal"` for ANSI rendering — add to `cli/package.json`
+- Add `qrcode` to blessed dependencies in `CLAUDE.md`
 
 ### Problem
 
@@ -1129,6 +1276,15 @@ join flow and the user successfully joins the broker's group.
 **Branch:** `v0/dev-tracer-bullet`
 **Scope:** `.claude/skills/tracer-bullet/`, `packages/cli/src/__tests__/`
 **Estimated size:** ~200 LOC
+**Commit convention:** `test(cli): dev network tracer bullet and smoke test`
+
+**Implementer prompt context:**
+- Read `.claude/skills/tracer-bullet/SKILL.md` for the "Dev Network" story definition
+- Read `packages/cli/src/__tests__/smoke.test.ts` (Phase 2B) for the existing test pattern
+- The dev tracer is fully automated — no operator interaction needed
+- Use `describe.skipIf(!process.env.XMTP_NETWORK_TESTS)` to gate network tests
+- Timeout: 60 seconds (network operations are slow)
+- Use `bun run packages/cli/src/bin.ts` as the CLI entry point
 
 ### Problem
 
@@ -1217,6 +1373,14 @@ Bob's identity (in the same broker) receives it via the group stream.
 **Branch:** `v0/prod-tracer-bullet`
 **Scope:** `packages/cli/`, `.claude/skills/tracer-bullet/`
 **Estimated size:** ~250 LOC
+**Commit convention:** `feat(cli): production tracer bullet with QR invite`
+
+**Implementer prompt context:**
+- Read `.claude/skills/tracer-bullet/SKILL.md` for the "Production" story definition
+- Read Step 3c output for `conversation invite` and QR rendering
+- This step wires the QR code renderer and updates the tracer bullet skill
+- The production tracer uses direct inbox IDs (not Convos invite protocol)
+- Interactive pauses require `AskUserQuestion` or polling with timeouts
 
 ### Problem
 
@@ -1478,6 +1642,15 @@ reply is received by the broker's event stream.
 **Scope:** `.claude/skills/tracer-bullet/`, `packages/cli/`
 **Estimated size:** ~150 LOC (tracer story + skill update)
 **Depends on:** Steps 3b and 3c (Convos join + invite generation)
+**Commit convention:** `test(cli): Convos interop tracer bullet`
+
+**Implementer prompt context:**
+- Read `.claude/skills/tracer-bullet/SKILL.md` for existing story patterns
+- Read `packages/core/src/convos/join.ts` (from Step 3b) for the join protocol
+- Read `packages/core/src/convos/invite-generator.ts` (from Step 3c) for invite generation
+- Both sub-stories are interactive — use `AskUserQuestion` for operator input
+- Timeouts: 120 seconds per interactive pause
+- Convos invite URL format: `popup.convos.org/v2?i=<base64url-encoded-binary>`
 
 ### Problem
 
@@ -1617,6 +1790,42 @@ will be available via MCP when the MCP transport is wired.
 | 6 | — | `.claude/skills/tracer-bullet/SKILL.md` |
 
 **Total:** ~1900 LOC across 8 steps (6 numbered, 3a/3b/3c as sub-steps).
+
+## Step Summary
+
+| Step | Branch | Commit Prefix | ~LOC |
+|------|--------|---------------|------|
+| 1 | `v0/identity-registration` | `feat(core):` | 250 |
+| 2 | `v0/core-network-start` | `feat(cli):` | 150 |
+| 3a | `v0/conversation-commands` | `feat(core):` | 300 |
+| 3b | `v0/convos-join` | `feat(core):` | 350 |
+| 3c | `v0/convos-invite` | `feat(core):` | 250 |
+| 4 | `v0/dev-tracer-bullet` | `test(cli):` | 200 |
+| 5 | `v0/prod-tracer-bullet` | `feat(cli):` | 250 |
+| 6 | `v0/convos-tracer` | `test(cli):` | 150 |
+
+8 branches, 8 commits, 8 PRs. ~1900 LOC total.
+
+## Full-Stack Verification
+
+After all 8 branches are submitted:
+
+```bash
+gt top                        # go to top of stack
+bun run build                 # full build
+bun run test                  # all tests (unit only, no network)
+bun run typecheck             # type check
+bun run lint                  # lint
+
+# Network smoke tests (requires XMTP devnet access)
+XMTP_NETWORK_TESTS=1 bun test packages/cli/src/__tests__/dev-network.test.ts
+```
+
+Then submit the full stack:
+
+```bash
+gt submit --stack --no-interactive
+```
 
 ## Gotchas
 
