@@ -29,10 +29,12 @@
     "@xmtp-broker/ws": "workspace:*",
     "better-result": "catalog:",
     "commander": "14.0.3",
+    "qrcode": "^1.5.4",
     "smol-toml": "1.6.0",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "bun-types": "catalog:",
     "typescript": "catalog:"
   }

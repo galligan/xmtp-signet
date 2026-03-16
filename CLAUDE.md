@@ -104,6 +104,7 @@ Use `qmd query` for semantic search across these collections. Use `qmd get` to r
 | Hash functions    | `@noble/hashes`             |
 | AEAD ciphers      | `@noble/ciphers`            |
 | Protobuf          | `protobufjs`                |
+| QR codes          | `qrcode`                    |
 
 Add new dependencies deliberately. Check here first — if a concern isn't listed, discuss before pulling something in.
 

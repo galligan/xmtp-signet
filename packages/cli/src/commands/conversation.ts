@@ -161,6 +161,117 @@ export function createConversationCommands(
       d.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
+  cmd
+    .command("invite")
+    .description("Generate an invite QR code for a group conversation")
+    .argument("<group-id>", "Group conversation ID")
+    .option("--as <label>", "Identity label")
+    .option("--config <path>", "Path to config file")
+    .option("--format <type>", "Output format: link, qr, or both", "both")
+    .option("--json", "JSON output")
+    .action(async (groupId: string, options) => {
+      const json = options.json === true;
+      const format =
+        typeof options.format === "string" ? options.format : "both";
+
+      const result = await d.withDaemonClient(
+        {
+          configPath:
+            typeof options.config === "string" ? options.config : undefined,
+        },
+        (client) => client.request<unknown>("conversation.info", { groupId }),
+      );
+
+      if (result.isErr()) {
+        writeError(d, result.error, json);
+        return;
+      }
+
+      const info = result.value as Record<string, unknown>;
+      const name = typeof info["name"] === "string" ? info["name"] : "unnamed";
+      const inviteData = JSON.stringify({
+        type: "xmtp-broker-invite",
+        groupId,
+        name,
+      });
+
+      if (json) {
+        const { renderQrToDataUrl } = await import("../invite/qr.js");
+        const qrDataUrl = await renderQrToDataUrl(inviteData);
+        d.writeStdout(
+          formatOutput({ groupId, name, inviteData, qrDataUrl }, { json }) +
+            "\n",
+        );
+        return;
+      }
+
+      d.writeStdout(`Group: ${name} (${groupId})\n`);
+      d.writeStdout(`Invite data: ${inviteData}\n`);
+
+      if (format === "link" || format === "both") {
+        d.writeStdout(`\nInvite payload:\n${inviteData}\n`);
+      }
+
+      if (format === "qr" || format === "both") {
+        const { renderQrToTerminal } = await import("../invite/qr.js");
+        const qr = await renderQrToTerminal(inviteData);
+        d.writeStdout(`\n${qr}`);
+      }
+    });
+
+  cmd
+    .command("members")
+    .description("List members of a group conversation")
+    .argument("<group-id>", "Group conversation ID")
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .option("--watch", "Poll for membership changes")
+    .action(async (groupId: string, options) => {
+      const json = options.json === true;
+      const watch = options.watch === true;
+      const configPath =
+        typeof options.config === "string" ? options.config : undefined;
+
+      const fetchMembers = async (): Promise<unknown | undefined> => {
+        const result = await d.withDaemonClient({ configPath }, (client) =>
+          client.request<unknown>("conversation.info", { groupId }),
+        );
+
+        if (result.isErr()) {
+          writeError(d, result.error, json);
+          return undefined;
+        }
+
+        return result.value;
+      };
+
+      const info = await fetchMembers();
+      if (info === undefined) return;
+
+      d.writeStdout(formatOutput(info, { json }) + "\n");
+
+      if (!watch) return;
+
+      let lastSerialized = JSON.stringify(info);
+      const interval = setInterval(async () => {
+        const updated = await fetchMembers();
+        if (updated === undefined) return;
+
+        const serialized = JSON.stringify(updated);
+        if (serialized !== lastSerialized) {
+          lastSerialized = serialized;
+          d.writeStdout(formatOutput(updated, { json }) + "\n");
+        }
+      }, 2000);
+
+      const cleanup = () => {
+        clearInterval(interval);
+      };
+
+      process.on("SIGINT", cleanup);
+      process.on("SIGTERM", cleanup);
+    });
+
   return cmd;
 }
 
