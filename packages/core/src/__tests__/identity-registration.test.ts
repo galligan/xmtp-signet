@@ -2,14 +2,10 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import { Result } from "better-result";
 import { SqliteIdentityStore } from "../identity-store.js";
 import { registerIdentity } from "../identity-registration.js";
-import type {
-  IdentityRegistrationDeps,
-  RegisterIdentityInput,
-} from "../identity-registration.js";
+import type { IdentityRegistrationDeps } from "../identity-registration.js";
 import type {
   XmtpClient,
   XmtpClientFactory,
-  XmtpClientCreateOptions,
   SignerProviderLike,
 } from "../xmtp-client-factory.js";
 import type { BrokerError } from "@xmtp-broker/schemas";
