@@ -4,14 +4,17 @@ An agent broker for XMTP. The broker is the real XMTP client; agent harnesses co
 
 ## Status
 
-Early development. No runnable code yet.
+Active development. Phase 2 (specs 10–15) implemented across 13 stacked PRs. CLI daemon runs (`broker start`), identity init and admin JWT generation work. Session issuance and WS harness wiring in progress (Phase 2B).
 
 ## Project Structure
 
 - `packages/` — Versioned libraries (source in `src/`, tests in `src/__tests__/`)
 - `.agents/docs/` — Planning documents and PRD
+- `.agents/plans/` — Specs, execution plans, and design decisions
 - `.agents/notes/` — Working notes and research (not permanent docs)
 - `.reference/` — Read-only reference codebases (gitignored)
+- `.trail/` — Session handoff notes and working logs
+- `docs/` — Architecture, concepts, and development guides
 
 Tests live alongside code in `src/__tests__/` with `*.test.ts` files.
 
@@ -38,9 +41,25 @@ bun run typecheck               # tsc --noEmit
 blz query -s xmtp "your query" --limit 5 --text   # search
 blz get xmtp:1234-1280 --raw                       # retrieve lines
 blz query -s xmtp "your query" -C all --text       # search + expand sections
+
+# Project documentation search (specs, architecture, design docs)
+qmd query "your query" -c xmtp-broker-plans        # specs + execution plans
+qmd query "your query" -c xmtp-broker              # architecture + dev docs
+qmd query "your query" -c xmtp-broker-claude        # skills + agent configs
+qmd get xmtp-broker-plans/plans/v0/13-daemon-cli.md:50 -l 40  # read specific section
 ```
 
 **Documentation lookup**: Delegate XMTP questions to the `xmtp-expert` agent (`.claude/agents/xmtp-expert.md`), which preloads the `xmtp-docs-blz` skill and maintains project-scoped memory of past lookups. For quick manual searches, use `blz` directly. The XMTP SDK evolves frequently — always verify patterns against documentation.
+
+**Project documentation search**: Three qmd collections are indexed with embeddings for semantic search:
+
+| Collection | Contents | Files |
+|------------|----------|-------|
+| `xmtp-broker` | `docs/` — architecture, concepts, development guides | 5 |
+| `xmtp-broker-plans` | `.agents/` — Phase 2 specs (10–15), execution plans, PRD, design decisions | 30 |
+| `xmtp-broker-claude` | `.claude/` — skills, agent configs, agent memory | 13 |
+
+Use `qmd query` for semantic search across these collections. Use `qmd get` to read specific file sections by path and line offset. Run `qmd update` after changing docs to re-index, then `qmd embed` to refresh embeddings.
 
 ## Development Principles
 
