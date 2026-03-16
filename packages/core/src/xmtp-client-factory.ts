@@ -30,6 +30,12 @@ export interface XmtpClient {
   /** List all groups the client is a member of. */
   listGroups(): Promise<Result<readonly XmtpGroupInfo[], BrokerError>>;
 
+  /** Create a new group conversation with the given members. */
+  createGroup(
+    memberInboxIds: readonly string[],
+    options?: { name?: string },
+  ): Promise<Result<XmtpGroupInfo, BrokerError>>;
+
   /** Add members to a group by inbox ID. */
   addMembers(
     groupId: string,

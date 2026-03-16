@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import type { BrokerError } from "@xmtp-broker/schemas";
 import { InternalError } from "@xmtp-broker/schemas";
 import type {
+  ActionSpec,
   BrokerCore,
   SessionManager,
   AttestationManager,
@@ -74,6 +75,10 @@ export interface BrokerRuntimeDeps {
   createWsServer: (config: unknown, deps: unknown) => WsServer;
 
   createAdminServer: (config: unknown, deps: unknown) => AdminServer;
+
+  /** Optional factory for conversation action specs, wired in production by start.ts. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createConversationActions?: () => ActionSpec<any, any, BrokerError>[];
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +198,12 @@ export async function createBrokerRuntime(
     },
   })) {
     registry.register(spec);
+  }
+
+  if (deps.createConversationActions) {
+    for (const spec of deps.createConversationActions()) {
+      registry.register(spec);
+    }
   }
 
   const adminServer = deps.createAdminServer(

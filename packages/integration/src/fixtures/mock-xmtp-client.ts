@@ -161,6 +161,19 @@ export function createMockXmtpClient(options?: MockXmtpClientOptions): {
       return Result.ok([...groups.values()]);
     },
 
+    async createGroup(memberInboxIds, opts) {
+      const groupId = `group_${crypto.randomUUID()}`;
+      const info: XmtpGroupInfo = {
+        groupId,
+        name: opts?.name ?? "",
+        description: "",
+        memberInboxIds: [inboxId, ...memberInboxIds],
+        createdAt: new Date().toISOString(),
+      };
+      groups.set(groupId, info);
+      return Result.ok(info);
+    },
+
     async addMembers(groupId, inboxIds) {
       addedMembers.push({ groupId, inboxIds });
       return Result.ok(undefined);

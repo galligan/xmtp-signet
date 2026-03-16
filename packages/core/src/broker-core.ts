@@ -6,6 +6,7 @@ import { CoreEventEmitter } from "./event-emitter.js";
 import { SqliteIdentityStore } from "./identity-store.js";
 import { ClientRegistry } from "./client-registry.js";
 import { BrokerCoreContext } from "./core-context.js";
+import type { ManagedClient } from "./client-registry.js";
 import type { RawEventHandler } from "./raw-events.js";
 import type {
   SignerProviderLike,
@@ -84,6 +85,11 @@ export class BrokerCoreImpl {
   /** The core configuration (exposed for wiring conversation actions). */
   get config(): BrokerCoreConfig {
     return this.#config;
+  }
+
+  /** Look up a managed client by identity ID. */
+  getManagedClient(identityId: string): ManagedClient | undefined {
+    return this.#registry.get(identityId);
   }
 
   /** Subscribe to raw events. Returns an unsubscribe function. */

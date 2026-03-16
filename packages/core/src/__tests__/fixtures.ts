@@ -69,6 +69,14 @@ export function createMockXmtpClient(options?: {
       return Result.ok(group);
     },
     listGroups: async () => Result.ok(groups),
+    createGroup: async (memberInboxIds, opts) =>
+      Result.ok({
+        groupId: `group-${Date.now()}`,
+        name: opts?.name ?? "",
+        description: "",
+        memberInboxIds: [inboxId, ...memberInboxIds],
+        createdAt: new Date().toISOString(),
+      }),
     addMembers: async (_groupId, _inboxIds) => Result.ok(),
     removeMembers: async (_groupId, _inboxIds) => Result.ok(),
     streamAllMessages: async () =>

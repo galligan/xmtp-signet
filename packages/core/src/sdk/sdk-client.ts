@@ -138,6 +138,22 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       }, "listGroups");
     },
 
+    async createGroup(
+      memberInboxIds: readonly string[],
+      options?: { name?: string },
+    ): Promise<Result<XmtpGroupInfo, BrokerError>> {
+      return wrapSdkCall(async () => {
+        const opts = options?.name !== undefined ? { name: options.name } : {};
+        const group = await client.conversations.createGroup(
+          [...memberInboxIds],
+          opts,
+        );
+        await group.sync();
+        const members = await group.members();
+        return toGroupInfo(group, members);
+      }, "createGroup");
+    },
+
     async addMembers(
       groupId: string,
       inboxIds: readonly string[],
