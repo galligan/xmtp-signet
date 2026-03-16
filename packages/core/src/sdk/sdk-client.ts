@@ -3,6 +3,7 @@ import type { BrokerError } from "@xmtp-broker/schemas";
 import { NotFoundError } from "@xmtp-broker/schemas";
 import type {
   XmtpClient,
+  XmtpDmInfo,
   XmtpGroupInfo,
   MessageStream,
   GroupStream,
@@ -85,6 +86,28 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       return wrapSdkCall(
         async () => group.sendText(text),
         "sendMessage",
+      );
+    },
+
+    async createDm(
+      peerInboxId: string,
+    ): Promise<Result<XmtpDmInfo, BrokerError>> {
+      return wrapSdkCall(async () => {
+        const dm = await client.conversations.createDm(peerInboxId);
+        return { dmId: dm.id, peerInboxId };
+      }, "createDm");
+    },
+
+    async sendDmMessage(
+      dmId: string,
+      text: string,
+    ): Promise<Result<string, BrokerError>> {
+      const dmResult = await getGroup(client, dmId);
+      if (dmResult.isErr()) return dmResult;
+
+      return wrapSdkCall(
+        async () => dmResult.value.sendText(text),
+        "sendDmMessage",
       );
     },
 

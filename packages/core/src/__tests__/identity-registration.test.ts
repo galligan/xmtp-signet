@@ -38,6 +38,8 @@ function createMockClient(inboxId: string): XmtpClient {
   return {
     inboxId,
     sendMessage: notImplemented,
+    createDm: notImplemented,
+    sendDmMessage: notImplemented,
     syncAll: notImplemented,
     syncGroup: notImplemented,
     getGroupInfo: notImplemented,

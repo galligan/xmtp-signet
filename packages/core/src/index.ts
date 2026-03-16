@@ -41,6 +41,7 @@ export type {
   XmtpClient,
   XmtpClientFactory,
   XmtpClientCreateOptions,
+  XmtpDmInfo,
   XmtpGroupInfo,
   XmtpDecodedMessage,
   XmtpGroupEvent,
@@ -60,6 +61,19 @@ export type {
 // Conversation actions
 export { createConversationActions } from "./conversation-actions.js";
 export type { ConversationActionDeps } from "./conversation-actions.js";
+
+// Convos invite parsing and join protocol
+export {
+  parseConvosInviteUrl,
+  verifyConvosInvite,
+} from "./convos/invite-parser.js";
+export type { ParsedConvosInvite } from "./convos/invite-parser.js";
+export { joinConversation } from "./convos/join.js";
+export type {
+  JoinConversationDeps,
+  JoinConversationOptions,
+  JoinResult,
+} from "./convos/join.js";
 
 // SDK integration (production XmtpClientFactory implementation)
 export {

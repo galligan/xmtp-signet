@@ -16,10 +16,14 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@noble/curves": "^1.8.0",
+    "@noble/hashes": "^1.8.0",
     "@xmtp-broker/contracts": "workspace:*",
     "@xmtp-broker/schemas": "workspace:*",
     "@xmtp/node-sdk": "6.0.0",
     "better-result": "catalog:",
+    "long": "^5.0.0",
+    "protobufjs": "^7.4.0",
     "viem": "^2.47.4",
     "zod": "catalog:"
   },

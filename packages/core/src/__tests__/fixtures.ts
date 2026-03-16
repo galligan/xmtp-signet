@@ -57,6 +57,9 @@ export function createMockXmtpClient(options?: {
   return {
     inboxId,
     sendMessage: async (_groupId, _content) => Result.ok(`msg-${Date.now()}`),
+    createDm: async (peerInboxId) =>
+      Result.ok({ dmId: `dm-${Date.now()}`, peerInboxId }),
+    sendDmMessage: async (_dmId, _text) => Result.ok(`dm-msg-${Date.now()}`),
     syncAll: async () => Result.ok(),
     syncGroup: async (_groupId) => Result.ok(),
     getGroupInfo: async (groupId) => {

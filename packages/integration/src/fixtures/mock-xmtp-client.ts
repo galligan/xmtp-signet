@@ -141,6 +141,14 @@ export function createMockXmtpClient(options?: MockXmtpClientOptions): {
       return Result.ok(`msg_${crypto.randomUUID()}`);
     },
 
+    async createDm(peerInboxId) {
+      return Result.ok({ dmId: `dm_${crypto.randomUUID()}`, peerInboxId });
+    },
+
+    async sendDmMessage(_dmId, _text) {
+      return Result.ok(`dm_msg_${crypto.randomUUID()}`);
+    },
+
     async syncAll() {
       return Result.ok(undefined);
     },

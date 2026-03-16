@@ -32,6 +32,8 @@ function createMockClient(options?: {
   return {
     inboxId,
     sendMessage: async () => Result.ok("msg-1"),
+    createDm: async (peerInboxId) => Result.ok({ dmId: `dm-1`, peerInboxId }),
+    sendDmMessage: async () => Result.ok("dm-msg-1"),
     syncAll: async () => Result.ok(),
     syncGroup: async () => Result.ok(),
     getGroupInfo: async (groupId) => {
