@@ -75,6 +75,26 @@ export type {
   JoinResult,
 } from "./convos/join.js";
 
+// Convos invite generation
+export {
+  generateConvosInviteSlug,
+  generateConvosInviteUrl,
+  decryptConversationToken,
+  unpackConversationId,
+} from "./convos/invite-generator.js";
+export type {
+  GenerateInviteSlugOptions,
+  GenerateInviteUrlOptions,
+} from "./convos/invite-generator.js";
+
+// Convos join request processing
+export { processJoinRequest } from "./convos/process-join-requests.js";
+export type {
+  ProcessJoinRequestDeps,
+  IncomingJoinMessage,
+  JoinRequestResult,
+} from "./convos/process-join-requests.js";
+
 // SDK integration (production XmtpClientFactory implementation)
 export {
   createSdkClientFactory,

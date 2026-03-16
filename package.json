@@ -16,6 +16,9 @@
     "format:fix": "oxfmt packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md",
     "check": "turbo run lint typecheck test"
   },
+  "dependencies": {
+    "@noble/ciphers": "^2.1.1"
+  },
   "devDependencies": {
     "lefthook": "catalog:",
     "oxfmt": "catalog:",
