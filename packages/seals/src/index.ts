@@ -28,6 +28,10 @@ export { computeInputDelta } from "./compute-delta.js";
 export { createSealStamper } from "./stamper.js";
 export type { SigningKeyHandle, StamperDeps } from "./stamper.js";
 
+// Seal publisher
+export { createSealPublisher } from "./publisher.js";
+export type { PublisherDeps } from "./publisher.js";
+
 // Seal manager
 export { createSealManager } from "./manager.js";
 export type {
