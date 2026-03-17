@@ -4,8 +4,8 @@ import {
   type GrantConfig,
   type ViewConfig,
   GrantDeniedError,
-} from "@xmtp-broker/schemas";
-import type { GrantError } from "@xmtp-broker/contracts";
+} from "@xmtp/signet-schemas";
+import type { GrantError } from "@xmtp/signet-contracts";
 import { checkGroupInScope } from "./scope-check.js";
 
 /**

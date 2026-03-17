@@ -3,8 +3,8 @@ import {
   type ContentTypeId,
   type ViewMode,
   ValidationError,
-} from "@xmtp-broker/schemas";
-import type { BrokerContentTypeConfig } from "./types.js";
+} from "@xmtp/signet-schemas";
+import type { SignetContentTypeConfig } from "./types.js";
 
 /**
  * Validates that a view mode is supported in the current version.
@@ -27,22 +27,22 @@ export function validateViewMode(
 
 /**
  * Computes the effective allowlist as the intersection of
- * baseline, broker-level, and agent view-level allowlists.
+ * baseline, signet-level, and agent view-level allowlists.
  *
- * effectiveAllowlist = baseline ∩ broker ∩ agent
+ * effectiveAllowlist = baseline ∩ signet ∩ agent
  *
  * Returns ValidationError if the intersection is empty.
  */
 export function resolveEffectiveAllowlist(
   baseline: readonly ContentTypeId[],
-  brokerConfig: BrokerContentTypeConfig,
+  signetConfig: SignetContentTypeConfig,
   agentAllowlist: readonly ContentTypeId[],
 ): Result<ReadonlySet<ContentTypeId>, ValidationError> {
   const baselineSet = new Set(baseline);
   const effective = new Set<ContentTypeId>();
 
   for (const ct of agentAllowlist) {
-    if (baselineSet.has(ct) && brokerConfig.allowlist.has(ct)) {
+    if (baselineSet.has(ct) && signetConfig.allowlist.has(ct)) {
       effective.add(ct);
     }
   }
@@ -51,7 +51,7 @@ export function resolveEffectiveAllowlist(
     return Result.err(
       ValidationError.create(
         "contentTypes",
-        "Effective content type allowlist is empty: no types are permitted across baseline, broker, and agent allowlists",
+        "Effective content type allowlist is empty: no types are permitted across baseline, signet, and agent allowlists",
       ),
     );
   }

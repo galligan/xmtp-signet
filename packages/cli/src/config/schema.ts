@@ -34,13 +34,23 @@ export const AdminServerConfigSchema: z.ZodType<
 
 // -- CLI config --
 
+type SignetConfig = {
+  env: "local" | "dev" | "production";
+  identityMode: "per-group" | "shared";
+  dataDir?: string | undefined;
+};
+
+type SignetConfigInput =
+  | {
+      env?: "local" | "dev" | "production" | undefined;
+      identityMode?: "per-group" | "shared" | undefined;
+      dataDir?: string | undefined;
+    }
+  | undefined;
+
 /** Top-level CLI configuration. Parsed from TOML with env var overrides. */
 export type CliConfig = {
-  broker: {
-    env: "local" | "dev" | "production";
-    identityMode: "per-group" | "shared";
-    dataDir?: string | undefined;
-  };
+  signet: SignetConfig;
   keys: {
     rootKeyPolicy: "biometric" | "passcode" | "open";
     operationalKeyPolicy: "biometric" | "passcode" | "open";
@@ -62,13 +72,7 @@ export type CliConfig = {
 };
 
 type CliConfigInput = {
-  broker?:
-    | {
-        env?: "local" | "dev" | "production" | undefined;
-        identityMode?: "per-group" | "shared" | undefined;
-        dataDir?: string | undefined;
-      }
-    | undefined;
+  signet?: SignetConfigInput;
   keys?:
     | {
         rootKeyPolicy?: "biometric" | "passcode" | "open" | undefined;
@@ -97,6 +101,91 @@ type CliConfigInput = {
     | undefined;
 };
 
+const SignetConfigSchema: z.ZodType<
+  SignetConfig,
+  z.ZodTypeDef,
+  SignetConfigInput
+> = z
+  .object({
+    env: z
+      .enum(["local", "dev", "production"])
+      .default("dev")
+      .describe("XMTP network environment"),
+    identityMode: z
+      .enum(["per-group", "shared"])
+      .default("per-group")
+      .describe("Identity isolation strategy"),
+    dataDir: z.string().optional().describe("Data directory override"),
+  })
+  .default({});
+
+const CliConfigBaseSchema = z
+  .object({
+    signet: SignetConfigSchema,
+    keys: z
+      .object({
+        rootKeyPolicy: z
+          .enum(["biometric", "passcode", "open"])
+          .default("biometric")
+          .describe("Protection level for the root key"),
+        operationalKeyPolicy: z
+          .enum(["biometric", "passcode", "open"])
+          .default("open")
+          .describe("Protection level for operational keys"),
+      })
+      .default({}),
+    ws: z
+      .object({
+        port: z
+          .number()
+          .int()
+          .nonnegative()
+          .default(8393)
+          .describe("WebSocket server port (0 for dynamic allocation)"),
+        host: z
+          .string()
+          .default("127.0.0.1")
+          .describe("WebSocket server bind address"),
+      })
+      .default({}),
+    admin: AdminServerConfigSchema,
+    sessions: z
+      .object({
+        defaultTtlSeconds: z
+          .number()
+          .int()
+          .positive()
+          .default(3600)
+          .describe("Default session TTL in seconds"),
+        maxConcurrentPerAgent: z
+          .number()
+          .int()
+          .positive()
+          .default(3)
+          .describe("Maximum concurrent sessions per agent"),
+        heartbeatIntervalSeconds: z
+          .number()
+          .int()
+          .positive()
+          .default(30)
+          .describe("Heartbeat interval in seconds"),
+      })
+      .default({}),
+    logging: z
+      .object({
+        level: z
+          .enum(["debug", "info", "warn", "error"])
+          .default("info")
+          .describe("Log level"),
+        auditLogPath: z
+          .string()
+          .optional()
+          .describe("Audit log file path override"),
+      })
+      .default({}),
+  })
+  .strict();
+
 /**
  * Top-level CLI configuration schema.
  * Parsed from TOML config file with env var overrides.
@@ -105,79 +194,4 @@ export const CliConfigSchema: z.ZodType<
   CliConfig,
   z.ZodTypeDef,
   CliConfigInput
-> = z.object({
-  broker: z
-    .object({
-      env: z
-        .enum(["local", "dev", "production"])
-        .default("dev")
-        .describe("XMTP network environment"),
-      identityMode: z
-        .enum(["per-group", "shared"])
-        .default("per-group")
-        .describe("Identity isolation strategy"),
-      dataDir: z.string().optional().describe("Data directory override"),
-    })
-    .default({}),
-  keys: z
-    .object({
-      rootKeyPolicy: z
-        .enum(["biometric", "passcode", "open"])
-        .default("biometric")
-        .describe("Protection level for the root key"),
-      operationalKeyPolicy: z
-        .enum(["biometric", "passcode", "open"])
-        .default("open")
-        .describe("Protection level for operational keys"),
-    })
-    .default({}),
-  ws: z
-    .object({
-      port: z
-        .number()
-        .int()
-        .nonnegative()
-        .default(8393)
-        .describe("WebSocket server port (0 for dynamic allocation)"),
-      host: z
-        .string()
-        .default("127.0.0.1")
-        .describe("WebSocket server bind address"),
-    })
-    .default({}),
-  admin: AdminServerConfigSchema,
-  sessions: z
-    .object({
-      defaultTtlSeconds: z
-        .number()
-        .int()
-        .positive()
-        .default(3600)
-        .describe("Default session TTL in seconds"),
-      maxConcurrentPerAgent: z
-        .number()
-        .int()
-        .positive()
-        .default(3)
-        .describe("Maximum concurrent sessions per agent"),
-      heartbeatIntervalSeconds: z
-        .number()
-        .int()
-        .positive()
-        .default(30)
-        .describe("Heartbeat interval in seconds"),
-    })
-    .default({}),
-  logging: z
-    .object({
-      level: z
-        .enum(["debug", "info", "warn", "error"])
-        .default("info")
-        .describe("Log level"),
-      auditLogPath: z
-        .string()
-        .optional()
-        .describe("Audit log file path override"),
-    })
-    .default({}),
-});
+> = CliConfigBaseSchema;

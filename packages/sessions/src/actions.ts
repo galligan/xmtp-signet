@@ -1,28 +1,28 @@
 import { Result } from "better-result";
 import { z } from "zod";
-import type { ActionSpec, SessionManager } from "@xmtp-broker/contracts";
+import type { ActionSpec, SessionManager } from "@xmtp/signet-contracts";
 import type {
-  BrokerError,
+  SignetError,
   SessionConfig as SessionConfigType,
   SessionRevocationReason as SessionRevocationReasonType,
-} from "@xmtp-broker/schemas";
-import { SessionConfig, SessionRevocationReason } from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
+import { SessionConfig, SessionRevocationReason } from "@xmtp/signet-schemas";
 
 export interface SessionActionDeps {
   readonly sessionManager: SessionManager;
 }
 
 function widenActionSpec<TInput, TOutput>(
-  spec: ActionSpec<TInput, TOutput, BrokerError>,
-): ActionSpec<unknown, unknown, BrokerError> {
+  spec: ActionSpec<TInput, TOutput, SignetError>,
+): ActionSpec<unknown, unknown, SignetError> {
   // The shared registry intentionally erases per-action input/output types.
-  return spec as ActionSpec<unknown, unknown, BrokerError>;
+  return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
 export function createSessionActions(
   deps: SessionActionDeps,
-): ActionSpec<unknown, unknown, BrokerError>[] {
-  const issue: ActionSpec<SessionConfigType, unknown, BrokerError> = {
+): ActionSpec<unknown, unknown, SignetError>[] {
+  const issue: ActionSpec<SessionConfigType, unknown, SignetError> = {
     id: "session.issue",
     input: SessionConfig,
     handler: async (input) => deps.sessionManager.issue(input),
@@ -31,7 +31,7 @@ export function createSessionActions(
       rpcMethod: "session.issue",
     },
     mcp: {
-      toolName: "broker/session/issue",
+      toolName: "signet/session/issue",
       description: "Issue a new session",
       readOnly: false,
     },
@@ -40,7 +40,7 @@ export function createSessionActions(
   const list: ActionSpec<
     { agentInboxId?: string | undefined },
     unknown,
-    BrokerError
+    SignetError
   > = {
     id: "session.list",
     input: z.object({
@@ -52,13 +52,13 @@ export function createSessionActions(
       rpcMethod: "session.list",
     },
     mcp: {
-      toolName: "broker/session/list",
+      toolName: "signet/session/list",
       description: "List active sessions",
       readOnly: true,
     },
   };
 
-  const inspect: ActionSpec<{ sessionId: string }, unknown, BrokerError> = {
+  const inspect: ActionSpec<{ sessionId: string }, unknown, SignetError> = {
     id: "session.inspect",
     input: z.object({
       sessionId: z.string(),
@@ -69,7 +69,7 @@ export function createSessionActions(
       rpcMethod: "session.inspect",
     },
     mcp: {
-      toolName: "broker/session/inspect",
+      toolName: "signet/session/inspect",
       description: "Inspect a session",
       readOnly: true,
     },
@@ -78,7 +78,7 @@ export function createSessionActions(
   const revoke: ActionSpec<
     { sessionId: string; reason?: SessionRevocationReasonType | undefined },
     { revoked: true },
-    BrokerError
+    SignetError
   > = {
     id: "session.revoke",
     input: z.object({
@@ -100,7 +100,7 @@ export function createSessionActions(
       rpcMethod: "session.revoke",
     },
     mcp: {
-      toolName: "broker/session/revoke",
+      toolName: "signet/session/revoke",
       description: "Revoke a session",
       readOnly: false,
       destructive: true,

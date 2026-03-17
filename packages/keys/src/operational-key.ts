@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp-broker/schemas";
+import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
 import type { Vault } from "./vault.js";
 import type { OperationalKey } from "./types.js";
 import {

@@ -3,9 +3,9 @@ import { Result } from "better-result";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdir, rm, readFile } from "node:fs/promises";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
-import { createBrokerRuntime, type BrokerRuntimeDeps } from "../runtime.js";
+import { createSignetRuntime, type SignetRuntimeDeps } from "../runtime.js";
 import { CliConfigSchema, type CliConfig } from "../config/schema.js";
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ function makeTempDir(): string {
 
 function makeConfig(tempDir: string): CliConfig {
   return CliConfigSchema.parse({
-    broker: { dataDir: join(tempDir, "data") },
+    signet: { dataDir: join(tempDir, "data") },
     admin: { socketPath: join(tempDir, "admin.sock") },
     logging: { auditLogPath: join(tempDir, "audit.jsonl") },
   });
@@ -44,7 +44,7 @@ function createCallTracker(): {
 function makeMockDeps(tracker: {
   calls: string[];
   record(name: string): void;
-}): BrokerRuntimeDeps & { _dispatcher: () => AdminDispatcher | undefined } {
+}): SignetRuntimeDeps & { _dispatcher: () => AdminDispatcher | undefined } {
   let capturedDispatcher: AdminDispatcher | undefined;
 
   return {
@@ -119,20 +119,20 @@ function makeMockDeps(tracker: {
         signWithOperationalKey: async () => Result.ok(new Uint8Array()),
       });
     },
-    createBrokerCore: () => {
-      tracker.record("brokerCore.create");
+    createSignetCore: () => {
+      tracker.record("signetCore.create");
       return {
         state: "uninitialized" as const,
         initializeLocal: async () => {
-          tracker.record("brokerCore.initializeLocal");
+          tracker.record("signetCore.initializeLocal");
           return Result.ok(undefined);
         },
         initialize: async () => {
-          tracker.record("brokerCore.initialize");
+          tracker.record("signetCore.initialize");
           return Result.ok(undefined);
         },
         shutdown: async () => {
-          tracker.record("brokerCore.shutdown");
+          tracker.record("signetCore.shutdown");
           return Result.ok(undefined);
         },
         sendMessage: async () =>
@@ -164,8 +164,8 @@ function makeMockDeps(tracker: {
         isActive: async () => Result.ok(false),
       };
     },
-    createAttestationManager: () => {
-      tracker.record("attestationManager.create");
+    createSealManager: () => {
+      tracker.record("sealManager.create");
       return {
         issue: async () => Result.err(InternalError.create("not impl")),
         refresh: async () => Result.err(InternalError.create("not impl")),
@@ -212,7 +212,7 @@ function makeMockDeps(tracker: {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("createBrokerRuntime", () => {
+describe("createSignetRuntime", () => {
   let tempDir: string;
 
   beforeEach(async () => {
@@ -229,7 +229,7 @@ describe("createBrokerRuntime", () => {
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
@@ -239,7 +239,7 @@ describe("createBrokerRuntime", () => {
     expect(runtime.config).toBe(config);
     expect(runtime.core).toBeDefined();
     expect(runtime.sessionManager).toBeDefined();
-    expect(runtime.attestationManager).toBeDefined();
+    expect(runtime.sealManager).toBeDefined();
     expect(runtime.keyManager).toBeDefined();
     expect(runtime.wsServer).toBeDefined();
     expect(runtime.adminServer).toBeDefined();
@@ -251,7 +251,7 @@ describe("createBrokerRuntime", () => {
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
     const runtime = result.value;
@@ -268,7 +268,7 @@ describe("createBrokerRuntime", () => {
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
@@ -277,8 +277,8 @@ describe("createBrokerRuntime", () => {
     // Key manager initialized first, then local core init, then network
     // init (for non-local envs), then ws/admin servers.
     const initIdx = tracker.calls.indexOf("keyManager.initialize");
-    const localIdx = tracker.calls.indexOf("brokerCore.initializeLocal");
-    const networkIdx = tracker.calls.indexOf("brokerCore.initialize");
+    const localIdx = tracker.calls.indexOf("signetCore.initializeLocal");
+    const networkIdx = tracker.calls.indexOf("signetCore.initialize");
     const wsIdx = tracker.calls.indexOf("wsServer.start");
     const adminIdx = tracker.calls.indexOf("adminServer.start");
 
@@ -289,12 +289,12 @@ describe("createBrokerRuntime", () => {
     expect(adminIdx).toBeGreaterThan(wsIdx);
   });
 
-  test("registers session and broker actions before admin server is created", async () => {
+  test("registers session and signet actions before admin server is created", async () => {
     const tracker = createCallTracker();
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
@@ -304,27 +304,27 @@ describe("createBrokerRuntime", () => {
     expect(dispatcher?.hasMethod("session.list")).toBe(true);
     expect(dispatcher?.hasMethod("session.inspect")).toBe(true);
     expect(dispatcher?.hasMethod("session.revoke")).toBe(true);
-    expect(dispatcher?.hasMethod("broker.status")).toBe(true);
-    expect(dispatcher?.hasMethod("broker.stop")).toBe(true);
+    expect(dispatcher?.hasMethod("signet.status")).toBe(true);
+    expect(dispatcher?.hasMethod("signet.stop")).toBe(true);
   });
 
   test("skips network init in local env", async () => {
     const tracker = createCallTracker();
     const config = CliConfigSchema.parse({
-      broker: { dataDir: join(tempDir, "data"), env: "local" },
+      signet: { dataDir: join(tempDir, "data"), env: "local" },
       admin: { socketPath: join(tempDir, "admin.sock") },
       logging: { auditLogPath: join(tempDir, "audit.jsonl") },
     });
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
     const startResult = await result.value.start();
     expect(Result.isOk(startResult)).toBe(true);
     expect(result.value.state).toBe("running");
-    expect(tracker.calls).not.toContain("brokerCore.initialize");
+    expect(tracker.calls).not.toContain("signetCore.initialize");
   });
 
   test("shutdown() reverses in correct order", async () => {
@@ -332,7 +332,7 @@ describe("createBrokerRuntime", () => {
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
     const runtime = result.value;
@@ -347,7 +347,7 @@ describe("createBrokerRuntime", () => {
     // Admin stopped first, then ws, then core
     const adminIdx = tracker.calls.indexOf("adminServer.stop");
     const wsIdx = tracker.calls.indexOf("wsServer.stop");
-    const coreIdx = tracker.calls.indexOf("brokerCore.shutdown");
+    const coreIdx = tracker.calls.indexOf("signetCore.shutdown");
 
     expect(adminIdx).toBeGreaterThanOrEqual(0);
     expect(wsIdx).toBeGreaterThan(adminIdx);
@@ -364,7 +364,7 @@ describe("createBrokerRuntime", () => {
       return Result.err(InternalError.create("Vault unlock failed"));
     };
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
 
     // Creation itself should fail if key manager can't be created
     expect(Result.isError(result)).toBe(true);
@@ -377,7 +377,7 @@ describe("createBrokerRuntime", () => {
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
     const runtime = result.value;
@@ -392,7 +392,7 @@ describe("createBrokerRuntime", () => {
     const tracker = createCallTracker();
     // Config with port 0 (dynamic allocation)
     const config = CliConfigSchema.parse({
-      broker: { dataDir: join(tempDir, "data") },
+      signet: { dataDir: join(tempDir, "data") },
       admin: { socketPath: join(tempDir, "admin.sock") },
       logging: { auditLogPath: join(tempDir, "audit.jsonl") },
       ws: { port: 0 },
@@ -416,7 +416,7 @@ describe("createBrokerRuntime", () => {
       };
     };
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
     const runtime = result.value;
@@ -437,7 +437,7 @@ describe("createBrokerRuntime", () => {
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
     const runtime = result.value;

@@ -9,8 +9,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/xmtp/xmtp-broker.git
-cd xmtp-broker
+git clone https://github.com/xmtp/xmtp-signet.git
+cd xmtp-signet
 bun install
 bunx lefthook install
 ```
@@ -20,14 +20,14 @@ This installs workspace dependencies and sets up git hooks via Lefthook.
 ## Project structure
 
 ```
-xmtp-broker/
+xmtp-signet/
 ├── packages/
 │   ├── schemas/          # Zod schemas, types, error taxonomy
 │   ├── contracts/        # Service interfaces, action specs, wire formats
 │   ├── core/             # XMTP client lifecycle, SDK integration
 │   ├── keys/             # Key hierarchy, vault, signers, admin keys
 │   ├── sessions/         # Session lifecycle, token generation
-│   ├── attestations/     # Attestation lifecycle, signing
+│   ├── seals/            # Seal lifecycle, signing
 │   ├── policy/           # View projection, grant validation
 │   ├── verifier/         # 6-check verification service
 │   ├── ws/               # WebSocket transport (Bun.serve)

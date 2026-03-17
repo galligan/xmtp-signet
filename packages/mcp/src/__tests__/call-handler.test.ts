@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { Result } from "better-result";
-import { PermissionError } from "@xmtp-broker/schemas";
+import { PermissionError } from "@xmtp/signet-schemas";
 import { handleCallTool } from "../call-handler.js";
 import {
   createSendSpec,
@@ -11,7 +11,7 @@ import {
 
 function makeCallContext() {
   return {
-    brokerId: "broker_1",
+    signetId: "signet_1",
     signerProvider: createMockSignerProvider(),
     sessionRecord: makeSessionRecord(),
     requestTimeoutMs: 30_000,
@@ -25,7 +25,7 @@ describe("handleCallTool", () => {
 
     const result = await handleCallTool(
       {
-        name: "broker/message/send",
+        name: "signet/message/send",
         arguments: {
           conversationId: "conv_1",
           content: { text: "hello" },
@@ -47,7 +47,7 @@ describe("handleCallTool", () => {
 
     const result = await handleCallTool(
       {
-        name: "broker/message/send",
+        name: "signet/message/send",
         arguments: {
           // missing required conversationId
           content: { text: "hello" },
@@ -69,7 +69,7 @@ describe("handleCallTool", () => {
 
     const result = await handleCallTool(
       {
-        name: "broker/message/list",
+        name: "signet/message/list",
         arguments: { conversationId: "conv_1" },
       },
       registry,
@@ -90,7 +90,7 @@ describe("handleCallTool", () => {
 
     const result = await handleCallTool(
       {
-        name: "broker/message/send",
+        name: "signet/message/send",
         arguments: {
           conversationId: "conv_1",
           content: { text: "hello" },
@@ -112,7 +112,7 @@ describe("handleCallTool", () => {
 
     const result = await handleCallTool(
       {
-        name: "broker/nonexistent/tool",
+        name: "signet/nonexistent/tool",
         arguments: {},
       },
       registry,
@@ -134,7 +134,7 @@ describe("handleCallTool", () => {
 
     const result = await handleCallTool(
       {
-        name: "broker/message/send",
+        name: "signet/message/send",
         arguments: {
           conversationId: "conv_1",
           content: { text: "hello" },

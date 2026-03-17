@@ -2,7 +2,7 @@ import type {
   SessionConfig,
   ViewConfig,
   GrantConfig,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
 export const baseView: ViewConfig = {
   mode: "redacted",

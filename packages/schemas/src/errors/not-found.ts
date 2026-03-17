@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class NotFoundError extends Error implements BrokerError {
+export class NotFoundError extends Error implements SignetError {
   readonly _tag = "NotFoundError" as const;
   readonly code = 1100;
   readonly category = "not_found" as const;

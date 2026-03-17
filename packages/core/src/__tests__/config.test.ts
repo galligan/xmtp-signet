@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  BrokerCoreConfigSchema,
+  SignetCoreConfigSchema,
   IdentityModeSchema,
   XmtpEnvSchema,
 } from "../config.js";
@@ -30,27 +30,27 @@ describe("IdentityModeSchema", () => {
   });
 });
 
-describe("BrokerCoreConfigSchema", () => {
+describe("SignetCoreConfigSchema", () => {
   test("requires dataDir", () => {
-    const result = BrokerCoreConfigSchema.safeParse({});
+    const result = SignetCoreConfigSchema.safeParse({});
     expect(result.success).toBe(false);
   });
 
   test("accepts minimal config with defaults", () => {
-    const config = BrokerCoreConfigSchema.parse({
-      dataDir: "/tmp/broker",
+    const config = SignetCoreConfigSchema.parse({
+      dataDir: "/tmp/signet",
     });
-    expect(config.dataDir).toBe("/tmp/broker");
+    expect(config.dataDir).toBe("/tmp/signet");
     expect(config.env).toBe("dev");
     expect(config.identityMode).toBe("per-group");
     expect(config.heartbeatIntervalMs).toBe(30_000);
     expect(config.syncTimeoutMs).toBe(30_000);
-    expect(config.appVersion).toBe("xmtp-broker/0.1.0");
+    expect(config.appVersion).toBe("xmtp-signet/0.1.0");
   });
 
   test("accepts fully specified config", () => {
-    const config = BrokerCoreConfigSchema.parse({
-      dataDir: "/data/broker",
+    const config = SignetCoreConfigSchema.parse({
+      dataDir: "/data/signet",
       env: "production",
       identityMode: "shared",
       heartbeatIntervalMs: 10_000,
@@ -65,7 +65,7 @@ describe("BrokerCoreConfigSchema", () => {
   });
 
   test("rejects non-positive heartbeatIntervalMs", () => {
-    const result = BrokerCoreConfigSchema.safeParse({
+    const result = SignetCoreConfigSchema.safeParse({
       dataDir: "/tmp",
       heartbeatIntervalMs: 0,
     });
@@ -73,7 +73,7 @@ describe("BrokerCoreConfigSchema", () => {
   });
 
   test("rejects non-positive syncTimeoutMs", () => {
-    const result = BrokerCoreConfigSchema.safeParse({
+    const result = SignetCoreConfigSchema.safeParse({
       dataDir: "/tmp",
       syncTimeoutMs: -1,
     });
@@ -81,7 +81,7 @@ describe("BrokerCoreConfigSchema", () => {
   });
 
   test("rejects non-integer heartbeatIntervalMs", () => {
-    const result = BrokerCoreConfigSchema.safeParse({
+    const result = SignetCoreConfigSchema.safeParse({
       dataDir: "/tmp",
       heartbeatIntervalMs: 1.5,
     });

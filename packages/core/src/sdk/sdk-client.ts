@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
-import { NotFoundError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { NotFoundError } from "@xmtp/signet-schemas";
 import type {
   XmtpClient,
   XmtpDmInfo,
@@ -28,7 +28,7 @@ export interface SdkClientOptions {
 async function getGroup(
   client: SdkClientShape,
   groupId: string,
-): Promise<Result<SdkGroupShape, BrokerError>> {
+): Promise<Result<SdkGroupShape, SignetError>> {
   const result = await wrapSdkCall(
     async () => client.conversations.getConversationById(groupId),
     "getConversationById",
@@ -76,22 +76,19 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
     async sendMessage(
       groupId: string,
       content: unknown,
-    ): Promise<Result<string, BrokerError>> {
+    ): Promise<Result<string, SignetError>> {
       const groupResult = await getGroup(client, groupId);
       if (groupResult.isErr()) return groupResult;
       const group = groupResult.value;
 
       const text = resolveTextContent(content);
 
-      return wrapSdkCall(
-        async () => group.sendText(text),
-        "sendMessage",
-      );
+      return wrapSdkCall(async () => group.sendText(text), "sendMessage");
     },
 
     async createDm(
       peerInboxId: string,
-    ): Promise<Result<XmtpDmInfo, BrokerError>> {
+    ): Promise<Result<XmtpDmInfo, SignetError>> {
       return wrapSdkCall(async () => {
         const dm = await client.conversations.createDm(peerInboxId);
         return { dmId: dm.id, peerInboxId };
@@ -101,7 +98,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
     async sendDmMessage(
       dmId: string,
       text: string,
-    ): Promise<Result<string, BrokerError>> {
+    ): Promise<Result<string, SignetError>> {
       const dmResult = await getGroup(client, dmId);
       if (dmResult.isErr()) return dmResult;
 
@@ -111,7 +108,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       );
     },
 
-    async syncAll(): Promise<Result<void, BrokerError>> {
+    async syncAll(): Promise<Result<void, SignetError>> {
       return wrapSdkCall(
         async () => {
           await client.conversations.sync();
@@ -122,7 +119,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       );
     },
 
-    async syncGroup(groupId: string): Promise<Result<void, BrokerError>> {
+    async syncGroup(groupId: string): Promise<Result<void, SignetError>> {
       const groupResult = await getGroup(client, groupId);
       if (groupResult.isErr()) return groupResult;
 
@@ -134,7 +131,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
     async getGroupInfo(
       groupId: string,
-    ): Promise<Result<XmtpGroupInfo, BrokerError>> {
+    ): Promise<Result<XmtpGroupInfo, SignetError>> {
       const groupResult = await getGroup(client, groupId);
       if (groupResult.isErr()) return groupResult;
       const group = groupResult.value;
@@ -149,7 +146,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       );
     },
 
-    async listGroups(): Promise<Result<readonly XmtpGroupInfo[], BrokerError>> {
+    async listGroups(): Promise<Result<readonly XmtpGroupInfo[], SignetError>> {
       return wrapSdkCall(async () => {
         const groups = client.conversations.listGroups();
         const results: XmtpGroupInfo[] = [];
@@ -164,7 +161,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
     async createGroup(
       memberInboxIds: readonly string[],
       options?: { name?: string },
-    ): Promise<Result<XmtpGroupInfo, BrokerError>> {
+    ): Promise<Result<XmtpGroupInfo, SignetError>> {
       return wrapSdkCall(async () => {
         const opts = options?.name !== undefined ? { name: options.name } : {};
         const group = await client.conversations.createGroup(
@@ -180,7 +177,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
     async addMembers(
       groupId: string,
       inboxIds: readonly string[],
-    ): Promise<Result<void, BrokerError>> {
+    ): Promise<Result<void, SignetError>> {
       const groupResult = await getGroup(client, groupId);
       if (groupResult.isErr()) return groupResult;
 
@@ -194,7 +191,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
     async removeMembers(
       groupId: string,
       inboxIds: readonly string[],
-    ): Promise<Result<void, BrokerError>> {
+    ): Promise<Result<void, SignetError>> {
       const groupResult = await getGroup(client, groupId);
       if (groupResult.isErr()) return groupResult;
 
@@ -205,14 +202,14 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       );
     },
 
-    async streamAllMessages(): Promise<Result<MessageStream, BrokerError>> {
+    async streamAllMessages(): Promise<Result<MessageStream, SignetError>> {
       return wrapSdkCall(async () => {
         const stream = await client.conversations.streamAllGroupMessages();
         return wrapMessageStream(stream);
       }, "streamAllMessages");
     },
 
-    async streamGroups(): Promise<Result<GroupStream, BrokerError>> {
+    async streamGroups(): Promise<Result<GroupStream, SignetError>> {
       return wrapSdkCall(async () => {
         const stream = await client.conversations.streamGroups();
         return wrapGroupStream(stream);

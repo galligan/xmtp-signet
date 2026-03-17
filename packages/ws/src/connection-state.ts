@@ -1,4 +1,4 @@
-import type { SessionRecord } from "@xmtp-broker/contracts";
+import type { SessionRecord } from "@xmtp/signet-contracts";
 import { CircularBuffer } from "./replay-buffer.js";
 import { BackpressureTracker } from "./backpressure.js";
 import type { SequencedFrame } from "./frames.js";

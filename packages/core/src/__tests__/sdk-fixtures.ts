@@ -5,7 +5,7 @@
  * factory functions that create mock instances conforming to those types.
  */
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { SignerProviderLike } from "../xmtp-client-factory.js";
 import type {
   SdkIdentifierShape,
@@ -69,8 +69,7 @@ export function createMockGroup(
   const name = overrides?.name ?? "Test Group";
   const description = overrides?.description ?? "A test group";
   const isActive = overrides?.isActive ?? true;
-  const createdAtNs =
-    overrides?.createdAtNs ?? BigInt(Date.now()) * 1_000_000n;
+  const createdAtNs = overrides?.createdAtNs ?? BigInt(Date.now()) * 1_000_000n;
   const membersList: SdkGroupMemberShape[] = overrides?.members ?? [
     {
       inboxId: "member-1",
@@ -93,8 +92,7 @@ export function createMockGroup(
     send: async (_encoded: unknown) => `msg-${Date.now()}`,
     addMembers: async (_inboxIds: string[]) => {},
     removeMembers: async (_inboxIds: string[]) => {},
-    stream: async () =>
-      createMockAsyncStreamProxy<SdkDecodedMessageShape>([]),
+    stream: async () => createMockAsyncStreamProxy<SdkDecodedMessageShape>([]),
     metadata: async () => ({
       creatorInboxId: "creator-inbox",
       conversationType: "group" as const,
@@ -122,10 +120,8 @@ export function createMockSdkNativeClient(
       listGroups: () => groups,
       sync: async () => {},
       syncAll: async () => ({ numConversations: groups.length }),
-      stream: async () =>
-        createMockAsyncStreamProxy<SdkGroupShape>([]),
-      streamGroups: async () =>
-        createMockAsyncStreamProxy<SdkGroupShape>([]),
+      stream: async () => createMockAsyncStreamProxy<SdkGroupShape>([]),
+      streamGroups: async () => createMockAsyncStreamProxy<SdkGroupShape>([]),
       streamAllMessages: async () =>
         createMockAsyncStreamProxy<SdkDecodedMessageShape>([]),
       streamAllGroupMessages: async () =>
@@ -188,8 +184,8 @@ export function createTestSignerProvider(
     fingerprint: string;
     dbEncryptionKey: Uint8Array;
     xmtpIdentityKey: `0x${string}`;
-    signError: BrokerError;
-    publicKeyError: BrokerError;
+    signError: SignetError;
+    publicKeyError: SignetError;
   }>,
 ): SignerProviderLike {
   return {
@@ -210,8 +206,6 @@ export function createTestSignerProvider(
     getDbEncryptionKey: async (_identityId: string) =>
       Result.ok(overrides?.dbEncryptionKey ?? new Uint8Array(32).fill(3)),
     getXmtpIdentityKey: async (_identityId: string) =>
-      Result.ok(
-        overrides?.xmtpIdentityKey ?? TEST_XMTP_IDENTITY_KEY,
-      ),
+      Result.ok(overrides?.xmtpIdentityKey ?? TEST_XMTP_IDENTITY_KEY),
   };
 }

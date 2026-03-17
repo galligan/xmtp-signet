@@ -4,7 +4,7 @@ import {
   ERROR_CATEGORY_META,
   errorCategoryMeta,
   ValidationError,
-  AttestationError,
+  SealError,
   NotFoundError,
   PermissionError,
   GrantDeniedError,
@@ -16,7 +16,7 @@ import {
   NetworkError,
   matchError,
 } from "../errors/index.js";
-import type { AnyBrokerError } from "../errors/index.js";
+import type { AnySignetError } from "../errors/index.js";
 
 describe("ErrorCategory", () => {
   it("accepts all 8 categories", () => {
@@ -113,14 +113,18 @@ describe("ValidationError", () => {
   });
 });
 
-describe("AttestationError", () => {
+describe("SealError", () => {
   it("creates with correct properties", () => {
-    const err = AttestationError.create("att-1", "expired");
-    expect(err._tag).toBe("AttestationError");
+    const err = SealError.create("att-1", "expired");
+    expect(err._tag).toBe("SealError");
     expect(err.code).toBe(1010);
     expect(err.category).toBe("validation");
-    expect(err.context.attestationId).toBe("att-1");
-    expect(err.message).toBe("Attestation 'att-1': expired");
+    expect(err.context.sealId).toBe("att-1");
+    expect(err.message).toBe("Seal 'att-1': expired");
+  });
+
+  it("is an instance of Error", () => {
+    expect(SealError.create("att-1", "expired")).toBeInstanceOf(Error);
   });
 });
 
@@ -222,7 +226,10 @@ describe("CancelledError", () => {
 
 describe("NetworkError", () => {
   it("creates with correct properties", () => {
-    const err = NetworkError.create("xmtp://node.example.com", "connection refused");
+    const err = NetworkError.create(
+      "xmtp://node.example.com",
+      "connection refused",
+    );
     expect(err._tag).toBe("NetworkError");
     expect(err.code).toBe(1700);
     expect(err.category).toBe("network");
@@ -247,10 +254,10 @@ describe("NetworkError", () => {
 
 describe("matchError", () => {
   it("dispatches to correct handler by _tag", () => {
-    const err: AnyBrokerError = GrantDeniedError.create("send", "messaging");
+    const err: AnySignetError = GrantDeniedError.create("send", "messaging");
     const result = matchError(err, {
       ValidationError: () => "validation",
-      AttestationError: () => "attestation",
+      SealError: () => "seal",
       NotFoundError: () => "not_found",
       PermissionError: () => "permission",
       GrantDeniedError: (e) => `denied:${e.context.operation}`,
@@ -265,9 +272,9 @@ describe("matchError", () => {
   });
 
   it("handles every error class", () => {
-    const errors: AnyBrokerError[] = [
+    const errors: AnySignetError[] = [
       ValidationError.create("f", "r"),
-      AttestationError.create("a", "r"),
+      SealError.create("a", "r"),
       NotFoundError.create("T", "id"),
       PermissionError.create("msg"),
       GrantDeniedError.create("op", "gt"),
@@ -282,7 +289,7 @@ describe("matchError", () => {
     for (const err of errors) {
       const result = matchError(err, {
         ValidationError: () => "ValidationError",
-        AttestationError: () => "AttestationError",
+        SealError: () => "SealError",
         NotFoundError: () => "NotFoundError",
         PermissionError: () => "PermissionError",
         GrantDeniedError: () => "GrantDeniedError",

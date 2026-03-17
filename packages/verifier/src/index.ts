@@ -11,9 +11,9 @@ export {
 } from "./schemas/statement.js";
 export {
   VerifierCapabilities,
-  VerifierSelfAttestationSchema,
-  type VerifierSelfAttestation,
-} from "./schemas/self-attestation.js";
+  VerifierSelfSealSchema,
+  type VerifierSelfSeal,
+} from "./schemas/self-seal.js";
 
 // Config
 export {
@@ -47,8 +47,8 @@ export type { CheckHandler } from "./checks/handler.js";
 export { createSourceAvailableCheck } from "./checks/source-available.js";
 export { createBuildProvenanceCheck } from "./checks/build-provenance.js";
 export { createReleaseSigningCheck } from "./checks/release-signing.js";
-export { createAttestationSignatureCheck } from "./checks/attestation-signature.js";
-export { createAttestationChainCheck } from "./checks/attestation-chain.js";
+export { createSealSignatureCheck } from "./checks/seal-signature.js";
+export { createSealChainCheck } from "./checks/seal-chain.js";
 export { createSchemaComplianceCheck } from "./checks/schema-compliance.js";
 
 // Service

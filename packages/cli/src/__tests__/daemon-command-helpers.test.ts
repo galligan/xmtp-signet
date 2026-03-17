@@ -8,7 +8,7 @@ import {
   AuthError,
   InternalError,
   ValidationError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import { CliConfigSchema } from "../config/schema.js";
 import {
   createWithDaemonClient,
@@ -30,7 +30,7 @@ afterEach(async () => {
 
 function makeConfig(dataDir: string) {
   return CliConfigSchema.parse({
-    broker: { dataDir },
+    signet: { dataDir },
     admin: { socketPath: join(dataDir, "admin.sock") },
     logging: { auditLogPath: join(dataDir, "audit.jsonl") },
   });
@@ -61,7 +61,7 @@ describe("parseJsonInput", () => {
   });
 
   test("parses @file JSON input", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "xmtp-broker-cli-json-"));
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-cli-json-"));
     testDirs.push(dir);
     const filePath = join(dir, "grant.json");
 
@@ -110,7 +110,7 @@ describe("parseJsonInput", () => {
 describe("withDaemonClient", () => {
   test("loads config, signs an admin JWT, connects, runs the callback, and closes the client", async () => {
     const calls: string[] = [];
-    const dir = await mkdtemp(join(tmpdir(), "xmtp-broker-cli-daemon-"));
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-cli-daemon-"));
     testDirs.push(dir);
     const config = makeConfig(dir);
     const withDaemonClient = createWithDaemonClient({
@@ -118,7 +118,7 @@ describe("withDaemonClient", () => {
       resolvePaths: () => ({
         configFile: join(dir, "config.toml"),
         dataDir: dir,
-        pidFile: join(dir, "broker.pid"),
+        pidFile: join(dir, "signet.pid"),
         adminSocket: join(dir, "admin.sock"),
         auditLog: join(dir, "audit.jsonl"),
       }),
@@ -158,7 +158,7 @@ describe("withDaemonClient", () => {
     const result = await withDaemonClient({}, async (client, ctx) => {
       calls.push(`run:${ctx.paths.adminSocket}`);
       const requestResult = await client.request<{ ok: boolean }>(
-        "broker.status",
+        "signet.status",
       );
       if (requestResult.isErr()) {
         return requestResult;
@@ -181,7 +181,7 @@ describe("withDaemonClient", () => {
   });
 
   test("returns an auth error when no admin key is available", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "xmtp-broker-cli-no-admin-"));
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-cli-no-admin-"));
     testDirs.push(dir);
     const config = makeConfig(dir);
     const withDaemonClient = createWithDaemonClient({
@@ -189,7 +189,7 @@ describe("withDaemonClient", () => {
       resolvePaths: () => ({
         configFile: join(dir, "config.toml"),
         dataDir: dir,
-        pidFile: join(dir, "broker.pid"),
+        pidFile: join(dir, "signet.pid"),
         adminSocket: join(dir, "admin.sock"),
         auditLog: join(dir, "audit.jsonl"),
       }),
@@ -224,7 +224,7 @@ describe("withDaemonClient", () => {
 
   test("still closes the client when the callback returns an error", async () => {
     const calls: string[] = [];
-    const dir = await mkdtemp(join(tmpdir(), "xmtp-broker-cli-close-"));
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-cli-close-"));
     testDirs.push(dir);
     const config = makeConfig(dir);
     const withDaemonClient = createWithDaemonClient({
@@ -232,7 +232,7 @@ describe("withDaemonClient", () => {
       resolvePaths: () => ({
         configFile: join(dir, "config.toml"),
         dataDir: dir,
-        pidFile: join(dir, "broker.pid"),
+        pidFile: join(dir, "signet.pid"),
         adminSocket: join(dir, "admin.sock"),
         auditLog: join(dir, "audit.jsonl"),
       }),
@@ -278,7 +278,7 @@ describe("withDaemonClient", () => {
     const requestFinished = new Promise<void>((resolve) => {
       resolveRequest = resolve;
     });
-    const dir = await mkdtemp(join(tmpdir(), "xmtp-broker-cli-await-"));
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-cli-await-"));
     testDirs.push(dir);
     const config = makeConfig(dir);
     const withDaemonClient = createWithDaemonClient({
@@ -286,7 +286,7 @@ describe("withDaemonClient", () => {
       resolvePaths: () => ({
         configFile: join(dir, "config.toml"),
         dataDir: dir,
-        pidFile: join(dir, "broker.pid"),
+        pidFile: join(dir, "signet.pid"),
         adminSocket: join(dir, "admin.sock"),
         auditLog: join(dir, "audit.jsonl"),
       }),
@@ -321,7 +321,7 @@ describe("withDaemonClient", () => {
     });
 
     const pending = withDaemonClient({}, async (client) => {
-      const result = await client.request("broker.status");
+      const result = await client.request("signet.status");
       if (result.isErr()) {
         return result;
       }

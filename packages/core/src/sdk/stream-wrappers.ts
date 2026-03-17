@@ -23,7 +23,7 @@ interface GroupStreamItem {
 }
 
 /**
- * Wraps an SDK message stream into broker's MessageStream type
+ * Wraps an SDK message stream into signet's MessageStream type
  * with abort support.
  */
 export function wrapMessageStream(
@@ -50,7 +50,7 @@ export function wrapMessageStream(
 }
 
 /**
- * Wraps an SDK group stream into broker's GroupStream type
+ * Wraps an SDK group stream into signet's GroupStream type
  * with abort support.
  */
 export function wrapGroupStream(

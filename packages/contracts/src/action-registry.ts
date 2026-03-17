@@ -1,4 +1,4 @@
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { ActionSpec } from "./action-spec.js";
 
 /**
@@ -8,7 +8,7 @@ import type { ActionSpec } from "./action-spec.js";
  * and surface metadata — not the strongly-typed handler signature.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyActionSpec = ActionSpec<any, any, BrokerError>;
+type AnyActionSpec = ActionSpec<any, any, SignetError>;
 
 /**
  * Registry for ActionSpec instances. Transport adapters query the

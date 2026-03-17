@@ -1,16 +1,16 @@
 import type { ServerWebSocket } from "bun";
 import { z } from "zod";
 import { Result } from "better-result";
-import type { BrokerEvent, BrokerError } from "@xmtp-broker/schemas";
+import type { SignetEvent, SignetError } from "@xmtp/signet-schemas";
 import {
   HarnessRequest as HarnessRequestSchema,
   InternalError as InternalErrorClass,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import type {
-  BrokerCore,
+  SignetCore,
   SessionManager,
-  AttestationManager,
-} from "@xmtp-broker/contracts";
+  SealManager,
+} from "@xmtp/signet-contracts";
 import type { WsServerConfig } from "./config.js";
 import { WsServerConfigSchema } from "./config.js";
 import {
@@ -34,20 +34,20 @@ import { WS_CLOSE_CODES } from "./close-codes.js";
 export type WsServerState = "idle" | "listening" | "draining" | "stopped";
 
 export interface WsServerDeps {
-  readonly core: BrokerCore;
+  readonly core: SignetCore;
   readonly sessionManager: SessionManager;
-  readonly attestationManager: AttestationManager;
+  readonly sealManager: SealManager;
   readonly tokenLookup: TokenLookup;
   readonly requestHandler: RequestHandler;
 }
 
 export interface WsServer {
-  start(): Promise<Result<{ port: number }, BrokerError>>;
-  stop(): Promise<Result<void, BrokerError>>;
+  start(): Promise<Result<{ port: number }, SignetError>>;
+  stop(): Promise<Result<void, SignetError>>;
   readonly state: WsServerState;
   readonly connectionCount: number;
   /** Broadcast an event to all connections for a session. */
-  broadcast(sessionId: string, event: BrokerEvent): void;
+  broadcast(sessionId: string, event: SignetEvent): void;
 }
 
 export function createWsServer(
@@ -87,7 +87,7 @@ export function createWsServer(
 
   function sendSequenced(
     ws: ServerWebSocket<ConnectionData>,
-    event: BrokerEvent,
+    event: SignetEvent,
   ): void {
     const sessionState = ws.data.sessionReplayState;
     if (!sessionState) return;
@@ -233,10 +233,7 @@ export function createWsServer(
     if (authFrame.lastSeenSeq !== null) {
       const lastSeen = authFrame.lastSeenSeq;
       const oldestFrame = sessionState.buffer.oldest();
-      if (
-        oldestFrame !== undefined &&
-        oldestFrame.seq > lastSeen + 1
-      ) {
+      if (oldestFrame !== undefined && oldestFrame.seq > lastSeen + 1) {
         needsRecovery = true;
       } else {
         replayFrames = sessionState.buffer.itemsSince(
@@ -268,7 +265,7 @@ export function createWsServer(
     // Send recovery event if client is too far behind
     if (needsRecovery) {
       sendSequenced(ws, {
-        type: "broker.recovery.complete",
+        type: "signet.recovery.complete",
         caughtUpThrough: new Date().toISOString(),
       });
     }
@@ -385,7 +382,7 @@ export function createWsServer(
     }
   }
 
-  function broadcastToSession(sessionId: string, event: BrokerEvent): void {
+  function broadcastToSession(sessionId: string, event: SignetEvent): void {
     const connections = registry.getBySessionId(sessionId);
     for (const ws of connections) {
       if (ws.data.phase === "active") {
@@ -460,7 +457,10 @@ export function createWsServer(
 
               // Rate limiting (when enabled)
               if (config.rateLimitMaxMessages !== null) {
-                if (now - ws.data.messageWindowStart >= config.rateLimitWindowMs) {
+                if (
+                  now - ws.data.messageWindowStart >=
+                  config.rateLimitWindowMs
+                ) {
                   // Window expired, reset
                   ws.data.messageCount = 1;
                   ws.data.messageWindowStart = now;
@@ -550,7 +550,7 @@ export function createWsServer(
           sendSequenced(ws, {
             type: "session.expired",
             sessionId: ws.data.sessionRecord.sessionId,
-            reason: "broker_shutdown",
+            reason: "signet_shutdown",
           });
           transition(ws.data, "draining");
         }

@@ -5,13 +5,13 @@ import {
   createActionRegistry,
   type ActionSpec,
   type SignerProvider,
-} from "@xmtp-broker/contracts";
+} from "@xmtp/signet-contracts";
 import {
   AuthError,
   InternalError,
   PermissionError,
-  type BrokerError,
-} from "@xmtp-broker/schemas";
+  type SignetError,
+} from "@xmtp/signet-schemas";
 import { createAdminServer, type AdminServer } from "../admin/server.js";
 import { createAdminClient, type AdminClient } from "../admin/client.js";
 import { createAdminDispatcher } from "../admin/dispatcher.js";
@@ -75,9 +75,9 @@ function makeStubSignerProvider(): SignerProvider {
 
 function makeTestSpec(
   id: string,
-  handler: ActionSpec<unknown, unknown, BrokerError>["handler"],
+  handler: ActionSpec<unknown, unknown, SignetError>["handler"],
   rpcMethod?: string,
-): ActionSpec<unknown, unknown, BrokerError> {
+): ActionSpec<unknown, unknown, SignetError> {
   return {
     id,
     handler,
@@ -122,7 +122,7 @@ describe("AdminSocket round-trip", () => {
       {
         keyManager: makeKeyManager(),
         dispatcher,
-        brokerId: "test-broker",
+        signetId: "test-signet",
         signerProvider: makeStubSignerProvider(),
       },
     );
@@ -139,13 +139,13 @@ describe("AdminSocket round-trip", () => {
     const socketPath = testSocketPath();
     const registry = createActionRegistry();
     const spec = makeTestSpec(
-      "broker.status",
+      "signet.status",
       async () =>
         Result.ok({
           state: "running",
           uptime: 123,
         }),
-      "broker.status",
+      "signet.status",
     );
     registry.register(spec);
     const dispatcher = createAdminDispatcher(registry);
@@ -155,7 +155,7 @@ describe("AdminSocket round-trip", () => {
       {
         keyManager: makeKeyManager(),
         dispatcher,
-        brokerId: "test-broker",
+        signetId: "test-signet",
         signerProvider: makeStubSignerProvider(),
       },
     );
@@ -168,7 +168,7 @@ describe("AdminSocket round-trip", () => {
     const response = await client.request<{
       state: string;
       uptime: number;
-    }>("broker.status");
+    }>("signet.status");
     expect(response.isOk()).toBe(true);
     if (response.isOk()) {
       expect(response.value.state).toBe("running");
@@ -186,7 +186,7 @@ describe("AdminSocket round-trip", () => {
       {
         keyManager: makeKeyManager(),
         dispatcher,
-        brokerId: "test-broker",
+        signetId: "test-signet",
         signerProvider: makeStubSignerProvider(),
       },
     );
@@ -218,7 +218,7 @@ describe("AdminSocket round-trip", () => {
       {
         keyManager: makeKeyManager(),
         dispatcher,
-        brokerId: "test-broker",
+        signetId: "test-signet",
         signerProvider: makeStubSignerProvider(),
       },
     );
@@ -240,7 +240,7 @@ describe("AdminSocket round-trip", () => {
     }
   });
 
-  test("client preserves structured broker errors from JSON-RPC failures", async () => {
+  test("client preserves structured signet errors from JSON-RPC failures", async () => {
     const socketPath = testSocketPath();
     const registry = createActionRegistry();
     const spec = makeTestSpec(
@@ -261,7 +261,7 @@ describe("AdminSocket round-trip", () => {
       {
         keyManager: makeKeyManager(),
         dispatcher,
-        brokerId: "test-broker",
+        signetId: "test-signet",
         signerProvider: makeStubSignerProvider(),
       },
     );
@@ -294,7 +294,7 @@ describe("AdminSocket round-trip", () => {
       {
         keyManager: makeKeyManager(),
         dispatcher,
-        brokerId: "test-broker",
+        signetId: "test-signet",
         signerProvider: makeStubSignerProvider(),
       },
     );

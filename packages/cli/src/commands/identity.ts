@@ -1,8 +1,8 @@
 import { Command } from "commander";
 import { Result } from "better-result";
 import { mkdirSync } from "node:fs";
-import { createKeyManager } from "@xmtp-broker/keys";
-import type { KeyManager } from "@xmtp-broker/keys";
+import { createKeyManager } from "@xmtp/signet-keys";
+import type { KeyManager } from "@xmtp/signet-keys";
 import { loadConfig } from "../config/loader.js";
 import { resolvePaths } from "../config/paths.js";
 import { formatOutput } from "../output/formatter.js";
@@ -100,7 +100,7 @@ export function createIdentityCommands(): Command {
         }
 
         // 7. Register XMTP identity (skip for local env)
-        const env = resolveEnv(options.env, config.broker.env);
+        const env = resolveEnv(options.env, config.signet.env);
         if (env !== "local") {
           await registerXmtpIdentity({
             km,
@@ -131,7 +131,7 @@ export function createIdentityCommands(): Command {
       }
 
       // 7. Register XMTP identity (skip for local env)
-      const env = resolveEnv(options.env, config.broker.env);
+      const env = resolveEnv(options.env, config.signet.env);
       if (env !== "local") {
         await registerXmtpIdentity({
           km,
@@ -183,7 +183,7 @@ export function createIdentityCommands(): Command {
       const paths = resolvePaths(configResult.value);
 
       // 2. Open identity store directly (no daemon needed)
-      const { SqliteIdentityStore } = await import("@xmtp-broker/core");
+      const { SqliteIdentityStore } = await import("@xmtp/signet-core");
       const store = new SqliteIdentityStore(`${paths.dataDir}/identities.db`);
 
       // 3. List and output
@@ -279,8 +279,8 @@ async function registerXmtpIdentity(opts: {
 
   // Dynamic imports — keeps @xmtp/node-sdk out of the critical path
   const { registerIdentity, SqliteIdentityStore, createSdkClientFactory } =
-    await import("@xmtp-broker/core");
-  const { createSignerProvider } = await import("@xmtp-broker/keys");
+    await import("@xmtp/signet-core");
+  const { createSignerProvider } = await import("@xmtp/signet-keys");
 
   const identityStore = new SqliteIdentityStore(
     `${paths.dataDir}/identities.db`,
@@ -297,7 +297,7 @@ async function registerXmtpIdentity(opts: {
       config: {
         dataDir: paths.dataDir,
         env,
-        appVersion: "xmtp-broker/0.1.0",
+        appVersion: "xmtp-signet/0.1.0",
       },
     },
     { label },

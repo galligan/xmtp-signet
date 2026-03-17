@@ -1,7 +1,7 @@
 import { inflateSync } from "node:zlib";
 import { Result } from "better-result";
-import { ValidationError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import { ValidationError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import protobuf from "protobufjs";
 import Long from "long";
 import { secp256k1 } from "@noble/curves/secp256k1";
@@ -103,9 +103,7 @@ function base64UrlDecode(str: string): Uint8Array {
   return new Uint8Array(Buffer.from(base64, "base64"));
 }
 
-function decompress(
-  data: Uint8Array,
-): Result<Uint8Array, BrokerError> {
+function decompress(data: Uint8Array): Result<Uint8Array, SignetError> {
   if (data.length === 0 || data[0] !== COMPRESSION_MARKER) {
     return Result.ok(data);
   }
@@ -177,7 +175,7 @@ function longToBigInt(value: protobuf.Long): bigint {
  */
 export function parseConvosInviteUrl(
   input: string,
-): Result<ParsedConvosInvite, BrokerError> {
+): Result<ParsedConvosInvite, SignetError> {
   try {
     // Step 1: Extract slug
     const slug = extractSlug(input);
@@ -296,7 +294,7 @@ export function parseConvosInviteUrl(
  */
 export function verifyConvosInvite(
   invite: ParsedConvosInvite,
-): Result<void, BrokerError> {
+): Result<void, SignetError> {
   try {
     const { signedInvitePayloadBytes, signedInviteSignature } = invite;
 

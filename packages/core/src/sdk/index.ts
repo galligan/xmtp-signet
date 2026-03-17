@@ -1,5 +1,5 @@
 /**
- * SDK integration layer. Wraps `@xmtp/node-sdk` behind broker-owned
+ * SDK integration layer. Wraps `@xmtp/node-sdk` behind signet-owned
  * interfaces so domain code never touches SDK types directly.
  * @module
  */

@@ -210,7 +210,7 @@ describe("createDirectClient", () => {
 
     const deps = makeMockDeps();
     deps.createKeyManager = async () => {
-      const { InternalError } = await import("@xmtp-broker/schemas");
+      const { InternalError } = await import("@xmtp/signet-schemas");
       return Result.err(InternalError.create("Vault locked"));
     };
 
@@ -230,7 +230,7 @@ describe("createDirectClient", () => {
 
     const deps = makeMockDeps();
     deps.createXmtpClient = async () => {
-      const { InternalError } = await import("@xmtp-broker/schemas");
+      const { InternalError } = await import("@xmtp/signet-schemas");
       return Result.err(InternalError.create("Network unreachable"));
     };
 

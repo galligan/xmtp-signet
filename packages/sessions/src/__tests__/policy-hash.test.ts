@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ViewConfig, GrantConfig } from "@xmtp-broker/schemas";
+import type { ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
 import { computePolicyHash } from "../policy-hash.js";
 
 const baseView: ViewConfig = {

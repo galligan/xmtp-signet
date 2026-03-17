@@ -1,15 +1,15 @@
 import { Result } from "better-result";
-import { InternalError, type BrokerError } from "@xmtp-broker/schemas";
-import type { BrokerCore } from "@xmtp-broker/contracts";
+import { InternalError, type SignetError } from "@xmtp/signet-schemas";
+import type { SignetCore } from "@xmtp/signet-contracts";
 
-type UpgradeableCore = Pick<BrokerCore, "state" | "initialize">;
+type UpgradeableCore = Pick<SignetCore, "state" | "initialize">;
 
 export function createLazyCoreUpgrade(
   core: UpgradeableCore,
-): () => Promise<Result<void, BrokerError>> {
-  let initializePromise: Promise<Result<void, BrokerError>> | null = null;
+): () => Promise<Result<void, SignetError>> {
+  let initializePromise: Promise<Result<void, SignetError>> | null = null;
 
-  return async (): Promise<Result<void, BrokerError>> => {
+  return async (): Promise<Result<void, SignetError>> => {
     if (core.state === "ready") {
       return Result.ok(undefined);
     }
@@ -24,7 +24,7 @@ export function createLazyCoreUpgrade(
       core.state !== "uninitialized"
     ) {
       return Result.err(
-        InternalError.create("Broker core is not ready to service requests", {
+        InternalError.create("Signet core is not ready to service requests", {
           coreState: core.state,
         }),
       );

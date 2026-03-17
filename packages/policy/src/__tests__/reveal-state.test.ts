@@ -4,7 +4,7 @@ import type {
   ContentTypeId,
   RevealGrant,
   RevealRequest,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
 function makeRequest(overrides?: Partial<RevealRequest>): RevealRequest {
   return {

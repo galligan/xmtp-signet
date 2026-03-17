@@ -85,8 +85,7 @@ describe("createSdkClientFactory", () => {
     let capturedSigner: { getIdentifier: () => unknown } | null = null;
     const factory = createSdkClientFactory({
       sdkCreateClient: async (signer) => {
-        capturedSigner =
-          signer as { getIdentifier: () => unknown };
+        capturedSigner = signer as { getIdentifier: () => unknown };
         return createMockSdkNativeClient();
       },
     });

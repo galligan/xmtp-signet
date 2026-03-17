@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { projectMessage } from "../pipeline/project-message.js";
-import type { ContentTypeId, ViewConfig } from "@xmtp-broker/schemas";
+import type { ContentTypeId, ViewConfig } from "@xmtp/signet-schemas";
 import { createTestRawMessage, createPassthroughView } from "./fixtures.js";
 
 describe("projectMessage", () => {

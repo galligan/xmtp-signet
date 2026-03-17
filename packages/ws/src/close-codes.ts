@@ -1,4 +1,4 @@
-/** WebSocket close codes used by the broker. */
+/** WebSocket close codes used by the signet. */
 export const WS_CLOSE_CODES = {
   /** Clean client disconnect. */
   NORMAL: 1000,

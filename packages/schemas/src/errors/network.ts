@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class NetworkError extends Error implements BrokerError {
+export class NetworkError extends Error implements SignetError {
   readonly _tag = "NetworkError" as const;
   readonly code = 1700;
   readonly category = "network" as const;

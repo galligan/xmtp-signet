@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
-import {
-  KeyPolicySchema,
-  PlatformCapabilitySchema,
-} from "./config.js";
+import { InternalError } from "@xmtp/signet-schemas";
+import { KeyPolicySchema, PlatformCapabilitySchema } from "./config.js";
 import type { KeyPolicy, PlatformCapability } from "./config.js";
 import type { RootKeyHandle } from "./types.js";
 import type { Vault } from "./vault.js";

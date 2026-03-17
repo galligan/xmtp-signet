@@ -370,7 +370,7 @@ describe("Event broadcasting", () => {
     const parsed = SequencedFrame.safeParse(recoveryFrame);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.event.type).toBe("broker.recovery.complete");
+      expect(parsed.data.event.type).toBe("signet.recovery.complete");
       expect(parsed.data.event.caughtUpThrough).toBeTruthy();
     }
 
@@ -572,7 +572,7 @@ describe("Graceful shutdown", () => {
       const event = msg["event"] as Record<string, unknown> | undefined;
       if (event) {
         expect(event["type"]).toBe("session.expired");
-        expect(event["reason"]).toBe("broker_shutdown");
+        expect(event["reason"]).toBe("signet_shutdown");
       }
     }
 

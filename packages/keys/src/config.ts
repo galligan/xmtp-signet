@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-export const KeyPolicySchema: z.ZodEnum<
-  ["biometric", "passcode", "open"]
-> = z
+export const KeyPolicySchema: z.ZodEnum<["biometric", "passcode", "open"]> = z
   .enum(["biometric", "passcode", "open"])
   .describe("Access control policy for a key tier");
 

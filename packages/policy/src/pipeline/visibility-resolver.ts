@@ -1,4 +1,4 @@
-import type { MessageVisibility, ViewMode } from "@xmtp-broker/schemas";
+import type { MessageVisibility, ViewMode } from "@xmtp/signet-schemas";
 
 /**
  * Stage 3: Visibility resolver. Determines the MessageVisibility

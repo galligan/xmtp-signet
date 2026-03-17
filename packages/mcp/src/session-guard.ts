@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import { AuthError } from "@xmtp-broker/schemas";
-import type { SessionManager, SessionRecord } from "@xmtp-broker/contracts";
+import { AuthError } from "@xmtp/signet-schemas";
+import type { SessionManager, SessionRecord } from "@xmtp/signet-contracts";
 
 /**
  * Validate a session token at startup. Resolves the token to a

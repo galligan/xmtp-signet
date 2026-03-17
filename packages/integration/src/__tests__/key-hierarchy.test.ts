@@ -14,7 +14,7 @@ import {
   createKeyManager,
   type KeyManager,
   createSignerProvider,
-} from "@xmtp-broker/keys";
+} from "@xmtp/signet-keys";
 
 let keyManager: KeyManager | null = null;
 let dataDir = "";
@@ -124,7 +124,7 @@ describe("key-hierarchy", () => {
     expect(sig1Hex).not.toBe(sig2Hex);
   });
 
-  test("signerProvider and attestationSigner use operational key", async () => {
+  test("signerProvider and sealSigner use operational key", async () => {
     const km = await setup();
     await km.initialize();
     await km.createOperationalKey("provider-id", null);

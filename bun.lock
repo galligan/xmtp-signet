@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "xmtp-broker",
+      "name": "xmtp-signet",
       "dependencies": {
         "@noble/ciphers": "^2.1.1",
       },
@@ -15,36 +15,22 @@
         "typescript": "catalog:",
       },
     },
-    "packages/attestations": {
-      "name": "@xmtp-broker/attestations",
-      "version": "0.0.0",
-      "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/policy": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
-        "better-result": "catalog:",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "bun-types": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "packages/cli": {
-      "name": "@xmtp-broker/cli",
+      "name": "@xmtp/signet-cli",
       "version": "0.1.0",
       "bin": {
-        "xmtp-broker": "src/bin.ts",
+        "xmtp-signet": "src/bin.ts",
+        "xs": "src/bin.ts",
       },
       "dependencies": {
-        "@xmtp-broker/attestations": "workspace:*",
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/core": "workspace:*",
-        "@xmtp-broker/keys": "workspace:*",
-        "@xmtp-broker/policy": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
-        "@xmtp-broker/sessions": "workspace:*",
-        "@xmtp-broker/ws": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-core": "workspace:*",
+        "@xmtp/signet-keys": "workspace:*",
+        "@xmtp/signet-policy": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
+        "@xmtp/signet-seals": "workspace:*",
+        "@xmtp/signet-sessions": "workspace:*",
+        "@xmtp/signet-ws": "workspace:*",
         "better-result": "catalog:",
         "commander": "14.0.3",
         "qrcode": "^1.5.4",
@@ -58,10 +44,10 @@
       },
     },
     "packages/contracts": {
-      "name": "@xmtp-broker/contracts",
+      "name": "@xmtp/signet-contracts",
       "version": "0.0.0",
       "dependencies": {
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -71,15 +57,15 @@
       },
     },
     "packages/core": {
-      "name": "@xmtp-broker/core",
+      "name": "@xmtp/signet-core",
       "version": "0.0.0",
       "dependencies": {
         "@noble/ciphers": "^2.1.1",
         "@noble/curves": "^1.8.0",
         "@noble/hashes": "^1.8.0",
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
         "@xmtp/node-sdk": "6.0.0",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "long": "^5.0.0",
         "protobufjs": "^7.4.0",
@@ -91,31 +77,17 @@
         "typescript": "catalog:",
       },
     },
-    "packages/handler": {
-      "name": "@xmtp-broker/handler",
-      "version": "0.0.0",
-      "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
-        "better-result": "catalog:",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "bun-types": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "packages/integration": {
-      "name": "@xmtp-broker/integration",
+      "name": "@xmtp/signet-integration",
       "dependencies": {
-        "@xmtp-broker/attestations": "workspace:*",
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/core": "workspace:*",
-        "@xmtp-broker/keys": "workspace:*",
-        "@xmtp-broker/policy": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
-        "@xmtp-broker/sessions": "workspace:*",
-        "@xmtp-broker/ws": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-core": "workspace:*",
+        "@xmtp/signet-keys": "workspace:*",
+        "@xmtp/signet-policy": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
+        "@xmtp/signet-seals": "workspace:*",
+        "@xmtp/signet-sessions": "workspace:*",
+        "@xmtp/signet-ws": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -125,11 +97,11 @@
       },
     },
     "packages/keys": {
-      "name": "@xmtp-broker/keys",
+      "name": "@xmtp/signet-keys",
       "version": "0.0.0",
       "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -139,15 +111,15 @@
       },
     },
     "packages/mcp": {
-      "name": "@xmtp-broker/mcp",
+      "name": "@xmtp/signet-mcp",
       "version": "0.0.0",
       "bin": {
-        "xmtp-broker-mcp": "./src/bin/mcp-server.ts",
+        "xmtp-signet-mcp": "./src/bin/mcp-server.ts",
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.27.1",
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
         "zod-to-json-schema": "3.24.5",
@@ -158,11 +130,11 @@
       },
     },
     "packages/policy": {
-      "name": "@xmtp-broker/policy",
+      "name": "@xmtp/signet-policy",
       "version": "0.0.0",
       "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -171,9 +143,38 @@
       },
     },
     "packages/schemas": {
-      "name": "@xmtp-broker/schemas",
+      "name": "@xmtp/signet-schemas",
       "version": "0.0.0",
       "dependencies": {
+        "better-result": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/sdk": {
+      "name": "@xmtp/signet-sdk",
+      "version": "0.0.0",
+      "dependencies": {
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
+        "better-result": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/seals": {
+      "name": "@xmtp/signet-seals",
+      "version": "0.0.0",
+      "dependencies": {
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-policy": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -183,11 +184,11 @@
       },
     },
     "packages/sessions": {
-      "name": "@xmtp-broker/sessions",
+      "name": "@xmtp/signet-sessions",
       "version": "0.0.0",
       "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -197,11 +198,11 @@
       },
     },
     "packages/verifier": {
-      "name": "@xmtp-broker/verifier",
+      "name": "@xmtp/signet-verifier",
       "version": "0.0.0",
       "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -211,11 +212,11 @@
       },
     },
     "packages/ws": {
-      "name": "@xmtp-broker/ws",
+      "name": "@xmtp/signet-ws",
       "version": "0.0.0",
       "dependencies": {
-        "@xmtp-broker/contracts": "workspace:*",
-        "@xmtp-broker/schemas": "workspace:*",
+        "@xmtp/signet-contracts": "workspace:*",
+        "@xmtp/signet-schemas": "workspace:*",
         "better-result": "catalog:",
         "zod": "catalog:",
       },
@@ -248,7 +249,7 @@
 
     "@noble/ciphers": ["@noble/ciphers@2.1.1", "", {}, "sha512-bysYuiVfhxNJuldNXlFEitTVdNnYUc+XNJZd7Qm2a5j1vZHgY+fazadNFWFaMK/2vye0JVlxV3gHmC0WDfAOQw=="],
 
-    "@noble/curves": ["@noble/curves@1.9.1", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA=="],
+    "@noble/curves": ["@noble/curves@1.9.7", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw=="],
 
     "@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
 
@@ -336,37 +337,37 @@
 
     "@types/qrcode": ["@types/qrcode@1.5.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw=="],
 
-    "@xmtp-broker/attestations": ["@xmtp-broker/attestations@workspace:packages/attestations"],
-
-    "@xmtp-broker/cli": ["@xmtp-broker/cli@workspace:packages/cli"],
-
-    "@xmtp-broker/contracts": ["@xmtp-broker/contracts@workspace:packages/contracts"],
-
-    "@xmtp-broker/core": ["@xmtp-broker/core@workspace:packages/core"],
-
-    "@xmtp-broker/handler": ["@xmtp-broker/handler@workspace:packages/handler"],
-
-    "@xmtp-broker/integration": ["@xmtp-broker/integration@workspace:packages/integration"],
-
-    "@xmtp-broker/keys": ["@xmtp-broker/keys@workspace:packages/keys"],
-
-    "@xmtp-broker/mcp": ["@xmtp-broker/mcp@workspace:packages/mcp"],
-
-    "@xmtp-broker/policy": ["@xmtp-broker/policy@workspace:packages/policy"],
-
-    "@xmtp-broker/schemas": ["@xmtp-broker/schemas@workspace:packages/schemas"],
-
-    "@xmtp-broker/sessions": ["@xmtp-broker/sessions@workspace:packages/sessions"],
-
-    "@xmtp-broker/verifier": ["@xmtp-broker/verifier@workspace:packages/verifier"],
-
-    "@xmtp-broker/ws": ["@xmtp-broker/ws@workspace:packages/ws"],
-
     "@xmtp/content-type-primitives": ["@xmtp/content-type-primitives@3.0.0", "", { "dependencies": { "@xmtp/node-bindings": "1.8.0" } }, "sha512-gxK6+k0ywOz39LFJjrUF3fOXWXR3aAmIkF7e0rFz7c27izDimZC5E2oja9iz/CYyzDS6lf9Pm31qRcGTMSYaHg=="],
 
     "@xmtp/node-bindings": ["@xmtp/node-bindings@1.10.0", "", {}, "sha512-US/YvMP7RL1DkNeiZ75ZjEyvMwLIrEPn12dBj5h7lAesM2N5snwnstJ2NNk3LpW3kCNDdzwhe/G0ZSb0PhwNeg=="],
 
     "@xmtp/node-sdk": ["@xmtp/node-sdk@6.0.0", "", { "dependencies": { "@xmtp/content-type-primitives": "3.0.0", "@xmtp/node-bindings": "1.10.0" } }, "sha512-UMClg1+WkC3pfeHffJoZMYzhqsUa2wZpSJtIrpvBqUD+n1VYVQTfhTqGyaavVIPgITxjHBi/uMS/K18E4qDbPA=="],
+
+    "@xmtp/signet-cli": ["@xmtp/signet-cli@workspace:packages/cli"],
+
+    "@xmtp/signet-contracts": ["@xmtp/signet-contracts@workspace:packages/contracts"],
+
+    "@xmtp/signet-core": ["@xmtp/signet-core@workspace:packages/core"],
+
+    "@xmtp/signet-integration": ["@xmtp/signet-integration@workspace:packages/integration"],
+
+    "@xmtp/signet-keys": ["@xmtp/signet-keys@workspace:packages/keys"],
+
+    "@xmtp/signet-mcp": ["@xmtp/signet-mcp@workspace:packages/mcp"],
+
+    "@xmtp/signet-policy": ["@xmtp/signet-policy@workspace:packages/policy"],
+
+    "@xmtp/signet-schemas": ["@xmtp/signet-schemas@workspace:packages/schemas"],
+
+    "@xmtp/signet-sdk": ["@xmtp/signet-sdk@workspace:packages/sdk"],
+
+    "@xmtp/signet-seals": ["@xmtp/signet-seals@workspace:packages/seals"],
+
+    "@xmtp/signet-sessions": ["@xmtp/signet-sessions@workspace:packages/sessions"],
+
+    "@xmtp/signet-verifier": ["@xmtp/signet-verifier@workspace:packages/verifier"],
+
+    "@xmtp/signet-ws": ["@xmtp/signet-ws@workspace:packages/ws"],
 
     "abitype": ["abitype@1.2.3", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3.22.0 || ^4.0.0" }, "optionalPeers": ["typescript", "zod"] }, "sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg=="],
 
@@ -683,5 +684,9 @@
     "@xmtp/content-type-primitives/@xmtp/node-bindings": ["@xmtp/node-bindings@1.8.0", "", {}, "sha512-dyppg1pQNsEdGH13RfsbkbXdnUdjufak6ea1YahjCROgmaJClDpMHcMcSfMzoJzASanU58MwEdCgYUF638NKgw=="],
 
     "ox/@noble/ciphers": ["@noble/ciphers@1.3.0", "", {}, "sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw=="],
+
+    "ox/@noble/curves": ["@noble/curves@1.9.1", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA=="],
+
+    "viem/@noble/curves": ["@noble/curves@1.9.1", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA=="],
   }
 }

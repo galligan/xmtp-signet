@@ -3,10 +3,14 @@ import type {
   ActionResult,
   ActionSpec,
   HandlerContext,
-} from "@xmtp-broker/contracts";
-import { toActionResult } from "@xmtp-broker/contracts";
-import type { BrokerError, ActionResultMeta } from "@xmtp-broker/schemas";
-import { InternalError, NotFoundError, ValidationError } from "@xmtp-broker/schemas";
+} from "@xmtp/signet-contracts";
+import { toActionResult } from "@xmtp/signet-contracts";
+import type { SignetError, ActionResultMeta } from "@xmtp/signet-schemas";
+import {
+  InternalError,
+  NotFoundError,
+  ValidationError,
+} from "@xmtp/signet-schemas";
 import { Result } from "better-result";
 
 // ---------------------------------------------------------------------------
@@ -40,8 +44,8 @@ export interface AdminDispatcher {
  */
 function buildMethodMap(
   registry: ActionRegistry,
-): Map<string, ActionSpec<unknown, unknown, BrokerError>> {
-  const map = new Map<string, ActionSpec<unknown, unknown, BrokerError>>();
+): Map<string, ActionSpec<unknown, unknown, SignetError>> {
+  const map = new Map<string, ActionSpec<unknown, unknown, SignetError>>();
 
   for (const spec of registry.listForSurface("cli")) {
     const cli = spec.cli;
@@ -107,9 +111,7 @@ export function createAdminDispatcher(
         const message =
           thrown instanceof Error ? thrown.message : String(thrown);
         return toActionResult(
-          Result.err(
-            InternalError.create(`Handler threw: ${message}`),
-          ),
+          Result.err(InternalError.create(`Handler threw: ${message}`)),
           makeMeta(ctx, startMs),
         );
       }

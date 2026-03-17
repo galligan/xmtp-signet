@@ -5,8 +5,8 @@ export {
   ERROR_CATEGORY_META,
   errorCategoryMeta,
 } from "./category.js";
-export { type BrokerError, type AnyBrokerError, matchError } from "./base.js";
-export { ValidationError, AttestationError } from "./validation.js";
+export { type SignetError, type AnySignetError, matchError } from "./base.js";
+export { ValidationError, SealError } from "./validation.js";
 export { NotFoundError } from "./not-found.js";
 export { PermissionError, GrantDeniedError } from "./permission.js";
 export { AuthError, SessionExpiredError } from "./auth.js";

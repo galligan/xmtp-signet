@@ -1,17 +1,17 @@
 // Config
 export {
-  BrokerCoreConfigSchema,
+  SignetCoreConfigSchema,
   XmtpEnvSchema,
   IdentityModeSchema,
 } from "./config.js";
-export type { BrokerCoreConfig, XmtpEnv, IdentityMode } from "./config.js";
+export type { SignetCoreConfig, XmtpEnv, IdentityMode } from "./config.js";
 
-// Broker core
-export { BrokerCoreImpl } from "./broker-core.js";
-export type { BrokerState, SignerProviderFactory } from "./broker-core.js";
+// Signet core
+export { SignetCoreImpl } from "./signet-core.js";
+export type { SignetState, SignerProviderFactory } from "./signet-core.js";
 
 // Core context
-export { BrokerCoreContext } from "./core-context.js";
+export { SignetCoreContext } from "./core-context.js";
 
 // Identity store
 export { SqliteIdentityStore } from "./identity-store.js";

@@ -1,10 +1,10 @@
 import type { Result } from "better-result";
 import type {
-  BrokerError,
+  SignetError,
   ActionResultMeta,
   ActionError,
   Pagination,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
 /**
  * Universal output envelope. All transports render from this shape.
@@ -27,7 +27,7 @@ export type ActionResult<T> =
  * Called by transport adapters after handler execution.
  */
 export function toActionResult<T>(
-  result: Result<T, BrokerError>,
+  result: Result<T, SignetError>,
   meta: ActionResultMeta,
   pagination?: Pagination,
 ): ActionResult<T> {

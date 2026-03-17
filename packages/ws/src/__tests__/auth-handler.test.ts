@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { handleAuth } from "../auth-handler.js";
-import { AuthError } from "@xmtp-broker/schemas";
-import type { SessionRecord } from "@xmtp-broker/contracts";
+import { AuthError } from "@xmtp/signet-schemas";
+import type { SessionRecord } from "@xmtp/signet-contracts";
 import type { AuthFrame } from "../frames.js";
 
 function makeSessionRecord(

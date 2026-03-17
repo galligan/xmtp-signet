@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import type { SessionRecord } from "@xmtp-broker/contracts";
-import type { HarnessRequest } from "@xmtp-broker/schemas";
-import { AuthError, PermissionError } from "@xmtp-broker/schemas";
+import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { HarnessRequest } from "@xmtp/signet-schemas";
+import { AuthError, PermissionError } from "@xmtp/signet-schemas";
 import { createWsRequestHandler } from "../ws/request-handler.js";
 
 function makeSessionRecord(

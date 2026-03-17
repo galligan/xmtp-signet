@@ -2,7 +2,7 @@ import { mkdir, readFile, appendFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 /**
- * A single entry in the broker's append-only audit log.
+ * A single entry in the signet's append-only audit log.
  * Covers admin operations: session issuance/revocation,
  * key rotation, daemon lifecycle events.
  */

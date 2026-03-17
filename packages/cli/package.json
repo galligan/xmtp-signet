@@ -1,9 +1,10 @@
 {
-  "name": "@xmtp-broker/cli",
+  "name": "@xmtp/signet-cli",
   "version": "0.1.0",
   "private": true,
   "bin": {
-    "xmtp-broker": "src/bin.ts"
+    "xmtp-signet": "src/bin.ts",
+    "xs": "src/bin.ts"
   },
   "type": "module",
   "exports": {
@@ -19,14 +20,14 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@xmtp-broker/attestations": "workspace:*",
-    "@xmtp-broker/contracts": "workspace:*",
-    "@xmtp-broker/core": "workspace:*",
-    "@xmtp-broker/keys": "workspace:*",
-    "@xmtp-broker/policy": "workspace:*",
-    "@xmtp-broker/schemas": "workspace:*",
-    "@xmtp-broker/sessions": "workspace:*",
-    "@xmtp-broker/ws": "workspace:*",
+    "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-core": "workspace:*",
+    "@xmtp/signet-keys": "workspace:*",
+    "@xmtp/signet-policy": "workspace:*",
+    "@xmtp/signet-schemas": "workspace:*",
+    "@xmtp/signet-seals": "workspace:*",
+    "@xmtp/signet-sessions": "workspace:*",
+    "@xmtp/signet-ws": "workspace:*",
     "better-result": "catalog:",
     "commander": "14.0.3",
     "qrcode": "^1.5.4",

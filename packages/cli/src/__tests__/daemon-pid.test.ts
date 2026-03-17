@@ -11,10 +11,10 @@ describe("PidFile", () => {
   beforeEach(async () => {
     testDir = join(
       tmpdir(),
-      `xmtp-broker-test-pid-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `xmtp-signet-test-pid-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     await mkdir(testDir, { recursive: true });
-    pidPath = join(testDir, "broker.pid");
+    pidPath = join(testDir, "signet.pid");
   });
 
   afterEach(async () => {
@@ -101,7 +101,7 @@ describe("PidFile", () => {
   });
 
   test("creates parent directory if missing", async () => {
-    const nestedPath = join(testDir, "nested", "deep", "broker.pid");
+    const nestedPath = join(testDir, "nested", "deep", "signet.pid");
     const pid = createPidFile(nestedPath);
 
     const result = await pid.write(12345);

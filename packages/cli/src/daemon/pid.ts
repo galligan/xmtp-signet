@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 import { dirname } from "node:path";
 import { mkdir, unlink, readFile, writeFile } from "node:fs/promises";
 

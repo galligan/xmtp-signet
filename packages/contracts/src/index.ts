@@ -13,15 +13,15 @@ export type { SessionRecord, MaterialityCheck } from "./session-types.js";
 // Policy types
 export type { PolicyDelta, GrantError } from "./policy-types.js";
 
-// Attestation types and wire format schemas
+// Seal types and wire format schemas
 export {
-  SignedAttestationEnvelope,
+  SealEnvelopeSchema,
   SignedRevocationEnvelope,
-} from "./attestation-types.js";
+} from "./seal-envelope.js";
 export type {
-  SignedAttestation,
   MessageProvenanceMetadata,
-} from "./attestation-types.js";
+  SealEnvelope,
+} from "./seal-envelope.js";
 
 // Handler types
 export type {
@@ -47,16 +47,12 @@ export { toActionResult } from "./result-envelope.js";
 export type { ActionResult } from "./result-envelope.js";
 
 // Service interfaces
-export type {
-  BrokerCore,
-  SessionManager,
-  AttestationManager,
-} from "./services.js";
+export type { SignetCore, SessionManager, SealManager } from "./services.js";
 
 // Provider interfaces
 export type {
   SignerProvider,
-  AttestationSigner,
-  AttestationPublisher,
+  SealStamper,
+  SealPublisher,
   RevealStateStore,
 } from "./providers.js";

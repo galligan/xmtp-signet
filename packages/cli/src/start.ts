@@ -1,45 +1,45 @@
 /**
- * Production dependency factory for the broker runtime.
+ * Production dependency factory for the signet runtime.
  *
  * Wires real implementations from each package into the
- * BrokerRuntimeDeps interface expected by createBrokerRuntime.
+ * SignetRuntimeDeps interface expected by createSignetRuntime.
  */
 
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
-import { InternalError } from "@xmtp-broker/schemas";
-import type { BrokerCore, CoreState } from "@xmtp-broker/contracts";
-import { createKeyManager, type KeyManager } from "@xmtp-broker/keys";
-import type { KeyManagerConfig } from "@xmtp-broker/keys";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { InternalError } from "@xmtp/signet-schemas";
+import type { SignetCore, CoreState } from "@xmtp/signet-contracts";
+import { createKeyManager, type KeyManager } from "@xmtp/signet-keys";
+import type { KeyManagerConfig } from "@xmtp/signet-keys";
 import {
-  BrokerCoreImpl,
-  BrokerCoreConfigSchema,
+  SignetCoreImpl,
+  SignetCoreConfigSchema,
   createSdkClientFactory,
   createConversationActions,
-  type BrokerState,
+  type SignetState,
   type SignerProviderFactory,
-} from "@xmtp-broker/core";
-import { createSignerProvider } from "@xmtp-broker/keys";
+} from "@xmtp/signet-core";
+import { createSignerProvider } from "@xmtp/signet-keys";
 import {
   createSessionManager as createSessionManagerImpl,
   createSessionService,
-} from "@xmtp-broker/sessions";
-import { createAttestationManager as createAttestationManagerImpl } from "@xmtp-broker/attestations";
-import type { InputResolver } from "@xmtp-broker/attestations";
+} from "@xmtp/signet-sessions";
+import { createSealManager as createSealManagerImpl } from "@xmtp/signet-seals";
+import type { InputResolver } from "@xmtp/signet-seals";
 import {
   createWsServer as createWsServerImpl,
   type WsServer,
   type WsServerDeps,
-} from "@xmtp-broker/ws";
+} from "@xmtp/signet-ws";
 import { createAdminServer as createAdminServerImpl } from "./admin/server.js";
 import type { AdminServer, AdminServerDeps } from "./admin/server.js";
 import type { AdminServerConfig } from "./config/schema.js";
-import type { BrokerRuntimeDeps } from "./runtime.js";
+import type { SignetRuntimeDeps } from "./runtime.js";
 import { createWsRequestHandler } from "./ws/request-handler.js";
 import { createLazyCoreUpgrade } from "./ws/core-upgrade.js";
 
-/** Map BrokerCoreImpl states to the contract's CoreState. */
-function mapBrokerState(state: BrokerState): CoreState {
+/** Map SignetCoreImpl states to the contract's CoreState. */
+function mapSignetState(state: SignetState): CoreState {
   switch (state) {
     case "idle":
       return "uninitialized";
@@ -59,21 +59,21 @@ function mapBrokerState(state: BrokerState): CoreState {
 }
 
 /**
- * Create production BrokerRuntimeDeps wired with real implementations.
+ * Create production SignetRuntimeDeps wired with real implementations.
  *
  * Each factory function receives the exact shape passed by
- * createBrokerRuntime -- the `unknown` params are narrowed here
+ * createSignetRuntime -- the `unknown` params are narrowed here
  * to the concrete types each package expects.
  */
-export function createProductionDeps(): BrokerRuntimeDeps {
+export function createProductionDeps(): SignetRuntimeDeps {
   // Hold references so downstream factories can access shared instances
   let keyManagerRef: KeyManager | null = null;
-  let coreImplRef: BrokerCoreImpl | null = null;
+  let coreImplRef: SignetCoreImpl | null = null;
 
   return {
     async createKeyManager(
       config: unknown,
-    ): Promise<Result<KeyManager, BrokerError>> {
+    ): Promise<Result<KeyManager, SignetError>> {
       const cfg = config as {
         platform: string;
         rootKeyPolicy: KeyManagerConfig["rootKeyPolicy"];
@@ -91,11 +91,11 @@ export function createProductionDeps(): BrokerRuntimeDeps {
       return result;
     },
 
-    createBrokerCore(
+    createSignetCore(
       config: unknown,
       _signerFactory: unknown,
       _clientFactory: unknown,
-    ): BrokerCore {
+    ): SignetCore {
       const cfg = config as {
         env: "local" | "dev" | "production";
         identityMode: "per-group" | "shared";
@@ -108,7 +108,7 @@ export function createProductionDeps(): BrokerRuntimeDeps {
       ) => {
         if (keyManagerRef === null) {
           throw new Error(
-            "KeyManager not initialized before BrokerCore creation",
+            "KeyManager not initialized before SignetCore creation",
           );
         }
         return createSignerProvider(keyManagerRef, identityId);
@@ -117,32 +117,32 @@ export function createProductionDeps(): BrokerRuntimeDeps {
       const clientFactory = createSdkClientFactory();
 
       // Parse through schema so defaults (heartbeatIntervalMs, etc.) are applied
-      const coreConfig = BrokerCoreConfigSchema.parse({
+      const coreConfig = SignetCoreConfigSchema.parse({
         dataDir: cfg.dataDir,
         env: cfg.env,
         identityMode: cfg.identityMode,
       });
 
-      const impl = new BrokerCoreImpl(
+      const impl = new SignetCoreImpl(
         coreConfig,
         signerProviderFactory,
         clientFactory,
       );
       coreImplRef = impl;
 
-      // Adapt BrokerCoreImpl (start/stop) to BrokerCore contract
+      // Adapt SignetCoreImpl (start/stop) to SignetCore contract
       // (initialize/shutdown) with state name mapping
       return {
         get state(): CoreState {
-          return mapBrokerState(impl.state);
+          return mapSignetState(impl.state);
         },
-        async initializeLocal(): Promise<Result<void, BrokerError>> {
+        async initializeLocal(): Promise<Result<void, SignetError>> {
           return impl.startLocal();
         },
-        async initialize(): Promise<Result<void, BrokerError>> {
+        async initialize(): Promise<Result<void, SignetError>> {
           return impl.start();
         },
-        async shutdown(): Promise<Result<void, BrokerError>> {
+        async shutdown(): Promise<Result<void, SignetError>> {
           return impl.stop();
         },
         async sendMessage(
@@ -159,8 +159,8 @@ export function createProductionDeps(): BrokerRuntimeDeps {
           // exercise this code path.
           const result = await impl.context.getGroupInfo(groupId);
           return result as Result<
-            import("@xmtp-broker/contracts").GroupInfo,
-            BrokerError
+            import("@xmtp/signet-contracts").GroupInfo,
+            SignetError
           >;
         },
       };
@@ -182,45 +182,40 @@ export function createProductionDeps(): BrokerRuntimeDeps {
       });
     },
 
-    createAttestationManager(_deps: unknown) {
-      // The runtime passes {} for deps. The real attestation manager
-      // needs signer, publisher, and resolveInput. For the initial
-      // startup these are stubs -- attestation operations happen
-      // later when sessions are created and groups are joined.
-      const stubSigner: import("@xmtp-broker/contracts").AttestationSigner = {
-        async sign(_attestation) {
+    createSealManager(_deps: unknown) {
+      // The runtime passes {} for deps. The real seal manager needs
+      // signer, publisher, and resolveInput. For the initial startup
+      // these are stubs -- seal operations happen later when sessions
+      // are created and groups are joined.
+      const stubSigner: import("@xmtp/signet-contracts").SealStamper = {
+        async sign(_seal) {
           return Result.err(
-            InternalError.create(
-              "AttestationSigner not wired -- no sessions active",
-            ),
+            InternalError.create("SealStamper not wired -- no sessions active"),
           );
         },
         async signRevocation(_revocation) {
           return Result.err(
-            InternalError.create(
-              "AttestationSigner not wired -- no sessions active",
-            ),
+            InternalError.create("SealStamper not wired -- no sessions active"),
           );
         },
       };
 
-      const stubPublisher: import("@xmtp-broker/contracts").AttestationPublisher =
-        {
-          async publish(_groupId, _signed) {
-            return Result.err(
-              InternalError.create(
-                "AttestationPublisher not wired -- no sessions active",
-              ),
-            );
-          },
-          async publishRevocation(_groupId, _signed) {
-            return Result.err(
-              InternalError.create(
-                "AttestationPublisher not wired -- no sessions active",
-              ),
-            );
-          },
-        };
+      const stubPublisher: import("@xmtp/signet-contracts").SealPublisher = {
+        async publish(_groupId, _signed) {
+          return Result.err(
+            InternalError.create(
+              "SealPublisher not wired -- no sessions active",
+            ),
+          );
+        },
+        async publishRevocation(_groupId, _signed) {
+          return Result.err(
+            InternalError.create(
+              "SealPublisher not wired -- no sessions active",
+            ),
+          );
+        },
+      };
 
       const stubResolver: InputResolver = async (_sessionId, _groupId) => {
         return Result.err(
@@ -228,7 +223,7 @@ export function createProductionDeps(): BrokerRuntimeDeps {
         );
       };
 
-      return createAttestationManagerImpl({
+      return createSealManagerImpl({
         signer: stubSigner,
         publisher: stubPublisher,
         resolveInput: stubResolver,
@@ -238,9 +233,9 @@ export function createProductionDeps(): BrokerRuntimeDeps {
     createWsServer(config: unknown, deps: unknown): WsServer {
       const cfg = config as { port: number; host: string };
       const d = deps as {
-        core: BrokerCore;
-        sessionManager: import("@xmtp-broker/contracts").SessionManager;
-        attestationManager: import("@xmtp-broker/contracts").AttestationManager;
+        core: SignetCore;
+        sessionManager: import("@xmtp/signet-contracts").SessionManager;
+        sealManager: import("@xmtp/signet-contracts").SealManager;
       };
 
       // Build the WsServerDeps with tokenLookup and requestHandler
@@ -255,7 +250,7 @@ export function createProductionDeps(): BrokerRuntimeDeps {
       const wsDeps: WsServerDeps = {
         core: d.core,
         sessionManager: d.sessionManager,
-        attestationManager: d.attestationManager,
+        sealManager: d.sealManager,
         async tokenLookup(token: string) {
           return d.sessionManager.lookupByToken(token);
         },
@@ -274,7 +269,7 @@ export function createProductionDeps(): BrokerRuntimeDeps {
     createConversationActions() {
       if (coreImplRef === null) {
         throw new Error(
-          "BrokerCoreImpl not initialized before conversation actions",
+          "SignetCoreImpl not initialized before conversation actions",
         );
       }
       if (keyManagerRef === null) {

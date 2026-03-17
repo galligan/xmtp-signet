@@ -12,8 +12,8 @@ export const IdentityModeSchema: z.ZodEnum<["per-group", "shared"]> = z
 
 export type IdentityMode = z.infer<typeof IdentityModeSchema>;
 
-/** Parsed broker core configuration (all defaults applied). */
-export type BrokerCoreConfig = {
+/** Parsed signet core configuration (all defaults applied). */
+export type SignetCoreConfig = {
   dataDir: string;
   env: XmtpEnv;
   identityMode: IdentityMode;
@@ -22,8 +22,8 @@ export type BrokerCoreConfig = {
   appVersion: string;
 };
 
-/** Input to BrokerCoreConfigSchema (fields with defaults are optional). */
-type BrokerCoreConfigInput = {
+/** Input to SignetCoreConfigSchema (fields with defaults are optional). */
+type SignetCoreConfigInput = {
   dataDir: string;
   env?: XmtpEnv | undefined;
   identityMode?: IdentityMode | undefined;
@@ -32,13 +32,13 @@ type BrokerCoreConfigInput = {
   appVersion?: string | undefined;
 };
 
-export const BrokerCoreConfigSchema: z.ZodType<
-  BrokerCoreConfig,
+export const SignetCoreConfigSchema: z.ZodType<
+  SignetCoreConfig,
   z.ZodTypeDef,
-  BrokerCoreConfigInput
+  SignetCoreConfigInput
 > = z
   .object({
-    dataDir: z.string().describe("Base directory for all broker data"),
+    dataDir: z.string().describe("Base directory for all signet data"),
     env: XmtpEnvSchema.default("dev").describe("XMTP network environment"),
     identityMode: IdentityModeSchema.default("per-group").describe(
       "Identity isolation strategy",
@@ -57,7 +57,7 @@ export const BrokerCoreConfigSchema: z.ZodType<
       .describe("Maximum time to wait for initial sync"),
     appVersion: z
       .string()
-      .default("xmtp-broker/0.1.0")
+      .default("xmtp-signet/0.1.0")
       .describe("App version string sent to XMTP network"),
   })
-  .describe("Broker core configuration");
+  .describe("Signet core configuration");

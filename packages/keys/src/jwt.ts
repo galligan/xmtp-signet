@@ -4,7 +4,7 @@ import {
   AuthError,
   ValidationError,
   InternalError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
 /**
  * Helper to convert Uint8Array to a BufferSource compatible with

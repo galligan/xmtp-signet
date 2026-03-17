@@ -1,17 +1,23 @@
 # Remaining Work: Phase 1 Completion and Phase 2 Delivery
 
 **Created:** 2026-03-17
-**Context:** Phase 2C (Convos interop, conversation management, devnet connectivity) is complete across 38 stacked PRs. This document tracks what remains before the broker is feature-complete for Phase 1 (PRD) and ready for Phase 2 delivery to external developers.
+**Updated:** 2026-03-17
+**Context:** Phase 2C (Convos interop, conversation management, devnet connectivity) is complete across 38 stacked PRs. This document tracks what remains before the signet is feature-complete for Phase 1 (PRD) and ready for Phase 2 delivery to external developers.
+
+**Note:** The XMTP Signet rename is now complete in the live code and public runtime surface. This document reflects the current `signet` naming. Historical planning notes may still use `broker` or `attestation` terminology where they describe earlier design phases.
 
 ## Current State
 
-The broker runs on XMTP devnet with:
+The signet runs on XMTP devnet with:
 - Dual-identity registration and management
 - Group creation, listing, info, add-member, members
 - Convos invite generate/parse/verify/join roundtrip
 - Session-scoped WebSocket with policy enforcement
+- WebSocket event streaming and heartbeat/liveness handling
 - Vault-backed key hierarchy (root, operational, session)
-- Reference verifier (trust chain, attestation chain)
+- Seal lifecycle and Ed25519 seal stamping in package/integration flows
+- Session-scoped MCP transport with conversation tools wired from ActionSpecs
+- Reference verifier (trust chain, seal chain)
 - CLI daemon with admin socket
 
 Validated end-to-end via tracer bullet on devnet (17/17 steps, 3 bugs fixed).
@@ -30,8 +36,6 @@ Items the PRD scopes to Phase 1 that are not yet complete.
 
 **Scope:** `packages/keys/` — add a `SecureEnclaveRootKeyProvider` alongside the existing `SoftwareRootKeyProvider`. The key hierarchy stays the same (root -> operational -> session); only the root key storage changes.
 
-**Reference:** `.reference/keypo-cli/` has the Swift Secure Enclave signer pattern. The broker should not take a runtime dependency on keypo-cli but can use it as a design reference.
-
 **Effort:** Large. Requires Swift interop (Bun FFI or child process) for Secure Enclave access. Platform-specific (macOS/iOS only; Linux falls back to software vault).
 
 ---
@@ -48,155 +52,73 @@ Items the PRD scopes to Phase 1 that are not yet complete.
 
 ---
 
-### P1-3: Broker Event Stream
-
-**What:** Implement the canonical broker events defined in the PRD and stream them to connected WebSocket clients.
-
-**Why:** The PRD defines 15 event types. Currently the broker emits raw XMTP events internally but doesn't project them to harness clients. The WebSocket connection is request/response only — no server-initiated events.
-
-**Events to implement (priority order):**
-1. `message.visible` — new message in the agent's view scope
-2. `session.expired` — session reached its `expiresAt`
-3. `message.visible.historical` — backfill of messages from before the session started
-4. `view.updated` — view scope changed (when editing is implemented)
-5. `grant.updated` — grant scope changed
-6. `attestation.updated` — new attestation published
-
-**Scope:** `packages/ws/` for the WebSocket streaming, `packages/core/` for event projection through the policy engine (filter events by session view).
-
-**Effort:** Medium-large. The raw event infrastructure exists (`streamAllMessages`, `streamGroups`). Needs: event type schemas, view-scoped filtering, WebSocket push frames, client SDK event handlers.
-
----
-
-### P1-4: Heartbeat and Liveness
-
-**What:** Implement heartbeat signals so clients can detect broker liveness. The attestation includes a `heartbeatInterval` field; clients should be able to infer "agent unreachable" when the interval is exceeded.
-
-**Why:** PRD section "Liveness and Graceful Degradation" — without heartbeats, a crashed broker is indistinguishable from an agent that chooses not to respond.
-
-**Scope:** `packages/ws/` — periodic ping/pong or lightweight keepalive frames. `packages/sessions/` — heartbeat interval in session/attestation metadata.
-
-**Effort:** Small. WebSocket ping/pong is mostly built-in. The attestation field already exists in the schema.
-
----
-
 ## Phase 2 Gaps (from PRD)
 
-Items the PRD scopes to Phase 2 that are not yet complete.
+### P2-1: Deployment Templates
 
-### P2-1: MCP Transport Wiring
+**What:** Dockerfile, docker-compose.yml, Railway template for running the signet outside the source tree.
 
-**What:** Wire the conversation ActionSpecs (create, list, info, join, invite, add-member, members) as MCP tools in `packages/mcp/`. Currently the MCP server exists with session-scoped tool infrastructure but the conversation actions aren't exposed.
+**Effort:** Small-medium.
 
-**Why:** MCP is a primary adapter in the PRD. Agent frameworks (Claude, etc.) connect via MCP. Without conversation tools in MCP, harnesses can only use WebSocket.
+### P2-2: Runtime Seal Publishing Wiring
 
-**Scope:** `packages/mcp/` — register each ActionSpec as an MCP tool with JSON Schema input/output derived from the Zod schemas (using `zod-to-json-schema`, already a blessed dep).
+**What:** Replace the CLI/runtime startup stubs in `packages/cli/src/start.ts` with real seal manager wiring so daemon-issued sessions and group operations publish real seals through the runtime composition root.
 
-**Effort:** Small-medium. The plumbing exists; it's mostly registration and input/output mapping.
+**Why:** The package layer already has real Ed25519 seal stamping and publish interfaces, and integration tests exercise that path. The remaining gap is the production runtime composition root, which still creates a stub signer/publisher during startup.
 
----
+**Effort:** Medium.
 
-### P2-2: Deployment Templates
+### P2-3: Build Provenance Verification
 
-**What:** Provide deployment templates for running the broker outside of `bun run packages/cli/src/bin.ts`.
+**What:** Real Sigstore/GitHub OIDC verification in the verifier (currently v0 stub).
 
-**Templates needed:**
-1. **Dockerfile** — single-container local broker
-2. **docker-compose.yml** — broker + optional verifier
-3. **Railway template** — one-click deploy (Railway supports Bun natively)
+**Effort:** Medium.
 
-**Why:** PRD Phase 2: "Add self-hosted deployment templates." Currently the only way to run the broker is from the source tree.
+### P2-4: Session Permission Editing
 
-**Scope:** Root-level `deploy/` directory with Dockerfile, compose file, and Railway config. Probably also a `broker` binary entry point (a thin wrapper around the CLI).
+**What:** Modify a session's view/grant without revoke + reissue.
 
-**Effort:** Small-medium. The CLI already handles all configuration. Templates just need to package it.
+**Effort:** Medium.
 
----
+### P2-5: HTTP API Adapter
 
-### P2-3: Full Attestation Signing
+**What:** REST API for non-streaming operations.
 
-**What:** Replace the attestation signer/publisher stubs in `packages/cli/src/start.ts` with real implementations. Attestations should be signed with the Ed25519 operational key and (optionally) published as XMTP messages to the group.
+**Effort:** Medium.
 
-**Why:** PRD Phase 1 says "Define structured egress/inference disclosure fields" (done) but Phase 2 says "Add attestation timeline UX (material changes only)." The signing infrastructure exists (`@xmtp-broker/attestations` has content types, signing interfaces, materiality checking) but the production wiring is stubbed.
+### P2-6: Action Confirmations
 
-**Scope:**
-- `packages/cli/src/start.ts` — replace `stubSigner` with real Ed25519 signing via the operational key
-- `packages/cli/src/start.ts` — replace `stubPublisher` with XMTP message publishing (send attestation content type to the group)
-- `packages/cli/src/start.ts` — replace `stubResolver` with real input resolution (read current session state)
+**What:** Confirmation flow for sensitive actions (tool calls, group management).
 
-**Effort:** Medium. The attestation package has the types and codecs. The signer needs the operational key (available via `SignerProvider`). The publisher needs the managed XMTP client.
+**Effort:** Medium-large.
 
----
+### P2-7: Historical Docs Terminology Cleanup
 
-### P2-4: Build Provenance Verification
+**What:** Update historical plans, skills, and notes that still say `broker` / `attestation` where they now refer to `signet` / `seal`.
 
-**What:** Implement real build provenance checking in the verifier. Currently returns "v0 stub" skip result.
+**Why:** The live code and public runtime surface are renamed, but hidden docs under `.agents/`, `.claude/`, and `.trail/` still contain older terminology. This is not a runtime blocker, but it does create friction for future agent and contributor onboarding.
 
-**Why:** PRD trust chain Layer 2: "Build Provenance — did this binary come from a known CI pipeline?" The verifier has the check scaffolding but doesn't actually verify GitHub Actions OIDC tokens or Sigstore bundles.
-
-**Scope:** `packages/verifier/src/checks/build-provenance.ts` — parse and verify Sigstore bundles or GitHub Actions OIDC attestations.
-
-**Effort:** Medium. Requires understanding Sigstore bundle format and GitHub OIDC token verification. Could use `sigstore-js` or implement minimal verification.
-
----
-
-### P2-5: Session Permission Editing
-
-**What:** Allow modifying a session's view and grant after issuance without revoking and reissuing.
-
-**Why:** PRD Phase 2: "Add permission editing UX." Currently the only way to change permissions is revoke + reissue, which breaks the WebSocket connection and requires the harness to reconnect.
-
-**Scope:** `packages/sessions/` — add `updateView()` and `updateGrant()` methods. `packages/ws/` — push `view.updated` / `grant.updated` events to the connected client. `packages/cli/` — `session update` command.
-
-**Effort:** Medium. Session store needs update methods. Policy engine needs to reload scopes mid-connection.
-
----
-
-### P2-6: HTTP API Adapter
-
-**What:** A lightweight REST API for non-streaming operations (session management, conversation management, status). Complements WebSocket (streaming) and MCP (tool-oriented).
-
-**Why:** PRD lists HTTP API as an additional adapter. Useful for dashboards, monitoring, and simple integrations that don't need real-time streaming.
-
-**Scope:** `packages/http/` or add routes to the existing `Bun.serve()` in the daemon. RESTful endpoints mapping to existing ActionSpecs.
-
-**Effort:** Medium. The handler contract is transport-agnostic, so this is mostly routing and serialization.
-
----
-
-### P2-7: Action Confirmations
-
-**What:** For sensitive actions (tool calls, group management), require explicit confirmation from the user before the broker executes them.
-
-**Why:** PRD Phase 2: "Add action confirmations and richer tool scopes." The grant has a `tools.scopes` field but no confirmation flow.
-
-**Scope:** `packages/ws/` — confirmation request/response frame types. `packages/core/` — action confirmation middleware in the handler pipeline. `packages/cli/` — CLI rendering of pending confirmations.
-
-**Effort:** Medium-large. New frame types, state machine for pending confirmations, timeout handling.
+**Effort:** Small-medium.
 
 ---
 
 ## Suggested Execution Order
 
-### Next Phase: "Phase 1 Close-Out"
-
-Focus on completing the PRD Phase 1 scope. These are the items that make the broker a credible local-first security boundary.
+### Next: Phase 1 Close-Out
 
 | Order | Item | Effort | Rationale |
 |-------|------|--------|-----------|
-| 1 | P1-4: Heartbeat/Liveness | Small | Quick win, closes a PRD gap |
-| 2 | P1-3: Broker Event Stream | Medium-large | Unlocks real-time agent UX — without this, agents can't react to incoming messages |
-| 3 | P1-2: Reveal-Only View Mode | Medium | Core privacy feature, differentiates from "just a proxy" |
-| 4 | P2-1: MCP Transport Wiring | Small-medium | Enables agent framework integration |
-| 5 | P2-3: Full Attestation Signing | Medium | Makes trust chain real, not stubbed |
-| 6 | P1-1: Secure Enclave | Large | Important but platform-specific; can ship without it on Linux |
+| 1 | P1-2: Reveal-Only View Mode | Medium | Core privacy feature still missing from Phase 1 |
+| 2 | P1-1: Secure Enclave | Large | Important PRD security gap; platform-specific |
+| 3 | P2-2: Runtime Seal Publishing Wiring | Medium | Completes the production seal path |
 
-### Follow-On: "Phase 2 Delivery"
+### Follow-On: Phase 2 Delivery
 
-| Order | Item | Effort | Rationale |
-|-------|------|--------|-----------|
-| 7 | P2-2: Deployment Templates | Small-medium | Gets the broker into others' hands |
-| 8 | P2-4: Build Provenance | Medium | Completes the trust chain |
-| 9 | P2-5: Session Permission Editing | Medium | UX improvement, not blocking |
-| 10 | P2-6: HTTP API | Medium | Nice-to-have adapter |
-| 11 | P2-7: Action Confirmations | Medium-large | Advanced grant feature |
+| Order | Item | Effort |
+|-------|------|--------|
+| 4 | P2-1: Deployment Templates | Small-medium |
+| 5 | P2-3: Build Provenance | Medium |
+| 6 | P2-4: Session Permission Editing | Medium |
+| 7 | P2-5: HTTP API | Medium |
+| 8 | P2-6: Action Confirmations | Medium-large |
+| 9 | P2-7: Historical Docs Terminology Cleanup | Small-medium |

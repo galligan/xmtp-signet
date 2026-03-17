@@ -1,5 +1,5 @@
 {
-  "name": "@xmtp-broker/ws",
+  "name": "@xmtp/signet-ws",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,8 +16,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@xmtp-broker/contracts": "workspace:*",
-    "@xmtp-broker/schemas": "workspace:*",
+    "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-schemas": "workspace:*",
     "better-result": "catalog:",
     "zod": "catalog:"
   },

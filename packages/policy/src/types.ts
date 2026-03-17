@@ -1,8 +1,8 @@
-import type { ContentTypeId, MessageEvent } from "@xmtp-broker/schemas";
+import type { ContentTypeId, MessageEvent } from "@xmtp/signet-schemas";
 
 /**
  * A raw message as received from the XMTP client, already decoded.
- * Extends the contracts RawMessage with threadId and attestationId
+ * Extends the contracts RawMessage with threadId and sealId
  * needed by the policy pipeline.
  */
 export interface RawMessage {
@@ -13,7 +13,7 @@ export interface RawMessage {
   readonly content: unknown;
   readonly sentAt: string;
   readonly threadId: string | null;
-  readonly attestationId: string | null;
+  readonly sealId: string | null;
 }
 
 /** Result of projecting a raw message through the view pipeline. */
@@ -21,7 +21,7 @@ export type ProjectionResult =
   | { readonly action: "emit"; readonly event: MessageEvent }
   | { readonly action: "drop" };
 
-/** Broker-level content type configuration. */
-export interface BrokerContentTypeConfig {
+/** Signet-level content type configuration. */
+export interface SignetContentTypeConfig {
   readonly allowlist: ReadonlySet<ContentTypeId>;
 }

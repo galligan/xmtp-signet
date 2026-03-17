@@ -1,4 +1,4 @@
-import type { ActionResult } from "@xmtp-broker/contracts";
+import type { ActionResult } from "@xmtp/signet-contracts";
 
 /**
  * MCP content block shape returned to MCP clients.

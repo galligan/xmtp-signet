@@ -5,14 +5,14 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { ActionResultMeta } from "@xmtp-broker/schemas";
-import { InternalError, AuthError } from "@xmtp-broker/schemas";
+import type { ActionResultMeta } from "@xmtp/signet-schemas";
+import { InternalError, AuthError } from "@xmtp/signet-schemas";
 import type {
   ActionRegistry,
   SessionManager,
   SessionRecord,
   SignerProvider,
-} from "@xmtp-broker/contracts";
+} from "@xmtp/signet-contracts";
 import type { McpServerConfig } from "./config.js";
 import { McpServerConfigSchema } from "./config.js";
 import {
@@ -22,7 +22,7 @@ import {
 import { handleCallTool } from "./call-handler.js";
 import { validateSession, checkSessionLiveness } from "./session-guard.js";
 import { formatActionResult } from "./output-formatter.js";
-import { toActionResult } from "@xmtp-broker/contracts";
+import { toActionResult } from "@xmtp/signet-contracts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,12 +34,12 @@ export type McpServerState = "idle" | "running" | "stopping" | "stopped";
 /** Dependencies injected into the MCP server. */
 export interface McpServerDeps {
   readonly registry: ActionRegistry;
-  readonly brokerId: string;
+  readonly signetId: string;
   readonly signerProvider: SignerProvider;
   readonly sessionManager: SessionManager;
 }
 
-/** Session-scoped MCP server instance exposing broker actions as MCP tools. */
+/** Session-scoped MCP server instance exposing signet actions as MCP tools. */
 export interface McpServerInstance {
   /** Start the server: validate session, discover tools, connect transport. */
   start(): Promise<Result<void, InternalError | AuthError>>;
@@ -71,7 +71,7 @@ function buildMeta(requestId: string, startTime: number): ActionResultMeta {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a session-scoped MCP server that exposes broker ActionSpecs
+ * Create a session-scoped MCP server that exposes signet ActionSpecs
  * as MCP tools. Validates the session token at startup and checks
  * liveness on each tool call.
  */
@@ -185,7 +185,7 @@ export function createMcpServer(
           },
           deps.registry,
           {
-            brokerId: deps.brokerId,
+            signetId: deps.signetId,
             signerProvider: deps.signerProvider,
             sessionRecord: cachedSession,
             requestTimeoutMs: config.requestTimeoutMs,

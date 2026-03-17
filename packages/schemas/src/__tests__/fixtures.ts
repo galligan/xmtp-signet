@@ -1,15 +1,13 @@
-import type { Attestation } from "../attestation.js";
+import type { Seal } from "../seal.js";
 import type { ViewConfig } from "../view.js";
 import type { GrantConfig } from "../grant.js";
 import type { IssuedSession, SessionToken } from "../session.js";
 
-/** Valid attestation fixture for testing. */
-export function createTestAttestation(
-  overrides?: Partial<Attestation>,
-): Attestation {
+/** Valid seal fixture for testing. */
+export function createTestSeal(overrides?: Partial<Seal>): Seal {
   return {
-    attestationId: "test-att-001",
-    previousAttestationId: null,
+    sealId: "test-att-001",
+    previousSealId: null,
     agentInboxId: "test-agent-inbox",
     ownerInboxId: "test-owner-inbox",
     groupId: "test-group-1",
@@ -37,7 +35,7 @@ export function createTestAttestation(
       ownerCanRevoke: true,
       adminCanRemove: false,
     },
-    issuer: "test-broker-identity",
+    issuer: "test-signet-identity",
     ...overrides,
   };
 }

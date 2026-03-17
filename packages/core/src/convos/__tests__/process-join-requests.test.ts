@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import { generateConvosInviteSlug } from "../invite-generator.js";
 import {
   processJoinRequest,
@@ -34,8 +34,8 @@ async function buildValidSlug(overrides?: {
 }
 
 function createMockDeps(overrides?: {
-  addMembersResult?: Result<void, BrokerError>;
-  getGroupTagResult?: Result<string | undefined, BrokerError>;
+  addMembersResult?: Result<void, SignetError>;
+  getGroupTagResult?: Result<string | undefined, SignetError>;
 }): ProcessJoinRequestDeps {
   return {
     walletPrivateKeyHex: TEST_PRIVATE_KEY_HEX,

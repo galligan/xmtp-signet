@@ -7,7 +7,7 @@
 
 import { describe, test, expect, afterEach } from "bun:test";
 import { rm } from "node:fs/promises";
-import { WS_CLOSE_CODES } from "@xmtp-broker/ws";
+import { WS_CLOSE_CODES } from "@xmtp/signet-ws";
 import {
   createTestRuntime,
   issueTestSession,
@@ -342,7 +342,7 @@ describe("ws-edge-cases", () => {
     ).toBe(true);
 
     // Cleanup remaining resources
-    await runtime.broker.stop().catch(() => {});
+    await runtime.signet.stop().catch(() => {});
     runtime.keyManager.close();
     await rm(runtime.dataDir, { recursive: true, force: true });
   });

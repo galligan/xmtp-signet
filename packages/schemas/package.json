@@ -1,5 +1,5 @@
 {
-  "name": "@xmtp-broker/schemas",
+  "name": "@xmtp/signet-schemas",
   "version": "0.0.0",
   "private": true,
   "type": "module",

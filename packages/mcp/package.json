@@ -1,9 +1,9 @@
 {
-  "name": "@xmtp-broker/mcp",
+  "name": "@xmtp/signet-mcp",
   "version": "0.0.0",
   "private": true,
   "bin": {
-    "xmtp-broker-mcp": "./src/bin/mcp-server.ts"
+    "xmtp-signet-mcp": "./src/bin/mcp-server.ts"
   },
   "type": "module",
   "exports": {
@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",
-    "@xmtp-broker/contracts": "workspace:*",
-    "@xmtp-broker/schemas": "workspace:*",
+    "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-schemas": "workspace:*",
     "better-result": "catalog:",
     "zod": "catalog:",
     "zod-to-json-schema": "3.24.5"

@@ -1,7 +1,7 @@
 /**
  * Test runtime that wires all Phase 1 packages with mock XMTP.
  *
- * Provides a fully composed broker runtime for integration tests
+ * Provides a fully composed signet runtime for integration tests
  * without any network dependencies.
  */
 
@@ -9,40 +9,37 @@ import { Result } from "better-result";
 import { tmpdir } from "node:os";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type {
-  AttestationPublisher,
-  SignedAttestation,
+  SealPublisher,
+  SealEnvelope,
   SignedRevocationEnvelope,
-} from "@xmtp-broker/contracts";
-import { BrokerCoreImpl } from "@xmtp-broker/core";
-import type { XmtpDecodedMessage, XmtpGroupEvent } from "@xmtp-broker/core";
-import { createSessionManager } from "@xmtp-broker/sessions";
+} from "@xmtp/signet-contracts";
+import { SignetCoreImpl } from "@xmtp/signet-core";
+import type { XmtpDecodedMessage, XmtpGroupEvent } from "@xmtp/signet-core";
+import { createSessionManager } from "@xmtp/signet-sessions";
 import type {
   InternalSessionManager,
   SessionManagerConfig,
-} from "@xmtp-broker/sessions";
-import { createKeyManager } from "@xmtp-broker/keys";
-import type { KeyManager } from "@xmtp-broker/keys";
-import { createSignerProvider } from "@xmtp-broker/keys";
-import { createAttestationSigner } from "@xmtp-broker/keys";
-import {
-  createAttestationManager,
-  type AttestationManagerDeps,
-} from "@xmtp-broker/attestations";
-import type { AttestationManagerImpl } from "@xmtp-broker/attestations";
-import { createWsServer } from "@xmtp-broker/ws";
-import type { WsServer, WsServerConfig } from "@xmtp-broker/ws";
+} from "@xmtp/signet-sessions";
+import { createKeyManager } from "@xmtp/signet-keys";
+import type { KeyManager } from "@xmtp/signet-keys";
+import { createSignerProvider } from "@xmtp/signet-keys";
+import { createSealStamper } from "@xmtp/signet-keys";
+import { createSealManager, type SealManagerDeps } from "@xmtp/signet-seals";
+import type { SealManagerImpl } from "@xmtp/signet-seals";
+import { createWsServer } from "@xmtp/signet-ws";
+import type { WsServer, WsServerConfig } from "@xmtp/signet-ws";
 import {
   createMockXmtpClientFactory,
   type MockXmtpClientFactory,
 } from "./mock-xmtp-factory.js";
 
-/** In-memory attestation publisher that records publications. */
-function createTestPublisher(): AttestationPublisher & {
+/** In-memory seal publisher that records publications. */
+function createTestPublisher(): SealPublisher & {
   readonly published: ReadonlyArray<{
     groupId: string;
-    attestation: SignedAttestation;
+    seal: SealEnvelope;
   }>;
   readonly revokedPublished: ReadonlyArray<{
     groupId: string;
@@ -51,7 +48,7 @@ function createTestPublisher(): AttestationPublisher & {
 } {
   const published: Array<{
     groupId: string;
-    attestation: SignedAttestation;
+    seal: SealEnvelope;
   }> = [];
   const revokedPublished: Array<{
     groupId: string;
@@ -65,8 +62,8 @@ function createTestPublisher(): AttestationPublisher & {
     get revokedPublished() {
       return revokedPublished;
     },
-    async publish(groupId, attestation) {
-      published.push({ groupId, attestation });
+    async publish(groupId, seal) {
+      published.push({ groupId, seal });
       return Result.ok(undefined);
     },
     async publishRevocation(groupId, revocation) {
@@ -78,9 +75,9 @@ function createTestPublisher(): AttestationPublisher & {
 
 export interface TestRuntime {
   readonly keyManager: KeyManager;
-  readonly broker: BrokerCoreImpl;
+  readonly signet: SignetCoreImpl;
   readonly sessionManager: InternalSessionManager;
-  readonly attestationManager: AttestationManagerImpl;
+  readonly sealManager: SealManagerImpl;
   readonly publisher: ReturnType<typeof createTestPublisher>;
   readonly wsServer: WsServer;
   readonly wsPort: number;
@@ -96,7 +93,7 @@ export interface TestRuntimeOptions {
   readonly wsConfig?: Partial<WsServerConfig>;
   readonly sessionConfig?: Partial<SessionManagerConfig>;
   readonly groupId?: string;
-  /** Skip starting broker and WS server (for unit-level tests). */
+  /** Skip starting signet and WS server (for unit-level tests). */
   readonly skipStart?: boolean;
 }
 
@@ -108,7 +105,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
   };
   cleanup: () => Promise<void>;
 }> {
-  const dataDir = await mkdtemp(join(tmpdir(), "xmtp-broker-test-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "xmtp-signet-test-"));
   const groupId = options?.groupId ?? "test-group";
 
   // 1. Key manager
@@ -126,11 +123,11 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     );
   }
 
-  // 2. Create broker with in-memory identity store
+  // 2. Create signet with in-memory identity store
   // We need the identity store to create an identity and get back its ID
   // before creating the operational key.
 
-  // 2a. Mock XMTP factory - we need this before creating broker
+  // 2a. Mock XMTP factory - we need this before creating signet
   const { factory, streams } = createMockXmtpClientFactory({
     groups: [
       {
@@ -143,12 +140,12 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     ],
   });
 
-  // 2b. Signer provider factory for BrokerCore
+  // 2b. Signer provider factory for SignetCore
   const signerProviderFactory = (id: string) =>
     createSignerProvider(keyManager, id);
 
-  // 2c. Broker core
-  const broker = new BrokerCoreImpl(
+  // 2c. Signet core
+  const signet = new SignetCoreImpl(
     {
       dataDir,
       env: "dev",
@@ -162,7 +159,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
   );
 
   // 2d. Create identity in the store, get back its generated ID
-  const identityResult = await broker.identityStore.create(groupId);
+  const identityResult = await signet.identityStore.create(groupId);
   if (identityResult.isErr()) {
     throw new Error(
       `Failed to create identity: ${identityResult.error.message}`,
@@ -188,17 +185,17 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     ...options?.sessionConfig,
   });
 
-  // 5. Attestation manager
-  const attestationSigner = createAttestationSigner(keyManager, identityId);
+  // 5. Seal manager
+  const sealStamper = createSealStamper(keyManager, identityId);
   const publisher = createTestPublisher();
 
-  const attestationDeps: AttestationManagerDeps = {
-    signer: attestationSigner,
+  const sealManagerDeps: SealManagerDeps = {
+    signer: sealStamper,
     publisher,
     resolveInput: async (sessionId, gId) => {
       const session = sessionManager.getSessionById(sessionId);
       if (!session.isOk()) {
-        return Result.err(session.error as BrokerError);
+        return Result.err(session.error as SignetError);
       }
       const s = session.value;
       return Result.ok({
@@ -229,13 +226,13 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
       });
     },
   };
-  const attestationManager = createAttestationManager(attestationDeps);
+  const sealManager = createSealManager(sealManagerDeps);
 
   // 6. Token lookup for WS
   const tokenLookup = async (token: string) => {
     const result = sessionManager.getSessionByToken(token);
     if (!result.isOk()) {
-      return Result.err(result.error as BrokerError);
+      return Result.err(result.error as SignetError);
     }
     const s = result.value;
     return Result.ok({
@@ -261,7 +258,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
         request["sessionId"] as string,
       );
       if (!hbResult.isOk()) {
-        return Result.err(hbResult.error as BrokerError);
+        return Result.err(hbResult.error as SignetError);
       }
       return Result.ok({ acknowledged: true });
     }
@@ -282,7 +279,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     {
       core: {
         get state() {
-          return broker.state === "running"
+          return signet.state === "running"
             ? ("ready" as const)
             : ("uninitialized" as const);
         },
@@ -290,13 +287,13 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
           return Result.ok(undefined);
         },
         async initialize() {
-          return broker.start();
+          return signet.start();
         },
         async shutdown() {
-          return broker.stop();
+          return signet.stop();
         },
         async sendMessage(groupId, contentType, content) {
-          return broker.context.sendMessage(groupId, contentType, content);
+          return signet.context.sendMessage(groupId, contentType, content);
         },
         async getGroupInfo(gId) {
           return Result.ok({
@@ -314,12 +311,12 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
             300,
           );
           if (!skResult.isOk()) {
-            return Result.err(skResult.error as BrokerError);
+            return Result.err(skResult.error as SignetError);
           }
           const fp = skResult.value.fingerprint;
           const result = await sessionManager.createSession(config, fp);
           if (!result.isOk()) {
-            return Result.err(result.error as BrokerError);
+            return Result.err(result.error as SignetError);
           }
           return Result.ok({
             token: result.value.token,
@@ -351,7 +348,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
         async lookup(sessionId) {
           const result = sessionManager.getSessionById(sessionId);
           if (!result.isOk()) {
-            return Result.err(result.error as BrokerError);
+            return Result.err(result.error as SignetError);
           }
           const s = result.value;
           return Result.ok({
@@ -369,7 +366,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
         async lookupByToken(token) {
           const result = sessionManager.getSessionByToken(token);
           if (!result.isOk()) {
-            return Result.err(result.error as BrokerError);
+            return Result.err(result.error as SignetError);
           }
           const s = result.value;
           return Result.ok({
@@ -387,26 +384,26 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
         async revoke(sessionId, reason) {
           const result = sessionManager.revokeSession(sessionId, reason);
           if (!result.isOk()) {
-            return Result.err(result.error as BrokerError);
+            return Result.err(result.error as SignetError);
           }
           return Result.ok(undefined);
         },
         async heartbeat(sessionId) {
           const result = sessionManager.recordHeartbeat(sessionId);
           if (!result.isOk()) {
-            return Result.err(result.error as BrokerError);
+            return Result.err(result.error as SignetError);
           }
           return Result.ok(undefined);
         },
         async isActive(sessionId) {
           const result = sessionManager.getSessionById(sessionId);
           if (!result.isOk()) {
-            return Result.err(result.error as BrokerError);
+            return Result.err(result.error as SignetError);
           }
           return Result.ok(result.value.state === "active");
         },
       },
-      attestationManager,
+      sealManager,
       tokenLookup,
       requestHandler,
     },
@@ -415,10 +412,10 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
   let wsPort = 0;
 
   if (!options?.skipStart) {
-    // Start broker
-    const startResult = await broker.start();
+    // Start signet
+    const startResult = await signet.start();
     if (startResult.isErr()) {
-      throw new Error(`Failed to start broker: ${startResult.error.message}`);
+      throw new Error(`Failed to start signet: ${startResult.error.message}`);
     }
 
     // Start WS server
@@ -433,9 +430,9 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
 
   const runtime: TestRuntime = {
     keyManager,
-    broker,
+    signet,
     sessionManager,
-    attestationManager,
+    sealManager,
     publisher,
     wsServer,
     wsPort,
@@ -450,7 +447,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     streams,
     cleanup: async () => {
       await wsServer.stop().catch(() => {});
-      await broker.stop().catch(() => {});
+      await signet.stop().catch(() => {});
       keyManager.close();
       await rm(dataDir, { recursive: true, force: true });
     },
@@ -513,9 +510,7 @@ export async function issueTestSession(
     overrides?.ttlSeconds ?? 300,
   );
   if (!skResult.isOk()) {
-    throw new Error(
-      `Failed to issue session key: ${skResult.error.message}`,
-    );
+    throw new Error(`Failed to issue session key: ${skResult.error.message}`);
   }
   const fp = skResult.value.fingerprint;
 

@@ -2,22 +2,22 @@
 
 /**
  * Standalone MCP server entry point.
- * Reads XMTP_BROKER_SESSION_TOKEN from env, creates server,
+ * Reads XMTP_SIGNET_SESSION_TOKEN from env, creates server,
  * starts stdio transport.
  */
 
 import { createMcpServer } from "../server.js";
-import { createActionRegistry } from "@xmtp-broker/contracts";
+import { createActionRegistry } from "@xmtp/signet-contracts";
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 
-const sessionToken = process.env["XMTP_BROKER_SESSION_TOKEN"];
+const sessionToken = process.env["XMTP_SIGNET_SESSION_TOKEN"];
 if (!sessionToken) {
-  console.error("XMTP_BROKER_SESSION_TOKEN is required");
+  console.error("XMTP_SIGNET_SESSION_TOKEN is required");
   process.exit(1);
 }
 
-// In a real deployment, these deps would come from the broker runtime.
+// In a real deployment, these deps would come from the signet runtime.
 // This entry point is a minimal wiring layer.
 const registry = createActionRegistry();
 
@@ -28,7 +28,7 @@ const server = createMcpServer(
   },
   {
     registry,
-    brokerId: process.env["XMTP_BROKER_ID"] ?? "broker_default",
+    signetId: process.env["XMTP_SIGNET_ID"] ?? "signet_default",
     signerProvider: {
       // Placeholder -- real signer injected by daemon
       async sign() {

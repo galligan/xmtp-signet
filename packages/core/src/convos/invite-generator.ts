@@ -1,8 +1,8 @@
 import { deflateSync } from "node:zlib";
 import { Result } from "better-result";
 import protobuf from "protobufjs";
-import { InternalError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { hkdf } from "@noble/hashes/hkdf";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha256";
@@ -272,7 +272,7 @@ function insertSeparators(str: string, sep: string, every: number): string {
  */
 export async function generateConvosInviteSlug(
   opts: GenerateInviteSlugOptions,
-): Promise<Result<string, BrokerError>> {
+): Promise<Result<string, SignetError>> {
   try {
     const privateKeyBytes = hexToBytes(opts.walletPrivateKeyHex);
 
@@ -346,7 +346,7 @@ export async function generateConvosInviteSlug(
  */
 export async function generateConvosInviteUrl(
   opts: GenerateInviteUrlOptions,
-): Promise<Result<string, BrokerError>> {
+): Promise<Result<string, SignetError>> {
   const slugResult = await generateConvosInviteSlug(opts);
   if (!slugResult.isOk()) return slugResult;
 

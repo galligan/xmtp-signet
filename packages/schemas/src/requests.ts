@@ -83,7 +83,7 @@ const _UpdateViewRequest = z
     requestId: z.string().describe("Client-generated request ID"),
     view: ViewConfig.describe("Requested view update"),
   })
-  .describe("Request a view update (broker may reject if material escalation)");
+  .describe("Request a view update (signet may reject if material escalation)");
 
 export const UpdateViewRequest: z.ZodType<UpdateViewRequest> =
   _UpdateViewRequest;
@@ -149,7 +149,7 @@ export type HarnessRequest =
   | ConfirmActionRequest
   | HeartbeatRequest;
 
-/** Discriminated union of all harness-to-broker requests. */
+/** Discriminated union of all harness-to-signet requests. */
 export const HarnessRequest: z.ZodType<HarnessRequest> = z
   .discriminatedUnion("type", [
     _SendMessageRequest,
@@ -160,4 +160,4 @@ export const HarnessRequest: z.ZodType<HarnessRequest> = z
     _ConfirmActionRequest,
     _HeartbeatRequest,
   ])
-  .describe("Any request a harness may send to the broker");
+  .describe("Any request a harness may send to the signet");

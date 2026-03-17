@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class CancelledError extends Error implements BrokerError {
+export class CancelledError extends Error implements SignetError {
   readonly _tag = "CancelledError" as const;
   readonly code = 1600;
   readonly category = "cancelled" as const;

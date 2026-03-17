@@ -4,7 +4,7 @@ import {
   validateSendReply,
 } from "../grant/validate-send.js";
 import { Result } from "better-result";
-import type { ContentTypeId } from "@xmtp-broker/schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 import {
   createFullGrant,
   createDenyAllGrant,

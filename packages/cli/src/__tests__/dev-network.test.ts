@@ -59,7 +59,7 @@ function writeConfig(dir: string): string {
   writeFileSync(
     configPath,
     [
-      "[broker]",
+      "[signet]",
       'env = "dev"',
       `dataDir = "${dataDir}"`,
       "",
@@ -114,7 +114,7 @@ async function runCli(
 
 function startDaemon(configPath: string): Bun.Subprocess {
   const proc = Bun.spawn(
-    ["bun", CLI, "broker", "start", "--config", configPath, "--json"],
+    ["bun", CLI, "start", "--config", configPath, "--json"],
     {
       cwd: repoRoot,
       stdout: "pipe",
@@ -151,7 +151,7 @@ async function waitForDaemonReady(
 
     // Try status
     const status = await runCli(
-      ["broker", "status", "--config", configPath, "--json"],
+      ["status", "--config", configPath, "--json"],
       5_000,
     );
 
@@ -174,14 +174,12 @@ async function waitForDaemonReady(
 
 async function stopDaemon(configPath: string): Promise<void> {
   const result = await runCli(
-    ["broker", "stop", "--config", configPath, "--json"],
+    ["stop", "--config", configPath, "--json"],
     10_000,
   );
   if (result.exitCode !== 0) {
     // Best-effort stop; daemon may have already exited
-    console.warn(
-      `broker stop exited with ${result.exitCode}: ${result.stderr}`,
-    );
+    console.warn(`stop exited with ${result.exitCode}: ${result.stderr}`);
   }
 }
 
@@ -257,8 +255,8 @@ describe.skipIf(!process.env["XMTP_NETWORK_TESTS"])(
       expect(aliceOutput["inboxId"]).not.toBe(bobOutput["inboxId"]);
     });
 
-    test("broker start connects identities to network", async () => {
-      const dir = makeTestDir("broker");
+    test("start connects identities to network", async () => {
+      const dir = makeTestDir("signet");
       const configPath = writeConfig(dir);
 
       // Init two identities
@@ -293,19 +291,13 @@ describe.skipIf(!process.env["XMTP_NETWORK_TESTS"])(
       await waitForDaemonReady(configPath, daemon);
 
       // Check status
-      const status = await runCli([
-        "broker",
-        "status",
-        "--config",
-        configPath,
-        "--json",
-      ]);
+      const status = await runCli(["status", "--config", configPath, "--json"]);
       expect(status.exitCode).toBe(0);
 
       const statusOutput = JSON.parse(status.stdout) as Record<string, unknown>;
       expect(statusOutput["state"]).toBe("running");
 
-      // The broker should report network connectivity when env is dev
+      // The signet should report network connectivity when env is dev
       // Accept both "connected" and presence of networkState field
       expect(statusOutput).toHaveProperty("networkState");
 

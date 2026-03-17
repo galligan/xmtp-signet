@@ -1,12 +1,12 @@
 import { describe, test, expect } from "bun:test";
 import { resolveEffectiveAllowlist } from "../allowlist.js";
-import { BASELINE_CONTENT_TYPES } from "@xmtp-broker/schemas";
-import type { ContentTypeId } from "@xmtp-broker/schemas";
+import { BASELINE_CONTENT_TYPES } from "@xmtp/signet-schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 import { Result } from "better-result";
 
 describe("resolveEffectiveAllowlist", () => {
   test("intersection of all three tiers", () => {
-    const broker = {
+    const signet = {
       allowlist: new Set([
         "xmtp.org/text:1.0" as ContentTypeId,
         "xmtp.org/reaction:1.0" as ContentTypeId,
@@ -20,7 +20,7 @@ describe("resolveEffectiveAllowlist", () => {
 
     const result = resolveEffectiveAllowlist(
       BASELINE_CONTENT_TYPES,
-      broker,
+      signet,
       agent,
     );
     expect(Result.isOk(result)).toBe(true);
@@ -33,8 +33,8 @@ describe("resolveEffectiveAllowlist", () => {
     }
   });
 
-  test("broker superset of baseline still bounded by baseline", () => {
-    const broker = {
+  test("signet superset of baseline still bounded by baseline", () => {
+    const signet = {
       allowlist: new Set([
         ...BASELINE_CONTENT_TYPES,
         "custom.org/special:1.0" as ContentTypeId,
@@ -47,7 +47,7 @@ describe("resolveEffectiveAllowlist", () => {
 
     const result = resolveEffectiveAllowlist(
       BASELINE_CONTENT_TYPES,
-      broker,
+      signet,
       agent,
     );
     expect(Result.isOk(result)).toBe(true);
@@ -59,8 +59,8 @@ describe("resolveEffectiveAllowlist", () => {
     }
   });
 
-  test("agent requests types broker does not allow -- silently excluded", () => {
-    const broker = {
+  test("agent requests types signet does not allow -- silently excluded", () => {
+    const signet = {
       allowlist: new Set(["xmtp.org/text:1.0" as ContentTypeId]),
     };
     const agent = [
@@ -70,7 +70,7 @@ describe("resolveEffectiveAllowlist", () => {
 
     const result = resolveEffectiveAllowlist(
       BASELINE_CONTENT_TYPES,
-      broker,
+      signet,
       agent,
     );
     expect(Result.isOk(result)).toBe(true);
@@ -81,14 +81,14 @@ describe("resolveEffectiveAllowlist", () => {
   });
 
   test("empty intersection returns ValidationError", () => {
-    const broker = {
+    const signet = {
       allowlist: new Set(["xmtp.org/text:1.0" as ContentTypeId]),
     };
     const agent = ["xmtp.org/reaction:1.0" as ContentTypeId];
 
     const result = resolveEffectiveAllowlist(
       BASELINE_CONTENT_TYPES,
-      broker,
+      signet,
       agent,
     );
     expect(Result.isError(result)).toBe(true);
@@ -98,12 +98,12 @@ describe("resolveEffectiveAllowlist", () => {
   });
 
   test("empty agent allowlist returns ValidationError", () => {
-    const broker = {
+    const signet = {
       allowlist: new Set(BASELINE_CONTENT_TYPES),
     };
     const result = resolveEffectiveAllowlist(
       BASELINE_CONTENT_TYPES,
-      broker,
+      signet,
       [],
     );
     expect(Result.isError(result)).toBe(true);

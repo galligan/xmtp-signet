@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 import { createSessionService } from "../service.js";
 import { createSessionManager } from "../session-manager.js";
 import type { InternalSessionManager } from "../session-manager.js";

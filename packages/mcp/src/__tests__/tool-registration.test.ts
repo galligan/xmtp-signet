@@ -15,7 +15,7 @@ describe("actionSpecToMcpTool", () => {
     const tool = actionSpecToMcpTool(spec);
 
     expect(tool).toBeDefined();
-    expect(tool.name).toBe("broker/message/send");
+    expect(tool.name).toBe("signet/message/send");
     expect(tool.description).toBe("Send a message to a conversation");
   });
 
@@ -23,7 +23,7 @@ describe("actionSpecToMcpTool", () => {
     const spec = createListSpec();
     const tool = actionSpecToMcpTool(spec);
 
-    expect(tool.name).toBe("broker/message/list");
+    expect(tool.name).toBe("signet/message/list");
   });
 
   test("converts input schema via zodToJsonSchema", () => {

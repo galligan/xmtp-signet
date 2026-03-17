@@ -1,4 +1,4 @@
-import type { ContentTypeId } from "@xmtp-broker/schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 
 /**
  * Stage 2: Content type filter. Returns true if the message's content

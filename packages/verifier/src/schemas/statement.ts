@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { TrustTier } from "@xmtp-broker/schemas";
-import type { TrustTier as TrustTierType } from "@xmtp-broker/schemas";
+import { TrustTier } from "@xmtp/signet-schemas";
+import type { TrustTier as TrustTierType } from "@xmtp/signet-schemas";
 import { VerificationCheck } from "./check.js";
 
 export const VerificationVerdict: z.ZodEnum<
@@ -15,7 +15,7 @@ export type VerificationStatement = {
   statementId: string;
   requestId: string;
   verifierInboxId: string;
-  brokerInboxId: string;
+  signetInboxId: string;
   agentInboxId: string;
   verdict: VerificationVerdict;
   verifiedTier: TrustTierType;
@@ -34,9 +34,9 @@ export const VerificationStatementSchema: z.ZodType<VerificationStatement> = z
     verifierInboxId: z
       .string()
       .describe("XMTP inbox ID of the verifier that issued this statement"),
-    brokerInboxId: z
+    signetInboxId: z
       .string()
-      .describe("XMTP inbox ID of the broker being verified"),
+      .describe("XMTP inbox ID of the signet being verified"),
     agentInboxId: z
       .string()
       .describe("XMTP inbox ID of the agent being verified"),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 import { createLazyCoreUpgrade } from "../ws/core-upgrade.js";
 
 describe("createLazyCoreUpgrade", () => {

@@ -2,7 +2,7 @@ import type {
   GrantConfig,
   SessionState,
   ViewConfig,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import type { PolicyDelta } from "./policy-types.js";
 
 /** Internal session state (superset of SessionToken). */

@@ -6,8 +6,8 @@ import {
   NotFoundError,
   ActionResultSchema,
   ActionErrorResultSchema,
-} from "@xmtp-broker/schemas";
-import type { ActionResultMeta } from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
+import type { ActionResultMeta } from "@xmtp/signet-schemas";
 import { toActionResult } from "../result-envelope.js";
 
 function validMeta(): ActionResultMeta {

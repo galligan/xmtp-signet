@@ -8,9 +8,9 @@ describe("CliConfigSchema", () => {
     if (!result.success) return;
 
     const config = result.data;
-    expect(config.broker.env).toBe("dev");
-    expect(config.broker.identityMode).toBe("per-group");
-    expect(config.broker.dataDir).toBeUndefined();
+    expect(config.signet.env).toBe("dev");
+    expect(config.signet.identityMode).toBe("per-group");
+    expect(config.signet.dataDir).toBeUndefined();
     expect(config.keys.rootKeyPolicy).toBe("biometric");
     expect(config.keys.operationalKeyPolicy).toBe("open");
     expect(config.ws.port).toBe(8393);
@@ -24,28 +24,35 @@ describe("CliConfigSchema", () => {
     expect(config.logging.auditLogPath).toBeUndefined();
   });
 
-  test("broker section defaults correctly", () => {
+  test("signet section defaults correctly", () => {
     const result = CliConfigSchema.safeParse({
-      broker: {},
+      signet: {},
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.broker.env).toBe("dev");
-    expect(result.data.broker.identityMode).toBe("per-group");
+    expect(result.data.signet.env).toBe("dev");
+    expect(result.data.signet.identityMode).toBe("per-group");
   });
 
-  test("accepts valid broker env values", () => {
+  test("rejects unknown legacy section", () => {
+    const result = CliConfigSchema.safeParse({
+      legacy_signet: { env: "production" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts valid signet env values", () => {
     for (const env of ["local", "dev", "production"]) {
       const result = CliConfigSchema.safeParse({
-        broker: { env },
+        signet: { env },
       });
       expect(result.success).toBe(true);
     }
   });
 
-  test("rejects invalid broker env", () => {
+  test("rejects invalid signet env", () => {
     const result = CliConfigSchema.safeParse({
-      broker: { env: "staging" },
+      signet: { env: "staging" },
     });
     expect(result.success).toBe(false);
   });
@@ -112,13 +119,13 @@ describe("CliConfigSchema", () => {
 
   test("accepts partial config and fills defaults for omitted fields", () => {
     const result = CliConfigSchema.safeParse({
-      broker: { env: "production" },
+      signet: { env: "production" },
       ws: { port: 4000 },
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.broker.env).toBe("production");
-    expect(result.data.broker.identityMode).toBe("per-group");
+    expect(result.data.signet.env).toBe("production");
+    expect(result.data.signet.identityMode).toBe("per-group");
     expect(result.data.ws.port).toBe(4000);
     expect(result.data.ws.host).toBe("127.0.0.1");
     expect(result.data.sessions.defaultTtlSeconds).toBe(3600);
@@ -152,10 +159,10 @@ describe("AdminServerConfigSchema", () => {
 
   test("accepts custom socketPath", () => {
     const result = AdminServerConfigSchema.safeParse({
-      socketPath: "/var/run/broker.sock",
+      socketPath: "/var/run/signet.sock",
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.socketPath).toBe("/var/run/broker.sock");
+    expect(result.data.socketPath).toBe("/var/run/signet.sock");
   });
 });

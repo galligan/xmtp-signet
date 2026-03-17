@@ -1,11 +1,11 @@
-import { ERROR_CATEGORY_META, type ErrorCategory } from "@xmtp-broker/schemas";
+import { ERROR_CATEGORY_META, type ErrorCategory } from "@xmtp/signet-schemas";
 
 /** Successful exit. */
 export const EXIT_SUCCESS = 0;
 
 /**
  * Map an error category to a CLI exit code.
- * Uses ERROR_CATEGORY_META from @xmtp-broker/schemas as the single source of truth.
+ * Uses ERROR_CATEGORY_META from @xmtp/signet-schemas as the single source of truth.
  * Falls back to the internal error exit code for unknown categories.
  */
 export function exitCodeFromCategory(category: ErrorCategory): number {

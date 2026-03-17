@@ -6,7 +6,7 @@
  * hash have identical effective policies.
  */
 
-import type { ViewConfig, GrantConfig } from "@xmtp-broker/schemas";
+import type { ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
 
 /** Compute a deterministic hash of the view + grant policy. */
 export function computePolicyHash(

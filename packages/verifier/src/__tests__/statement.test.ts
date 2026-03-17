@@ -6,7 +6,7 @@ describe("VerificationStatementSchema", () => {
     statementId: "stmt-001",
     requestId: "req-001",
     verifierInboxId: "verifier-inbox-001",
-    brokerInboxId: "broker-inbox-001",
+    signetInboxId: "signet-inbox-001",
     agentInboxId: "agent-inbox-001",
     verdict: "verified",
     verifiedTier: "source-verified",

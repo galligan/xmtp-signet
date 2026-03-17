@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { isInScope } from "../pipeline/scope-filter.js";
-import type { ThreadScope } from "@xmtp-broker/schemas";
+import type { ThreadScope } from "@xmtp/signet-schemas";
 
 describe("isInScope", () => {
   test("returns true when message groupId matches a scope with null threadId", () => {

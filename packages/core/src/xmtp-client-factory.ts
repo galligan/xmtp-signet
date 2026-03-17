@@ -1,5 +1,5 @@
 import type { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { XmtpEnv } from "./config.js";
 
 /**
@@ -16,58 +16,58 @@ export interface XmtpClient {
   sendMessage(
     groupId: string,
     content: unknown,
-  ): Promise<Result<string, BrokerError>>;
+  ): Promise<Result<string, SignetError>>;
 
   /** Sync all conversations. */
-  syncAll(): Promise<Result<void, BrokerError>>;
+  syncAll(): Promise<Result<void, SignetError>>;
 
   /** Sync a specific group. */
-  syncGroup(groupId: string): Promise<Result<void, BrokerError>>;
+  syncGroup(groupId: string): Promise<Result<void, SignetError>>;
 
   /** Get group metadata. */
-  getGroupInfo(groupId: string): Promise<Result<XmtpGroupInfo, BrokerError>>;
+  getGroupInfo(groupId: string): Promise<Result<XmtpGroupInfo, SignetError>>;
 
   /** List all groups the client is a member of. */
-  listGroups(): Promise<Result<readonly XmtpGroupInfo[], BrokerError>>;
+  listGroups(): Promise<Result<readonly XmtpGroupInfo[], SignetError>>;
 
   /** Create a DM conversation with a peer by inbox ID. */
-  createDm(peerInboxId: string): Promise<Result<XmtpDmInfo, BrokerError>>;
+  createDm(peerInboxId: string): Promise<Result<XmtpDmInfo, SignetError>>;
 
   /** Send a text message to a DM conversation. */
   sendDmMessage(
     dmId: string,
     text: string,
-  ): Promise<Result<string, BrokerError>>;
+  ): Promise<Result<string, SignetError>>;
 
   /** Create a new group conversation with the given members. */
   createGroup(
     memberInboxIds: readonly string[],
     options?: { name?: string },
-  ): Promise<Result<XmtpGroupInfo, BrokerError>>;
+  ): Promise<Result<XmtpGroupInfo, SignetError>>;
 
   /** Add members to a group by inbox ID. */
   addMembers(
     groupId: string,
     inboxIds: readonly string[],
-  ): Promise<Result<void, BrokerError>>;
+  ): Promise<Result<void, SignetError>>;
 
   /** Remove members from a group. */
   removeMembers(
     groupId: string,
     inboxIds: readonly string[],
-  ): Promise<Result<void, BrokerError>>;
+  ): Promise<Result<void, SignetError>>;
 
   /**
    * Stream all messages across all groups.
    * Returns an async iterable and an abort function.
    */
-  streamAllMessages(): Promise<Result<MessageStream, BrokerError>>;
+  streamAllMessages(): Promise<Result<MessageStream, SignetError>>;
 
   /**
    * Stream group creation/join events.
    * Returns an async iterable and an abort function.
    */
-  streamGroups(): Promise<Result<GroupStream, BrokerError>>;
+  streamGroups(): Promise<Result<GroupStream, SignetError>>;
 }
 
 /** DM conversation metadata returned by the XMTP client. */
@@ -132,7 +132,7 @@ export interface XmtpClientCreateOptions {
 /**
  * Factory for creating XMTP client instances.
  *
- * Injected into BrokerCore to decouple from the real `@xmtp/node-sdk`.
+ * Injected into SignetCore to decouple from the real `@xmtp/node-sdk`.
  * Tests provide a mock factory; production provides a factory that wraps
  * `Client.create()` from the SDK.
  */
@@ -140,7 +140,7 @@ export interface XmtpClientFactory {
   /** Create and register an XMTP client for the given identity. */
   create(
     options: XmtpClientCreateOptions,
-  ): Promise<Result<XmtpClient, BrokerError>>;
+  ): Promise<Result<XmtpClient, SignetError>>;
 }
 
 /**
@@ -150,18 +150,18 @@ export interface XmtpClientFactory {
  */
 export interface SignerProviderLike {
   /** Sign data with the Ed25519 operational key. */
-  sign(data: Uint8Array): Promise<Result<Uint8Array, BrokerError>>;
+  sign(data: Uint8Array): Promise<Result<Uint8Array, SignetError>>;
   /** Get the Ed25519 public key. */
-  getPublicKey(): Promise<Result<Uint8Array, BrokerError>>;
+  getPublicKey(): Promise<Result<Uint8Array, SignetError>>;
   /** Get a fingerprint of the Ed25519 public key. */
-  getFingerprint(): Promise<Result<string, BrokerError>>;
+  getFingerprint(): Promise<Result<string, SignetError>>;
   /**
    * Derive or retrieve a 32-byte encryption key for XMTP client databases.
    * Must return the same key for a given identity across restarts.
    */
   getDbEncryptionKey(
     identityId: string,
-  ): Promise<Result<Uint8Array, BrokerError>>;
+  ): Promise<Result<Uint8Array, SignetError>>;
   /**
    * Retrieve the secp256k1 private key for XMTP identity registration.
    * Returns a hex-encoded 0x-prefixed key. Used once during
@@ -169,5 +169,5 @@ export interface SignerProviderLike {
    */
   getXmtpIdentityKey(
     identityId: string,
-  ): Promise<Result<`0x${string}`, BrokerError>>;
+  ): Promise<Result<`0x${string}`, SignetError>>;
 }

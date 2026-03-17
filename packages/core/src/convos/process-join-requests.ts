@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import { ValidationError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import { ValidationError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import { parseConvosInviteUrl } from "./invite-parser.js";
@@ -18,11 +18,11 @@ export interface ProcessJoinRequestDeps {
   readonly addMembersToGroup: (
     groupId: string,
     inboxIds: readonly string[],
-  ) => Promise<Result<void, BrokerError>>;
+  ) => Promise<Result<void, SignetError>>;
   /** Get the invite tag stored in a group's appData (for verification). */
   readonly getGroupInviteTag: (
     groupId: string,
-  ) => Promise<Result<string | undefined, BrokerError>>;
+  ) => Promise<Result<string | undefined, SignetError>>;
 }
 
 /** An incoming message to evaluate as a potential join request. */
@@ -104,7 +104,7 @@ function verifySignatureMatchesKey(
 export async function processJoinRequest(
   deps: ProcessJoinRequestDeps,
   message: IncomingJoinMessage,
-): Promise<Result<JoinRequestResult, BrokerError>> {
+): Promise<Result<JoinRequestResult, SignetError>> {
   // Step 1: Parse the message as an invite slug
   const parseResult = parseConvosInviteUrl(message.messageText);
   if (!parseResult.isOk()) return parseResult;

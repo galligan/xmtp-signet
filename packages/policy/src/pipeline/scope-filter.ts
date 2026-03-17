@@ -1,4 +1,4 @@
-import type { ThreadScope } from "@xmtp-broker/schemas";
+import type { ThreadScope } from "@xmtp/signet-schemas";
 
 /**
  * Stage 1: Scope filter. Returns true if the message falls within

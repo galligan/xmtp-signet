@@ -1,4 +1,4 @@
-import type { BrokerEvent } from "@xmtp-broker/schemas";
+import type { SignetEvent } from "@xmtp/signet-schemas";
 import type { SequencedFrame } from "./frames.js";
 import type { SessionReplayState } from "./connection-state.js";
 
@@ -8,7 +8,7 @@ import type { SessionReplayState } from "./connection-state.js";
  */
 export function sequenceEvent(
   sessionState: SessionReplayState,
-  event: BrokerEvent,
+  event: SignetEvent,
 ): SequencedFrame {
   const seq = sessionState.nextSeq;
   sessionState.nextSeq = seq + 1;

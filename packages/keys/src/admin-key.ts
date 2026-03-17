@@ -4,7 +4,7 @@ import {
   NotFoundError,
   AuthError,
   ValidationError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import type { Vault } from "./vault.js";
 import {
   generateEd25519KeyPair,

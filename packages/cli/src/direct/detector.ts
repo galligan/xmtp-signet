@@ -11,7 +11,7 @@ export interface ModeDetectionResult {
 }
 
 /**
- * Detect whether the broker daemon is running and reachable.
+ * Detect whether the signet daemon is running and reachable.
  *
  * Checks if the admin socket file exists and a daemon is listening on it.
  * If the socket file is stale (daemon not running), it is cleaned up.

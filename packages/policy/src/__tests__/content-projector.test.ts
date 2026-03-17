@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { projectContent } from "../pipeline/content-projector.js";
-import type { ContentTypeId } from "@xmtp-broker/schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 
 describe("projectContent", () => {
   const content = { text: "hello world" };

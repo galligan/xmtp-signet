@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { TimeoutError, ValidationError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import { TimeoutError, ValidationError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "../identity-store.js";
 import type { XmtpClientFactory } from "../xmtp-client-factory.js";
-import type { XmtpEnv, BrokerCoreConfig } from "../config.js";
+import type { XmtpEnv, SignetCoreConfig } from "../config.js";
 import type { SignerProviderFactory } from "../identity-registration.js";
 import { registerIdentity } from "../identity-registration.js";
 import { parseConvosInviteUrl, verifyConvosInvite } from "./invite-parser.js";
@@ -13,7 +13,7 @@ export interface JoinConversationDeps {
   readonly identityStore: SqliteIdentityStore;
   readonly clientFactory: XmtpClientFactory;
   readonly signerProviderFactory: SignerProviderFactory;
-  readonly config: Pick<BrokerCoreConfig, "dataDir" | "env" | "appVersion">;
+  readonly config: Pick<SignetCoreConfig, "dataDir" | "env" | "appVersion">;
 }
 
 /** Options for joining a conversation. */
@@ -80,7 +80,7 @@ export async function joinConversation(
   deps: JoinConversationDeps,
   inviteUrl: string,
   options?: JoinConversationOptions,
-): Promise<Result<JoinResult, BrokerError>> {
+): Promise<Result<JoinResult, SignetError>> {
   const { identityStore, clientFactory, signerProviderFactory, config } = deps;
   const pollIntervalMs = options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const maxPollAttempts = options?.maxPollAttempts ?? DEFAULT_MAX_POLL_ATTEMPTS;

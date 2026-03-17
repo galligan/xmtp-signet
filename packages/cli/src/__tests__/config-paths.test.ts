@@ -39,65 +39,65 @@ describe("resolvePaths", () => {
     const paths = resolvePaths(config);
     const home = homedir();
 
-    expect(paths.configFile).toBe(`${home}/.config/xmtp-broker/config.toml`);
-    expect(paths.dataDir).toBe(`${home}/.local/share/xmtp-broker`);
-    expect(paths.auditLog).toBe(`${home}/.local/state/xmtp-broker/audit.jsonl`);
+    expect(paths.configFile).toBe(`${home}/.config/xmtp-signet/config.toml`);
+    expect(paths.dataDir).toBe(`${home}/.local/share/xmtp-signet`);
+    expect(paths.auditLog).toBe(`${home}/.local/state/xmtp-signet/audit.jsonl`);
     expect(paths.identityKeyFile).toBe(
-      `${home}/.local/share/xmtp-broker/vault.db`,
+      `${home}/.local/share/xmtp-signet/vault.db`,
     );
   });
 
   test("XDG_CONFIG_HOME overrides config file path", () => {
     process.env["XDG_CONFIG_HOME"] = "/custom/config";
     const paths = resolvePaths(defaultConfig());
-    expect(paths.configFile).toBe("/custom/config/xmtp-broker/config.toml");
+    expect(paths.configFile).toBe("/custom/config/xmtp-signet/config.toml");
   });
 
   test("XDG_DATA_HOME overrides data directory", () => {
     process.env["XDG_DATA_HOME"] = "/custom/data";
     const paths = resolvePaths(defaultConfig());
-    expect(paths.dataDir).toBe("/custom/data/xmtp-broker");
-    expect(paths.identityKeyFile).toBe("/custom/data/xmtp-broker/vault.db");
+    expect(paths.dataDir).toBe("/custom/data/xmtp-signet");
+    expect(paths.identityKeyFile).toBe("/custom/data/xmtp-signet/vault.db");
   });
 
   test("XDG_RUNTIME_DIR overrides pid and socket paths", () => {
     process.env["XDG_RUNTIME_DIR"] = "/custom/runtime";
     const paths = resolvePaths(defaultConfig());
-    expect(paths.pidFile).toBe("/custom/runtime/xmtp-broker/broker.pid");
-    expect(paths.adminSocket).toBe("/custom/runtime/xmtp-broker/admin.sock");
+    expect(paths.pidFile).toBe("/custom/runtime/xmtp-signet/signet.pid");
+    expect(paths.adminSocket).toBe("/custom/runtime/xmtp-signet/admin.sock");
   });
 
   test("XDG_STATE_HOME overrides audit log path", () => {
     process.env["XDG_STATE_HOME"] = "/custom/state";
     const paths = resolvePaths(defaultConfig());
-    expect(paths.auditLog).toBe("/custom/state/xmtp-broker/audit.jsonl");
+    expect(paths.auditLog).toBe("/custom/state/xmtp-signet/audit.jsonl");
   });
 
   test("macOS: TMPDIR used as XDG_RUNTIME_DIR fallback", () => {
     // XDG_RUNTIME_DIR is unset in beforeEach
     const paths = resolvePaths(defaultConfig());
-    const expected = `${tmpdir()}/xmtp-broker`;
-    expect(paths.pidFile).toBe(`${expected}/broker.pid`);
+    const expected = `${tmpdir()}/xmtp-signet`;
+    expect(paths.pidFile).toBe(`${expected}/signet.pid`);
     expect(paths.adminSocket).toBe(`${expected}/admin.sock`);
   });
 
   test("config dataDir override is respected", () => {
     const config = CliConfigSchema.parse({
-      broker: { dataDir: "/custom/broker-data" },
+      signet: { dataDir: "/custom/signet-data" },
     });
     const paths = resolvePaths(config);
-    expect(paths.dataDir).toBe("/custom/broker-data");
-    expect(paths.identityKeyFile).toBe("/custom/broker-data/vault.db");
+    expect(paths.dataDir).toBe("/custom/signet-data");
+    expect(paths.identityKeyFile).toBe("/custom/signet-data/vault.db");
   });
 
   test("tilde expansion works in config dataDir", () => {
     const config = CliConfigSchema.parse({
-      broker: { dataDir: "~/my-broker-data" },
+      signet: { dataDir: "~/my-signet-data" },
     });
     const paths = resolvePaths(config);
     const home = homedir();
-    expect(paths.dataDir).toBe(`${home}/my-broker-data`);
-    expect(paths.identityKeyFile).toBe(`${home}/my-broker-data/vault.db`);
+    expect(paths.dataDir).toBe(`${home}/my-signet-data`);
+    expect(paths.identityKeyFile).toBe(`${home}/my-signet-data/vault.db`);
   });
 
   test("admin socketPath from config overrides default", () => {
@@ -110,10 +110,10 @@ describe("resolvePaths", () => {
 
   test("audit log path from config overrides default", () => {
     const config = CliConfigSchema.parse({
-      logging: { auditLogPath: "/var/log/broker-audit.jsonl" },
+      logging: { auditLogPath: "/var/log/signet-audit.jsonl" },
     });
     const paths = resolvePaths(config);
-    expect(paths.auditLog).toBe("/var/log/broker-audit.jsonl");
+    expect(paths.auditLog).toBe("/var/log/signet-audit.jsonl");
   });
 
   test("all returned paths are readonly strings", () => {

@@ -6,7 +6,7 @@
  */
 
 import { Result } from "better-result";
-import { NotFoundError } from "@xmtp-broker/schemas";
+import { NotFoundError } from "@xmtp/signet-schemas";
 import type {
   XmtpClient,
   XmtpGroupInfo,
@@ -14,7 +14,7 @@ import type {
   XmtpGroupEvent,
   MessageStream,
   GroupStream,
-} from "@xmtp-broker/core";
+} from "@xmtp/signet-core";
 
 export interface MockXmtpClientOptions {
   readonly inboxId?: string;

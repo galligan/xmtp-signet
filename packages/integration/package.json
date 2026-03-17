@@ -1,5 +1,5 @@
 {
-  "name": "@xmtp-broker/integration",
+  "name": "@xmtp/signet-integration",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,14 +8,14 @@
     "lint": "oxlint src/"
   },
   "dependencies": {
-    "@xmtp-broker/attestations": "workspace:*",
-    "@xmtp-broker/contracts": "workspace:*",
-    "@xmtp-broker/core": "workspace:*",
-    "@xmtp-broker/keys": "workspace:*",
-    "@xmtp-broker/policy": "workspace:*",
-    "@xmtp-broker/schemas": "workspace:*",
-    "@xmtp-broker/sessions": "workspace:*",
-    "@xmtp-broker/ws": "workspace:*",
+    "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-core": "workspace:*",
+    "@xmtp/signet-keys": "workspace:*",
+    "@xmtp/signet-policy": "workspace:*",
+    "@xmtp/signet-schemas": "workspace:*",
+    "@xmtp/signet-seals": "workspace:*",
+    "@xmtp/signet-sessions": "workspace:*",
+    "@xmtp/signet-ws": "workspace:*",
     "better-result": "catalog:",
     "zod": "catalog:"
   },

@@ -40,7 +40,7 @@ describe("release_signing check", () => {
       const evidence = result.value.evidence as Record<string, unknown>;
       expect(evidence["releaseTag"]).toBe("v1.0.0");
       expect(evidence["sourceRepoUrl"]).toBe(
-        "https://github.com/xmtp/xmtp-broker",
+        "https://github.com/xmtp/xmtp-signet",
       );
     }
   });

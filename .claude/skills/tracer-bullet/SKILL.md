@@ -1,11 +1,11 @@
 ---
 name: tracer-bullet
-description: "Run end-to-end tracer bullets against the real xmtp-broker codebase. Executes user stories step-by-step, pausing at failures to diagnose and fix. Use when testing a user story, running an end-to-end flow, validating that things actually work, doing a tracer bullet, smoke testing, or when the user says 'let's try it' or 'does this actually work'. Proactively use this when a feature has been implemented but never run for real."
+description: "Run end-to-end tracer bullets against the real xmtp-signet codebase. Executes user stories step-by-step, pausing at failures to diagnose and fix. Use when testing a user story, running an end-to-end flow, validating that things actually work, doing a tracer bullet, smoke testing, or when the user says 'let's try it' or 'does this actually work'. Proactively use this when a feature has been implemented but never run for real."
 ---
 
 # Tracer Bullet
 
-Run predefined user stories against the real broker, catch every gap between "tests pass" and "it actually works."
+Run predefined user stories against the real signet, catch every gap between "tests pass" and "it actually works."
 
 ## Invocation
 
@@ -13,14 +13,14 @@ If the user doesn't specify which tracer bullet to run, use `AskUserQuestion` to
 
 | Option | Story | Needs |
 |--------|-------|-------|
-| **Admin flow** | identity init → broker start → admin token → session issue/list/inspect/revoke → broker stop | Keys + daemon |
-| **Empty-dir boot** | broker start from empty data dir → verify listening → verify no implicit credentials → stop | Nothing |
+| **Admin flow** | identity init → signet start → admin token → session issue/list/inspect/revoke → signet stop | Keys + daemon |
+| **Empty-dir boot** | signet start from empty data dir → verify listening → verify no implicit credentials → stop | Nothing |
 | **WebSocket harness** | (after admin flow) connect WS with session token → denied send → allowed send → disconnect | Session token |
 | **Full journey** | All of the above in sequence | Nothing |
-| **Dev network** | dual-identity init → broker start → create group → session issue → WS send → receive → stop | Network access |
-| **Production** | identity init (prod) → broker start → create group → invite QR → operator joins → exchange messages → stop | Network + external XMTP app |
-| **Convos: join** | Operator shares Convos invite → broker joins via invite protocol → exchange messages | Production + Convos app |
-| **Convos: host** | Broker creates group → generates Convos invite URL + QR → operator joins from Convos → exchange messages | Production + Convos app |
+| **Dev network** | dual-identity init → signet start → create group → session issue → WS send → receive → stop | Network access |
+| **Production** | identity init (prod) → signet start → create group → invite QR → operator joins → exchange messages → stop | Network + external XMTP app |
+| **Convos: join** | Operator shares Convos invite → signet joins via invite protocol → exchange messages | Production + Convos app |
+| **Convos: host** | Signet creates group → generates Convos invite URL + QR → operator joins from Convos → exchange messages | Production + Convos app |
 | **Convos: both** | Run join then host in sequence | Production + Convos app |
 
 If the user says "all" or "full", run the local stories (Admin flow → Empty-dir boot → WebSocket harness) in order. Dev network and Production are separate — they require network access and are opt-in.
@@ -63,7 +63,7 @@ Each tracer bullet runs as a **subagent** so the main conversation stays clean. 
 ### Subagent prompt template
 
 ```
-Run the "{story_name}" tracer bullet for xmtp-broker.
+Run the "{story_name}" tracer bullet for xmtp-signet.
 
 Test directory: {test_dir}
 Config file: {test_dir}/config.toml
@@ -96,7 +96,7 @@ Each tracer bullet writes a markdown report to `.test/tracers/<story-name>/REPOR
 
 | # | Action | Status | Duration | Notes |
 |---|--------|--------|----------|-------|
-| 1 | broker start | PASS | 1.2s | ws://127.0.0.1:{port} |
+| 1 | signet start | PASS | 1.2s | ws://127.0.0.1:{port} |
 | 2 | identity init | FIXED | 3.4s | wired command, see fix below |
 | 3 | admin token | PASS | 0.8s | JWT generated |
 
@@ -135,15 +135,15 @@ After all requested stories finish:
 ```
 1. Create test environment (config, directories)
 2. identity init --config {config} --json
-3. broker start --config {config} --json (background)
+3. signet start --config {config} --json (background)
 4. Wait for admin socket + WS port
 5. admin token --config {config} --json
-6. broker status --config {config} --json
+6. signet status --config {config} --json
 7. session issue --config {config} --agent test-agent --view @{view_file} --grant @{grant_file} --json
 8. session list --config {config} --agent test-agent --json
 9. session inspect --config {config} {session_id} --json
 10. session revoke --config {config} {session_id} --json
-11. broker stop --config {config} --json
+11. signet stop --config {config} --json
 12. Verify: PID file cleaned up, port released, audit log has entries
 ```
 
@@ -152,9 +152,9 @@ After all requested stories finish:
 ```
 1. Create test environment (config only, empty data dir)
 2. Verify data dir does not exist
-3. broker start --config {config} --json (background)
+3. signet start --config {config} --json (background)
 4. Wait for admin socket + WS port
-5. broker status --config {config} --json
+5. signet status --config {config} --json
 6. Verify: no admin key, no operational key, no XMTP identity created
 7. Stop daemon via SIGTERM
 8. Verify: PID file cleaned up, port released
@@ -166,14 +166,14 @@ Depends on a session token from Admin Flow (run Admin Flow first, or reuse exist
 
 ```
 1. Create test environment (or reuse from Admin Flow)
-2. identity init + broker start + session issue (if not already done)
+2. identity init + signet start + session issue (if not already done)
 3. Connect WebSocket to ws://127.0.0.1:{port} with session token
 4. Send auth frame, verify AuthenticatedFrame received
 5. Send send_message for group NOT in session scope → expect permission error
 6. Send send_message for group IN session scope → expect routed response
 7. Send heartbeat → expect success
 8. Disconnect WebSocket
-9. broker stop --config {config} --json
+9. signet stop --config {config} --json
 ```
 
 ### Full Journey
@@ -187,9 +187,9 @@ Run Admin Flow → Empty-Dir Boot → WebSocket Harness in sequence. Each gets i
  2. identity init --env dev --label alice --config {config} --json
  3. identity init --env dev --label bob --config {config} --json
  4. Verify: two distinct inbox IDs returned
- 5. broker start --config {config} --json (background)
- 6. Wait for daemon ready + core state "running" (poll broker status)
- 7. broker status --config {config} --json → verify 2 identities connected
+ 5. signet start --config {config} --json (background)
+ 6. Wait for daemon ready + core state "running" (poll signet status)
+ 7. signet status --config {config} --json → verify 2 identities connected
  8. conversation create --name "tracer-test" --members {bob_inbox_id} --as alice --config {config} --json
  9. conversation list --config {config} --json → verify group exists
 10. Generate view.json scoped to the created group:
@@ -200,18 +200,18 @@ Run Admin Flow → Empty-Dir Boot → WebSocket Harness in sequence. Each gets i
 13. Connect WebSocket with session token
 14. Send auth frame → verify authenticated
 15. Send send_message to the created group → expect success with messageId
-16. Verify: message appears in broker's event stream (or poll conversation)
+16. Verify: message appears in signet's event stream (or poll conversation)
 17. session issue for bob → connect second WS → verify bob receives the message
-18. broker stop --config {config} --json
+18. signet stop --config {config} --json
 19. Verify: clean shutdown, PID file removed
 ```
 
 **Config template for dev network:**
 ```toml
-[broker]
+[signet]
 env = "dev"
 
-[broker.ws]
+[signet.ws]
 host = "127.0.0.1"
 port = 0
 
@@ -225,64 +225,64 @@ state_dir = "{test_dir}/state"
 
 ```
  1. Create test environment (config with env: "production", temp dirs)
- 2. identity init --env production --label broker-agent --config {config} --json
- 3. broker start --config {config} --json (background)
+ 2. identity init --env production --label signet-agent --config {config} --json
+ 3. signet start --config {config} --json (background)
  4. Wait for daemon ready + core state "running"
  5. PAUSE: Ask operator for their XMTP inbox ID (displayed in their app)
     → Or the operator can provide an Ethereum address for lookup
- 6. conversation create --name "broker-test-{date}" --members {operator_inbox_id} --as broker-agent --config {config} --json
-    → Creates group with both broker and operator as members
+ 6. conversation create --name "signet-test-{date}" --members {operator_inbox_id} --as signet-agent --config {config} --json
+    → Creates group with both signet and operator as members
  7. conversation invite {group_id} --format both --config {config}
     → Displays QR code and group info
     → Operator sees the group appear in their XMTP app automatically
- 8. session issue --config {config} --agent {broker_inbox_id} --view @{view} --grant @{grant} --json
+ 8. session issue --config {config} --agent {signet_inbox_id} --view @{view} --grant @{grant} --json
  9. Connect WebSocket with session token
-10. Send send_message "Hello from the broker!" to the group
+10. Send send_message "Hello from the signet!" to the group
     → Operator sees the message in their XMTP app
 11. PAUSE: Operator sends a reply from their XMTP app
-    → Poll broker status or WS event stream until message from non-broker inbox arrives (120s timeout)
-12. Verify: broker received the external message via event stream
-13. broker stop --config {config} --json
+    → Poll signet status or WS event stream until message from non-signet inbox arrives (120s timeout)
+12. Verify: signet received the external message via event stream
+13. signet stop --config {config} --json
 14. Verify: clean shutdown
 ```
 
-### Convos: Join (User Invites Broker)
+### Convos: Join (User Invites Signet)
 
-Interactive story requiring an operator with the Convos app. The operator shares a Convos invite link, and the broker joins the conversation via the Convos join protocol.
+Interactive story requiring an operator with the Convos app. The operator shares a Convos invite link, and the signet joins the conversation via the Convos join protocol.
 
 ```
  1. Create test environment (config with env: "production", temp dirs)
  2. identity init --env production --label convos-joiner --config {config} --json
- 3. broker start --config {config} --json (background)
+ 3. signet start --config {config} --json (background)
  4. Wait for daemon ready + core state "running"
  5. PAUSE: Ask operator for a Convos invite URL
     → Use AskUserQuestion: "Paste a Convos invite URL (popup.convos.org/v2?i=...)"
  6. conversation join {invite_url} --label convos-joiner --config {config} --json --timeout 120
-    → Broker parses invite, creates per-conversation identity, follows join protocol
-    → Operator sees the broker appear as a new member in Convos
+    → Signet parses invite, creates per-conversation identity, follows join protocol
+    → Operator sees the signet appear as a new member in Convos
  7. session issue --config {config} --agent {joiner_inbox_id} --view @{view} --grant @{grant} --json
     (view scoped to the joined group)
  8. Connect WebSocket with session token
- 9. Send send_message "Hello from the broker!" to the joined group
+ 9. Send send_message "Hello from the signet!" to the joined group
     → Operator sees the message in Convos
 10. PAUSE: Operator sends a reply
-    → Poll WS event stream until message from non-broker inbox arrives (120s timeout)
-11. Verify: broker received the external message
-12. broker stop --config {config} --json
+    → Poll WS event stream until message from non-signet inbox arrives (120s timeout)
+11. Verify: signet received the external message
+12. signet stop --config {config} --json
 13. Verify: clean shutdown
 ```
 
-### Convos: Host (Broker Invites User)
+### Convos: Host (Signet Invites User)
 
-Interactive story requiring an operator with the Convos app. The broker creates a group, generates a Convos-compatible invite URL with QR code, and the operator scans it to join.
+Interactive story requiring an operator with the Convos app. The signet creates a group, generates a Convos-compatible invite URL with QR code, and the operator scans it to join.
 
 ```
  1. Create test environment (config with env: "production", temp dirs)
  2. identity init --env production --label convos-host --config {config} --json
- 3. broker start --config {config} --json (background)
+ 3. signet start --config {config} --json (background)
  4. Wait for daemon ready + core state "running"
- 5. conversation create --name "broker-hosted-{date}" --as convos-host --config {config} --json
-    → Broker creates an empty group (creator only)
+ 5. conversation create --name "signet-hosted-{date}" --as convos-host --config {config} --json
+    → Signet creates an empty group (creator only)
  6. conversation invite {group_id} --as convos-host --format both --config {config}
     → Generates Convos-compatible invite URL (popup.convos.org/v2?i=...)
     → Renders QR code in terminal
@@ -292,12 +292,12 @@ Interactive story requiring an operator with the Convos app. The broker creates 
  8. Verify: operator appears as group member
  9. session issue --config {config} --agent {host_inbox_id} --view @{view} --grant @{grant} --json
 10. Connect WebSocket with session token
-11. Send send_message "Welcome! You joined the broker's chat." to the group
+11. Send send_message "Welcome! You joined the signet's chat." to the group
     → Operator sees the message in Convos
 12. PAUSE: Operator sends a reply
-    → Poll until message from non-broker inbox arrives (120s timeout)
-13. Verify: broker received the external message
-14. broker stop --config {config} --json
+    → Poll until message from non-signet inbox arrives (120s timeout)
+13. Verify: signet received the external message
+14. signet stop --config {config} --json
 15. Verify: clean shutdown
 ```
 

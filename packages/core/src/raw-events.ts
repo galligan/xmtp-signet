@@ -1,5 +1,5 @@
 /**
- * Internal raw event types emitted by BrokerCore.
+ * Internal raw event types emitted by SignetCore.
  *
  * These are unfiltered events from the XMTP client, before any policy
  * filtering. They carry enough metadata for the policy engine to apply

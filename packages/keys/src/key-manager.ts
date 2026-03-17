@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import type { TrustTier } from "@xmtp-broker/schemas";
+import type { TrustTier } from "@xmtp/signet-schemas";
 import {
   InternalError,
   NotFoundError,
   type AuthError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import {
   KeyManagerConfigSchema,
   type KeyManagerConfig,

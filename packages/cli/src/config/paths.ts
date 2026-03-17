@@ -2,10 +2,10 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CliConfig } from "./schema.js";
 
-const APP_NAME = "xmtp-broker";
+const APP_NAME = "xmtp-signet";
 
 /**
- * Resolved filesystem paths for the broker runtime.
+ * Resolved filesystem paths for the signet runtime.
  * All paths are absolute with tilde and XDG variables resolved.
  */
 export interface ResolvedPaths {
@@ -46,8 +46,8 @@ function xdgStateHome(): string {
  */
 export function resolvePaths(config: CliConfig): ResolvedPaths {
   const dataDir =
-    config.broker.dataDir !== undefined
-      ? expandTilde(config.broker.dataDir)
+    config.signet.dataDir !== undefined
+      ? expandTilde(config.signet.dataDir)
       : join(xdgDataHome(), APP_NAME);
   const runtimeDir = join(xdgRuntimeDir(), APP_NAME);
 
@@ -60,7 +60,7 @@ export function resolvePaths(config: CliConfig): ResolvedPaths {
   return {
     configFile: join(xdgConfigHome(), APP_NAME, "config.toml"),
     dataDir,
-    pidFile: join(runtimeDir, "broker.pid"),
+    pidFile: join(runtimeDir, "signet.pid"),
     adminSocket,
     auditLog,
     identityKeyFile: join(dataDir, "vault.db"),

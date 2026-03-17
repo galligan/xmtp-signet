@@ -1,6 +1,6 @@
-# CLAUDE.md -- xmtp-broker
+# CLAUDE.md -- xmtp-signet
 
-An agent broker for XMTP. The broker is the real XMTP client; agent harnesses connect through a controlled interface with scoped views and grants. See [README.md](README.md) for an overview and [.agents/docs/init/xmtp-broker.md](.agents/docs/init/xmtp-broker.md) for the full PRD.
+An agent signet for XMTP. The signet is the real XMTP client; agent harnesses connect through a controlled interface with scoped views and grants. See [README.md](README.md) for an overview and [.agents/docs/init/xmtp-signet.md](.agents/docs/init/xmtp-signet.md) for the full PRD.
 
 ## Status
 
@@ -43,21 +43,21 @@ blz get xmtp:1234-1280 --raw                       # retrieve lines
 blz query -s xmtp "your query" -C all --text       # search + expand sections
 
 # Project documentation search (specs, architecture, design docs)
-qmd query "your query" -c xmtp-broker-plans        # specs + execution plans
-qmd query "your query" -c xmtp-broker              # architecture + dev docs
-qmd query "your query" -c xmtp-broker-claude        # skills + agent configs
-qmd get xmtp-broker-plans/plans/v0/13-daemon-cli.md:50 -l 40  # read specific section
+qmd query "your query" -c xmtp-signet-plans        # specs + execution plans
+qmd query "your query" -c xmtp-signet              # architecture + dev docs
+qmd query "your query" -c xmtp-signet-claude        # skills + agent configs
+qmd get xmtp-signet-plans/plans/v0/13-daemon-cli.md:50 -l 40  # read specific section
 ```
 
 **Documentation lookup**: Delegate XMTP questions to the `xmtp-expert` agent (`.claude/agents/xmtp-expert.md`), which preloads the `xmtp-docs-blz` skill and maintains project-scoped memory of past lookups. For quick manual searches, use `blz` directly. The XMTP SDK evolves frequently — always verify patterns against documentation.
 
 **Project documentation search**: Three qmd collections are indexed with embeddings for semantic search:
 
-| Collection | Contents | Files |
-|------------|----------|-------|
-| `xmtp-broker` | `docs/` — architecture, concepts, development guides | 5 |
-| `xmtp-broker-plans` | `.agents/` — Phase 2 specs (10–15), execution plans, PRD, design decisions | 30 |
-| `xmtp-broker-claude` | `.claude/` — skills, agent configs, agent memory | 13 |
+| Collection           | Contents                                                                   | Files |
+| -------------------- | -------------------------------------------------------------------------- | ----- |
+| `xmtp-signet`        | `docs/` — architecture, concepts, development guides                       | 5     |
+| `xmtp-signet-plans`  | `.agents/` — Phase 2 specs (10–15), execution plans, PRD, design decisions | 30    |
+| `xmtp-signet-claude` | `.claude/` — skills, agent configs, agent memory                           | 13    |
 
 Use `qmd query` for semantic search across these collections. Use `qmd get` to read specific file sections by path and line offset. Run `qmd update` after changing docs to re-index, then `qmd embed` to refresh embeddings.
 
@@ -94,7 +94,7 @@ Use `qmd query` for semantic search across these collections. Use `qmd get` to r
 | Result type       | `better-result`             |
 | Schema validation | `zod`                       |
 | Testing           | `bun:test`                  |
-| XMTP SDK          | `@xmtp/node-sdk`           |
+| XMTP SDK          | `@xmtp/node-sdk`            |
 | CLI framework     | `commander`                 |
 | TOML parsing      | `smol-toml`                 |
 | MCP SDK           | `@modelcontextprotocol/sdk` |
@@ -115,13 +115,13 @@ Add new dependencies deliberately. Check here first — if a concern isn't liste
 All domain logic uses transport-agnostic handlers:
 
 ```typescript
-type Handler<TInput, TOutput, TError extends BrokerError> = (
+type Handler<TInput, TOutput, TError extends SignetError> = (
   input: TInput,
   ctx: HandlerContext,
 ) => Promise<Result<TOutput, TError>>;
 ```
 
-`HandlerContext` is defined in `@xmtp-broker/contracts` with `requestId`, `signal`, and optional `adminAuth`/`sessionId`. `CoreContext` remains available for core-specific operations.
+`HandlerContext` is defined in `@xmtp/signet-contracts` with `requestId`, `signal`, and optional `adminAuth`/`sessionId`. `CoreContext` remains available for core-specific operations.
 
 Handlers receive pre-validated input and a context object. They return `Result`, never throw. CLI, WebSocket, MCP, and HTTP are thin adapters over the same handlers.
 
@@ -129,16 +129,16 @@ Handlers receive pre-validated input and a context object. They return `Result`,
 
 **Foundation** — Stable types and contracts:
 
-- Schemas (views, grants, attestations, sessions, events)
+- Schemas (views, grants, seals, sessions, events)
 - Result/Error types and error taxonomy
 - Shared type utilities
 
-**Runtime** — Core broker functionality:
+**Runtime** — Core signet functionality:
 
 - XMTP client management (raw plane)
 - Policy engine (view filtering, grant enforcement)
 - Session management
-- Attestation lifecycle
+- Seal lifecycle
 - Key management
 
 **Transport** — Protocol adapters:
@@ -203,10 +203,10 @@ The `.reference/` directory (gitignored) contains source material from related p
 
 | Directory                     | What it is                                                                                                                                          | Why it matters                                                                                                                                                                                                                              |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.reference/keypo-cli/`       | Hardware-bound key management CLI (Secure Enclave P-256 + encrypted vault). Swift signer, Rust wallet, Solidity smart account.                      | Reference architecture for the broker's key management layer. The PRD calls out keypo-cli's Secure Enclave patterns as direct inspiration for the derived key hierarchy (root -> operational -> session).                                   |
-| `.reference/xmtp-js/`         | Official XMTP TypeScript monorepo: browser SDK, node SDK, agent SDK, content types, and CLI.                                                        | The broker wraps the XMTP client that these SDKs provide. Understanding the node SDK and agent SDK interfaces is essential for designing the broker's raw plane and the harness-facing derived plane.                                       |
+| `.reference/keypo-cli/`       | Hardware-bound key management CLI (Secure Enclave P-256 + encrypted vault). Swift signer, Rust wallet, Solidity smart account.                      | Reference architecture for the signet's key management layer. The PRD calls out keypo-cli's Secure Enclave patterns as direct inspiration for the derived key hierarchy (root -> operational -> session).                                   |
+| `.reference/xmtp-js/`         | Official XMTP TypeScript monorepo: browser SDK, node SDK, agent SDK, content types, and CLI.                                                        | The signet wraps the XMTP client that these SDKs provide. Understanding the node SDK and agent SDK interfaces is essential for designing the signet's raw plane and the harness-facing derived plane.                                       |
 | `.reference/skills/`          | Claude Code agent skills for XMTP: documentation lookup (`xmtp-docs`) and agent identity/messaging (`xmtp-agent`).                                  | Useful for querying current XMTP SDK patterns and methods during development.                                                                                                                                                               |
-| `.reference/convos-node-sdk/` | Convos Node SDK by XMTP Labs. Opinionated wrapper around `@xmtp/node-sdk` with per-group identity keys, agent runtime, and conversation management. | Key patterns for the broker: separate identity keys per group chat, agent lifecycle management, and how an opinionated client layer sits above the raw XMTP SDK. Per-group identity is a strong candidate for a first-class broker feature. |
+| `.reference/convos-node-sdk/` | Convos Node SDK by XMTP Labs. Opinionated wrapper around `@xmtp/node-sdk` with per-group identity keys, agent runtime, and conversation management. | Key patterns for the signet: separate identity keys per group chat, agent lifecycle management, and how an opinionated client layer sits above the raw XMTP SDK. Per-group identity is a strong candidate for a first-class signet feature. |
 | `.reference/convos-cli/`      | Convos CLI by XMTP Labs. Command-line interface for Convos agent operations.                                                                        | Reference for CLI patterns around XMTP agent management, conversation commands, and how a CLI surfaces XMTP operations.                                                                                                                     |
 | `.reference/convos-agents/`   | Convos Agents by XMTP Labs. Agent runtime, pool management, and dashboard for running XMTP agents at scale.                                         | Reference for agent orchestration patterns: runtime lifecycle, pool scaling, monitoring, and multi-agent coordination.                                                                                                                      |
 

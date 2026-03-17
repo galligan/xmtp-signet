@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { InternalError, type BrokerError } from "@xmtp-broker/schemas";
+import { InternalError, type SignetError } from "@xmtp/signet-schemas";
 import type { AdminClient } from "../admin/client.js";
 import { createConversationCommands } from "../commands/conversation.js";
 
@@ -33,8 +33,8 @@ function createHarness<T>(response: T) {
         options: { configPath?: string | undefined },
         run: (
           adminClient: AdminClient,
-        ) => Promise<Result<TResult, BrokerError>>,
-      ): Promise<Result<TResult, BrokerError>> {
+        ) => Promise<Result<TResult, SignetError>>,
+      ): Promise<Result<TResult, SignetError>> {
         withDaemonCalls.push(options);
         return run(client);
       },
@@ -58,7 +58,7 @@ function createHarness<T>(response: T) {
   };
 }
 
-function createErrorHarness(error: BrokerError) {
+function createErrorHarness(error: SignetError) {
   const stdout: string[] = [];
   const stderr: string[] = [];
   let exitCode: number | undefined;
@@ -69,8 +69,8 @@ function createErrorHarness(error: BrokerError) {
         _options: { configPath?: string | undefined },
         _run: (
           adminClient: AdminClient,
-        ) => Promise<Result<TResult, BrokerError>>,
-      ): Promise<Result<TResult, BrokerError>> {
+        ) => Promise<Result<TResult, SignetError>>,
+      ): Promise<Result<TResult, SignetError>> {
         return Result.err(error);
       },
       writeStdout(message: string) {

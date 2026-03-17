@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class InternalError extends Error implements BrokerError {
+export class InternalError extends Error implements SignetError {
   readonly _tag = "InternalError" as const;
   readonly code = 1400;
   readonly category = "internal" as const;

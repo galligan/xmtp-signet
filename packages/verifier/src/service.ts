@@ -4,14 +4,14 @@ import {
   type ValidationError,
   type TimeoutError,
   InternalError as InternalErrorClass,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import type { VerificationRequest } from "./schemas/request.js";
 import type {
   VerificationStatement,
   VerificationVerdict,
 } from "./schemas/statement.js";
 import type { VerificationCheck } from "./schemas/check.js";
-import type { VerifierSelfAttestation } from "./schemas/self-attestation.js";
+import type { VerifierSelfSeal } from "./schemas/self-seal.js";
 import type { VerifierConfig } from "./config.js";
 import type { CheckHandler } from "./checks/handler.js";
 import type { RateLimiter } from "./rate-limiter.js";
@@ -21,8 +21,8 @@ import { determineVerdict, determineVerifiedTier } from "./verdict.js";
 import { createSourceAvailableCheck } from "./checks/source-available.js";
 import { createBuildProvenanceCheck } from "./checks/build-provenance.js";
 import { createReleaseSigningCheck } from "./checks/release-signing.js";
-import { createAttestationSignatureCheck } from "./checks/attestation-signature.js";
-import { createAttestationChainCheck } from "./checks/attestation-chain.js";
+import { createSealSignatureCheck } from "./checks/seal-signature.js";
+import { createSealChainCheck } from "./checks/seal-chain.js";
 import { createSchemaComplianceCheck } from "./checks/schema-compliance.js";
 import {
   DEFAULT_MAX_REQUESTS_PER_HOUR,
@@ -35,8 +35,8 @@ const ALL_CHECK_IDS = [
   "source_available",
   "build_provenance",
   "release_signing",
-  "attestation_signature",
-  "attestation_chain",
+  "seal_signature",
+  "seal_chain",
   "schema_compliance",
 ] as const;
 
@@ -64,7 +64,7 @@ export interface VerifierService {
       ValidationError | InternalError | TimeoutError
     >
   >;
-  selfAttestation(): VerifierSelfAttestation;
+  selfSeal(): VerifierSelfSeal;
 }
 
 export function createVerifierService(
@@ -87,15 +87,15 @@ export function createVerifierService(
     createSourceAvailableCheck(),
     createBuildProvenanceCheck(),
     createReleaseSigningCheck(),
-    createAttestationSignatureCheck(),
-    createAttestationChainCheck(),
+    createSealSignatureCheck(),
+    createSealChainCheck(),
     createSchemaComplianceCheck(),
   ];
 
   const ttlSeconds =
     config.statementTtlSeconds ?? DEFAULT_STATEMENT_TTL_SECONDS;
 
-  let cachedSelfAttestation: VerifierSelfAttestation | undefined;
+  let cachedSelfSeal: VerifierSelfSeal | undefined;
 
   return {
     async handleRequest(
@@ -129,7 +129,7 @@ export function createVerifierService(
             statementId: generateId(),
             requestId: request.requestId,
             verifierInboxId: config.verifierInboxId,
-            brokerInboxId: request.brokerInboxId,
+            signetInboxId: request.signetInboxId,
             agentInboxId: request.agentInboxId,
             verdict: "rejected" as VerificationVerdict,
             verifiedTier: "unverified" as const,
@@ -174,7 +174,7 @@ export function createVerifierService(
           statementId: generateId(),
           requestId: request.requestId,
           verifierInboxId: config.verifierInboxId,
-          brokerInboxId: request.brokerInboxId,
+          signetInboxId: request.signetInboxId,
           agentInboxId: request.agentInboxId,
           verdict,
           verifiedTier,
@@ -187,13 +187,13 @@ export function createVerifierService(
       );
     },
 
-    selfAttestation(): VerifierSelfAttestation {
-      if (cachedSelfAttestation !== undefined) {
-        return cachedSelfAttestation;
+    selfSeal(): VerifierSelfSeal {
+      if (cachedSelfSeal !== undefined) {
+        return cachedSelfSeal;
       }
 
-      // Build a self-attestation (signature is a placeholder in v0)
-      cachedSelfAttestation = {
+      // Build a self-seal (signature is a placeholder in v0).
+      cachedSelfSeal = {
         verifierInboxId: config.verifierInboxId,
         capabilities: {
           supportedTiers: ["unverified"],
@@ -207,7 +207,7 @@ export function createVerifierService(
         signature: "",
       };
 
-      return cachedSelfAttestation;
+      return cachedSelfSeal;
     },
   };
 }

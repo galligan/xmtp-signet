@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
-import type { SignerProvider } from "@xmtp-broker/contracts";
+import type { SignetError } from "@xmtp/signet-schemas";
+import type { SignerProvider } from "@xmtp/signet-contracts";
 import type { KeyManager } from "./key-manager.js";
 
 /**
@@ -13,11 +13,11 @@ export function createSignerProvider(
   identityId: string,
 ): SignerProvider {
   return {
-    async sign(data: Uint8Array): Promise<Result<Uint8Array, BrokerError>> {
+    async sign(data: Uint8Array): Promise<Result<Uint8Array, SignetError>> {
       return manager.signWithOperationalKey(identityId, data);
     },
 
-    async getPublicKey(): Promise<Result<Uint8Array, BrokerError>> {
+    async getPublicKey(): Promise<Result<Uint8Array, SignetError>> {
       const opKey = manager.getOperationalKey(identityId);
       if (Result.isError(opKey)) return opKey;
 
@@ -27,19 +27,17 @@ export function createSignerProvider(
       return Result.ok(bytes);
     },
 
-    async getFingerprint(): Promise<Result<string, BrokerError>> {
+    async getFingerprint(): Promise<Result<string, SignetError>> {
       const opKey = manager.getOperationalKey(identityId);
       if (Result.isError(opKey)) return opKey;
       return Result.ok(opKey.value.fingerprint);
     },
 
-    async getDbEncryptionKey(): Promise<Result<Uint8Array, BrokerError>> {
+    async getDbEncryptionKey(): Promise<Result<Uint8Array, SignetError>> {
       return manager.getOrCreateDbKey(identityId);
     },
 
-    async getXmtpIdentityKey(): Promise<
-      Result<`0x${string}`, BrokerError>
-    > {
+    async getXmtpIdentityKey(): Promise<Result<`0x${string}`, SignetError>> {
       return manager.getOrCreateXmtpIdentityKey(identityId);
     },
   };

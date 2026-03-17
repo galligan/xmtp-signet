@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { readFile } from "node:fs/promises";
 import { parse as parseToml } from "smol-toml";
-import { ValidationError, InternalError } from "@xmtp-broker/schemas";
+import { ValidationError, InternalError } from "@xmtp/signet-schemas";
 import { CliConfigSchema } from "./schema.js";
 import type { CliConfig } from "./schema.js";
 import { resolvePaths } from "./paths.js";
@@ -71,19 +71,19 @@ function applyEnvOverrides(
   data: Record<string, unknown>,
   env: Record<string, string | undefined>,
 ): void {
-  const brokerEnv = env["XMTP_BROKER_ENV"];
-  if (brokerEnv !== undefined) {
-    ensureSection(data, "broker");
-    (data["broker"] as Record<string, unknown>)["env"] = brokerEnv;
+  const signetEnv = env["XMTP_SIGNET_ENV"];
+  if (signetEnv !== undefined) {
+    ensureSection(data, "signet");
+    (data["signet"] as Record<string, unknown>)["env"] = signetEnv;
   }
 
-  const dataDir = env["XMTP_BROKER_DATA_DIR"];
+  const dataDir = env["XMTP_SIGNET_DATA_DIR"];
   if (dataDir !== undefined) {
-    ensureSection(data, "broker");
-    (data["broker"] as Record<string, unknown>)["dataDir"] = dataDir;
+    ensureSection(data, "signet");
+    (data["signet"] as Record<string, unknown>)["dataDir"] = dataDir;
   }
 
-  const wsPort = env["XMTP_BROKER_WS_PORT"];
+  const wsPort = env["XMTP_SIGNET_WS_PORT"];
   if (wsPort !== undefined) {
     const parsed = Number(wsPort);
     if (Number.isNaN(parsed)) {
@@ -96,7 +96,7 @@ function applyEnvOverrides(
     }
   }
 
-  const logLevel = env["XMTP_BROKER_LOG_LEVEL"];
+  const logLevel = env["XMTP_SIGNET_LOG_LEVEL"];
   if (logLevel !== undefined) {
     ensureSection(data, "logging");
     (data["logging"] as Record<string, unknown>)["level"] = logLevel;

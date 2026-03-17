@@ -1,7 +1,7 @@
 /**
  * Structural types mirroring @xmtp/node-sdk v6.0.0 shapes.
  *
- * These allow the broker to interact with SDK objects without importing
+ * These allow the signet to interact with SDK objects without importing
  * the real SDK, which requires native bindings. Both production code
  * (for structural typing against real SDK objects) and tests (for mock
  * construction) use these interfaces.

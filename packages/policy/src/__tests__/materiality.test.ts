@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { isMaterialChange, requiresReauthorization } from "../materiality.js";
-import type { PolicyDelta } from "@xmtp-broker/contracts";
+import type { PolicyDelta } from "@xmtp/signet-contracts";
 
 function emptyDelta(): PolicyDelta {
   return {

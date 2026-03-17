@@ -121,8 +121,7 @@ export const WsServerConfigSchema: z.ZodType<
         "Max messages per window per connection. null = unlimited (default)",
       ),
   })
-  .refine(
-    (c) => c.sendBufferSoftLimit < c.sendBufferHardLimit,
-    { message: "sendBufferSoftLimit must be less than sendBufferHardLimit" },
-  )
+  .refine((c) => c.sendBufferSoftLimit < c.sendBufferHardLimit, {
+    message: "sendBufferSoftLimit must be less than sendBufferHardLimit",
+  })
   .describe("WebSocket server configuration");

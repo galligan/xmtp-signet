@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp-broker/schemas";
+import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
 
-/** Represents a single agent identity managed by the broker. */
+/** Represents a single agent identity managed by the signet. */
 export interface AgentIdentity {
   readonly id: string;
   readonly inboxId: string | null;

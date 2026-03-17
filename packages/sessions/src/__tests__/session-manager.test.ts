@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import { createSessionManager } from "../session-manager.js";
 import type { InternalSessionManager } from "../session-manager.js";
 import { createTestSessionConfig, baseView, baseGrant } from "./fixtures.js";
-import type { ViewConfig } from "@xmtp-broker/schemas";
+import type { ViewConfig } from "@xmtp/signet-schemas";
 
 let manager: InternalSessionManager;
 

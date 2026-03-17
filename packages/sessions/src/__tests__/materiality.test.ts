@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ViewConfig } from "@xmtp-broker/schemas";
+import type { ViewConfig } from "@xmtp/signet-schemas";
 import { checkMateriality } from "../materiality.js";
 import { baseView, baseGrant, createTestGrant } from "./fixtures.js";
 

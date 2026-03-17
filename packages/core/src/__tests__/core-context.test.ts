@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { BrokerCoreContext } from "../core-context.js";
+import { SignetCoreContext } from "../core-context.js";
 import { ClientRegistry } from "../client-registry.js";
 import { SqliteIdentityStore } from "../identity-store.js";
 import type { ManagedClient } from "../client-registry.js";
@@ -16,12 +16,12 @@ const testGroup: XmtpGroupInfo = {
 
 let registry: ClientRegistry;
 let identityStore: SqliteIdentityStore;
-let ctx: BrokerCoreContext;
+let ctx: SignetCoreContext;
 
 beforeEach(() => {
   registry = new ClientRegistry();
   identityStore = new SqliteIdentityStore(":memory:");
-  ctx = new BrokerCoreContext(registry, identityStore);
+  ctx = new SignetCoreContext(registry, identityStore);
 });
 
 function registerClientForGroup(
@@ -43,7 +43,7 @@ function registerClientForGroup(
   return managed;
 }
 
-describe("BrokerCoreContext", () => {
+describe("SignetCoreContext", () => {
   describe("sendMessage", () => {
     test("sends through the correct client", async () => {
       registerClientForGroup("id-1", "group-1");

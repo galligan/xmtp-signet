@@ -1,6 +1,6 @@
 import type { CheckVerdict } from "./schemas/check.js";
 import type { VerificationVerdict } from "./schemas/statement.js";
-import type { TrustTier } from "@xmtp-broker/schemas";
+import type { TrustTier } from "@xmtp/signet-schemas";
 
 /**
  * Determines the overall verification verdict from individual check results.

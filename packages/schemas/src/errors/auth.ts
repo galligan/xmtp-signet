@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class AuthError extends Error implements BrokerError {
+export class AuthError extends Error implements SignetError {
   readonly _tag = "AuthError" as const;
   readonly code = 1300;
   readonly category = "auth" as const;
@@ -18,7 +18,7 @@ export class AuthError extends Error implements BrokerError {
   }
 }
 
-export class SessionExpiredError extends Error implements BrokerError {
+export class SessionExpiredError extends Error implements SignetError {
   readonly _tag = "SessionExpiredError" as const;
   readonly code = 1310;
   readonly category = "auth" as const;

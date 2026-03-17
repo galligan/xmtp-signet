@@ -40,9 +40,9 @@ export const SessionRevocationReason: z.ZodEnum<
 
 export type SessionRevocationReason = z.infer<typeof SessionRevocationReason>;
 
-export type RevocationAttestation = {
-  attestationId: string;
-  previousAttestationId: string;
+export type RevocationSeal = {
+  sealId: string;
+  previousSealId: string;
   agentInboxId: string;
   groupId: string;
   reason: AgentRevocationReason;
@@ -50,12 +50,10 @@ export type RevocationAttestation = {
   issuer: string;
 };
 
-export const RevocationAttestation: z.ZodType<RevocationAttestation> = z
+export const RevocationSeal: z.ZodType<RevocationSeal> = z
   .object({
-    attestationId: z.string().describe("ID of this revocation attestation"),
-    previousAttestationId: z
-      .string()
-      .describe("ID of the attestation being revoked"),
+    sealId: z.string().describe("ID of this revocation seal"),
+    previousSealId: z.string().describe("ID of the seal being revoked"),
     agentInboxId: z.string().describe("Agent being revoked"),
     groupId: z.string().describe("Group the revocation applies to"),
     reason: AgentRevocationReason.describe("Why the agent was revoked"),
@@ -65,4 +63,4 @@ export const RevocationAttestation: z.ZodType<RevocationAttestation> = z
       .describe("When the revocation took effect"),
     issuer: z.string().describe("Identity of the revocation issuer"),
   })
-  .describe("Group-visible revocation of an agent's attestation");
+  .describe("Group-visible revocation of an agent's seal");

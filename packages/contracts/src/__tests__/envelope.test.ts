@@ -1,14 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import {
-  SignedAttestationEnvelope,
-  SignedRevocationEnvelope,
-} from "../attestation-types.js";
+import { SealEnvelope, SignedRevocationEnvelope } from "../seal-envelope.js";
 
-/** Minimal valid attestation payload matching AttestationSchema. */
-function validAttestation() {
+/** Minimal valid seal payload matching SealSchema. */
+function validSeal() {
   return {
-    attestationId: "att-001",
-    previousAttestationId: null,
+    sealId: "att-001",
+    previousSealId: null,
     agentInboxId: "agent-inbox-1",
     ownerInboxId: "owner-inbox-1",
     groupId: "group-1",
@@ -36,113 +33,113 @@ function validAttestation() {
       ownerCanRevoke: true,
       adminCanRemove: true,
     },
-    issuer: "broker-1",
+    issuer: "signet-1",
   };
 }
 
-/** Minimal valid revocation payload matching RevocationAttestation. */
+/** Minimal valid revocation payload matching RevocationSeal. */
 function validRevocation() {
   return {
-    attestationId: "rev-001",
-    previousAttestationId: "att-001",
+    sealId: "rev-001",
+    previousSealId: "att-001",
     agentInboxId: "agent-inbox-1",
     groupId: "group-1",
     reason: "owner-initiated",
     revokedAt: "2026-01-01T00:30:00Z",
-    issuer: "broker-1",
+    issuer: "signet-1",
   };
 }
 
-describe("SignedAttestationEnvelope", () => {
-  test("accepts a valid signed attestation", () => {
+describe("SealEnvelope", () => {
+  test("accepts a valid signed seal", () => {
     const input = {
-      attestation: validAttestation(),
+      seal: validSeal(),
       signature: "dGVzdC1zaWduYXR1cmU=",
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(true);
   });
 
   test("rejects missing signature", () => {
     const input = {
-      attestation: validAttestation(),
+      seal: validSeal(),
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 
-  test("rejects missing attestation", () => {
+  test("rejects missing seal", () => {
     const input = {
       signature: "dGVzdC1zaWduYXR1cmU=",
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 
-  test("rejects invalid attestation payload", () => {
+  test("rejects invalid seal payload", () => {
     const input = {
-      attestation: { attestationId: "att-001" },
+      seal: { sealId: "att-001" },
       signature: "dGVzdC1zaWduYXR1cmU=",
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 
   test("rejects missing signatureAlgorithm", () => {
     const input = {
-      attestation: validAttestation(),
+      seal: validSeal(),
       signature: "dGVzdC1zaWduYXR1cmU=",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 
   test("rejects missing signerKeyRef", () => {
     const input = {
-      attestation: validAttestation(),
+      seal: validSeal(),
       signature: "dGVzdC1zaWduYXR1cmU=",
       signatureAlgorithm: "Ed25519",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 
-  test("rejects empty attestation signature", () => {
+  test("rejects empty seal signature", () => {
     const input = {
-      attestation: validAttestation(),
+      seal: validSeal(),
       signature: "",
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 
-  test("rejects non-base64 attestation signature", () => {
+  test("rejects non-base64 seal signature", () => {
     const input = {
-      attestation: validAttestation(),
+      seal: validSeal(),
       signature: "not-base64!!!",
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",
     };
 
-    const result = SignedAttestationEnvelope.safeParse(input);
+    const result = SealEnvelope.safeParse(input);
     expect(result.success).toBe(false);
   });
 });
@@ -173,7 +170,7 @@ describe("SignedRevocationEnvelope", () => {
 
   test("rejects invalid revocation payload", () => {
     const input = {
-      revocation: { attestationId: "rev-001" },
+      revocation: { sealId: "rev-001" },
       signature: "dGVzdC1zaWduYXR1cmU=",
       signatureAlgorithm: "Ed25519",
       signerKeyRef: "key-ref-001",

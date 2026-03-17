@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { Result } from "better-result";
-import { InternalError, type BrokerError } from "@xmtp-broker/schemas";
-import type { XmtpClient, SignerProviderLike } from "@xmtp-broker/core";
-import type { KeyManager } from "@xmtp-broker/keys";
+import { InternalError, type SignetError } from "@xmtp/signet-schemas";
+import type { XmtpClient, SignerProviderLike } from "@xmtp/signet-core";
+import type { KeyManager } from "@xmtp/signet-keys";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -51,11 +51,11 @@ export interface DirectClient {
 export interface DirectModeDeps {
   createKeyManager: (config: {
     dataDir: string;
-  }) => Promise<Result<Partial<KeyManager>, BrokerError>>;
+  }) => Promise<Result<Partial<KeyManager>, SignetError>>;
   createXmtpClient: (
     config: { env: string; dataDir: string },
     signerProvider: SignerProviderLike,
-  ) => Promise<Result<XmtpClient, BrokerError>>;
+  ) => Promise<Result<XmtpClient, SignetError>>;
   closed?: Array<() => void>;
 }
 
@@ -80,7 +80,7 @@ const DIRECT_IDENTITY_ID = "direct-mode";
 export async function createDirectClient(
   config: DirectModeConfig,
   deps: DirectModeDeps,
-): Promise<Result<DirectClient, BrokerError>> {
+): Promise<Result<DirectClient, SignetError>> {
   // 1. Create key manager from vault in dataDir
   const kmResult = await deps.createKeyManager({
     dataDir: config.dataDir,
@@ -114,7 +114,7 @@ export async function createDirectClient(
 
   // 4. Build a signer provider for the direct identity
   const signerProvider: SignerProviderLike = {
-    async sign(data: Uint8Array): Promise<Result<Uint8Array, BrokerError>> {
+    async sign(data: Uint8Array): Promise<Result<Uint8Array, SignetError>> {
       if (keyManager.signWithOperationalKey === undefined) {
         return Result.err(
           InternalError.create("Key manager does not support signing"),
@@ -122,7 +122,7 @@ export async function createDirectClient(
       }
       return keyManager.signWithOperationalKey(DIRECT_IDENTITY_ID, data);
     },
-    async getPublicKey(): Promise<Result<Uint8Array, BrokerError>> {
+    async getPublicKey(): Promise<Result<Uint8Array, SignetError>> {
       if (keyManager.getOperationalKey === undefined) {
         return Result.err(
           InternalError.create("Key manager does not support key retrieval"),
@@ -134,7 +134,7 @@ export async function createDirectClient(
       const bytes = hexToBytes(hex);
       return Result.ok(bytes);
     },
-    async getFingerprint(): Promise<Result<string, BrokerError>> {
+    async getFingerprint(): Promise<Result<string, SignetError>> {
       if (keyManager.getOperationalKey === undefined) {
         return Result.err(
           InternalError.create("Key manager does not support key retrieval"),
@@ -144,7 +144,7 @@ export async function createDirectClient(
       if (Result.isError(opKey)) return opKey;
       return Result.ok(opKey.value.fingerprint);
     },
-    async getDbEncryptionKey(): Promise<Result<Uint8Array, BrokerError>> {
+    async getDbEncryptionKey(): Promise<Result<Uint8Array, SignetError>> {
       if (keyManager.getOrCreateDbKey === undefined) {
         return Result.err(
           InternalError.create(
@@ -154,9 +154,7 @@ export async function createDirectClient(
       }
       return keyManager.getOrCreateDbKey(DIRECT_IDENTITY_ID);
     },
-    async getXmtpIdentityKey(): Promise<
-      Result<`0x${string}`, BrokerError>
-    > {
+    async getXmtpIdentityKey(): Promise<Result<`0x${string}`, SignetError>> {
       if (keyManager.getOrCreateXmtpIdentityKey === undefined) {
         return Result.err(
           InternalError.create(

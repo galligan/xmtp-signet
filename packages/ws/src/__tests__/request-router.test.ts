@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { routeRequest } from "../request-router.js";
-import type { HarnessRequest } from "@xmtp-broker/schemas";
-import { PermissionError } from "@xmtp-broker/schemas";
-import type { SessionRecord } from "@xmtp-broker/contracts";
+import type { HarnessRequest } from "@xmtp/signet-schemas";
+import { PermissionError } from "@xmtp/signet-schemas";
+import type { SessionRecord } from "@xmtp/signet-contracts";
 
 function makeSessionRecord(): SessionRecord {
   return {

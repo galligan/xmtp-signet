@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { Result } from "better-result";
-import { NotFoundError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
-import type { HandlerContext } from "@xmtp-broker/contracts";
+import { NotFoundError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
+import type { HandlerContext } from "@xmtp/signet-contracts";
 import { SqliteIdentityStore } from "../identity-store.js";
 import type { ManagedClient } from "../client-registry.js";
 import type { XmtpClient, XmtpGroupInfo } from "../xmtp-client-factory.js";
@@ -40,7 +40,7 @@ function createMockClient(options?: {
       const g = groups.find((x) => x.groupId === groupId);
       if (!g) {
         return Result.err(
-          NotFoundError.create("group", groupId) as BrokerError,
+          NotFoundError.create("group", groupId) as SignetError,
         );
       }
       return Result.ok(g);
@@ -94,7 +94,7 @@ describe("conversation actions", () => {
   function setupDeps(
     getGroupInfoFn?: (
       groupId: string,
-    ) => Promise<Result<XmtpGroupInfo, BrokerError>>,
+    ) => Promise<Result<XmtpGroupInfo, SignetError>>,
   ): void {
     deps = {
       identityStore,
@@ -102,7 +102,7 @@ describe("conversation actions", () => {
       getGroupInfo:
         getGroupInfoFn ??
         (async (groupId) =>
-          Result.err(NotFoundError.create("group", groupId) as BrokerError)),
+          Result.err(NotFoundError.create("group", groupId) as SignetError)),
     };
   }
 
@@ -322,7 +322,7 @@ describe("conversation actions", () => {
             });
           }
           return Result.err(
-            NotFoundError.create("group", groupId) as BrokerError,
+            NotFoundError.create("group", groupId) as SignetError,
           );
         },
       };

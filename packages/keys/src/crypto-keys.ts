@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 
 /**
  * Helper to convert Uint8Array to a BufferSource compatible with

@@ -5,8 +5,8 @@ import {
   createActionRegistry,
   type ActionSpec,
   type HandlerContext,
-} from "@xmtp-broker/contracts";
-import { ValidationError, type BrokerError } from "@xmtp-broker/schemas";
+} from "@xmtp/signet-contracts";
+import { ValidationError, type SignetError } from "@xmtp/signet-schemas";
 import { createAdminDispatcher } from "../admin/dispatcher.js";
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ function makeHandlerContext(
   overrides?: Partial<HandlerContext>,
 ): HandlerContext {
   return {
-    brokerId: "test-broker",
+    signetId: "test-signet",
     signerProvider: {} as HandlerContext["signerProvider"],
     requestId: crypto.randomUUID(),
     signal: AbortSignal.timeout(5_000),
@@ -30,10 +30,10 @@ function makeSpec(
   opts?: {
     rpcMethod?: string;
     command?: string;
-    handler?: ActionSpec<unknown, unknown, BrokerError>["handler"];
+    handler?: ActionSpec<unknown, unknown, SignetError>["handler"];
     input?: z.ZodType<unknown>;
   },
-): ActionSpec<unknown, unknown, BrokerError> {
+): ActionSpec<unknown, unknown, SignetError> {
   return {
     id,
     handler: opts?.handler ?? (async (input: unknown) => Result.ok(input)),

@@ -11,7 +11,7 @@ import type {
 } from "../xmtp-client-factory.js";
 
 describe("wrapMessageStream", () => {
-  test("yields decoded messages mapped to broker types", async () => {
+  test("yields decoded messages mapped to signet types", async () => {
     const msgs = [
       createMockDecodedMessage({ id: "msg-1", conversationId: "g1" }),
       createMockDecodedMessage({ id: "msg-2", conversationId: "g2" }),
@@ -65,7 +65,7 @@ describe("wrapMessageStream", () => {
 });
 
 describe("wrapGroupStream", () => {
-  test("yields group events mapped to broker types", async () => {
+  test("yields group events mapped to signet types", async () => {
     const groups = [
       createMockGroup({ id: "g1", name: "Group 1" }),
       createMockGroup({ id: "g2", name: "Group 2" }),

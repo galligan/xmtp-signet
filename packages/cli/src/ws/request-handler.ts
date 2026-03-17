@@ -3,23 +3,23 @@ import {
   AuthError,
   InternalError,
   PermissionError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import type {
-  BrokerError,
+  SignetError,
   HarnessRequest,
   SendMessageRequest,
-} from "@xmtp-broker/schemas";
-import type { SessionManager, SessionRecord } from "@xmtp-broker/contracts";
-import { validateSendMessage } from "@xmtp-broker/policy";
-import type { RequestHandler } from "@xmtp-broker/ws";
+} from "@xmtp/signet-schemas";
+import type { SessionManager, SessionRecord } from "@xmtp/signet-contracts";
+import { validateSendMessage } from "@xmtp/signet-policy";
+import type { RequestHandler } from "@xmtp/signet-ws";
 
 export interface HarnessRequestHandlerDeps {
-  readonly ensureCoreReady: () => Promise<Result<void, BrokerError>>;
+  readonly ensureCoreReady: () => Promise<Result<void, SignetError>>;
   readonly sendMessage: (
     groupId: string,
     contentType: string,
     content: unknown,
-  ) => Promise<Result<{ messageId: string }, BrokerError>>;
+  ) => Promise<Result<{ messageId: string }, SignetError>>;
   readonly sessionManager: Pick<SessionManager, "heartbeat">;
 }
 
@@ -29,7 +29,7 @@ export function createWsRequestHandler(
   async function handleSendMessage(
     request: SendMessageRequest,
     session: SessionRecord,
-  ): Promise<Result<{ messageId: string }, BrokerError>> {
+  ): Promise<Result<{ messageId: string }, SignetError>> {
     if (!session.view.contentTypes.includes(request.contentType)) {
       return Result.err(
         PermissionError.create(
@@ -75,7 +75,7 @@ export function createWsRequestHandler(
   async function handleHeartbeat(
     request: Extract<HarnessRequest, { type: "heartbeat" }>,
     session: SessionRecord,
-  ): Promise<Result<null, BrokerError>> {
+  ): Promise<Result<null, SignetError>> {
     if (request.sessionId !== session.sessionId) {
       return Result.err(
         AuthError.create(
@@ -99,7 +99,7 @@ export function createWsRequestHandler(
   return async (
     request: HarnessRequest,
     session: SessionRecord,
-  ): Promise<Result<unknown, BrokerError>> => {
+  ): Promise<Result<unknown, SignetError>> => {
     switch (request.type) {
       case "send_message":
         return handleSendMessage(request, session);

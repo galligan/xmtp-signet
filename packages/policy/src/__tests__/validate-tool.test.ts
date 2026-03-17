@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { validateToolUse } from "../grant/validate-tool.js";
 import { Result } from "better-result";
 import { createFullGrant } from "./fixtures.js";
-import type { GrantConfig } from "@xmtp-broker/schemas";
+import type { GrantConfig } from "@xmtp/signet-schemas";
 
 describe("validateToolUse", () => {
   test("succeeds when toolId is in scopes with allowed: true", () => {

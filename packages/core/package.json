@@ -1,5 +1,5 @@
 {
-  "name": "@xmtp-broker/core",
+  "name": "@xmtp/signet-core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,9 +19,9 @@
     "@noble/ciphers": "^2.1.1",
     "@noble/curves": "^1.8.0",
     "@noble/hashes": "^1.8.0",
-    "@xmtp-broker/contracts": "workspace:*",
-    "@xmtp-broker/schemas": "workspace:*",
     "@xmtp/node-sdk": "6.0.0",
+    "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-schemas": "workspace:*",
     "better-result": "catalog:",
     "long": "^5.0.0",
     "protobufjs": "^7.4.0",

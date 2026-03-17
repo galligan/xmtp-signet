@@ -1,5 +1,5 @@
 /**
- * MCP transport adapter. Exposes broker ActionSpecs as session-scoped
+ * MCP transport adapter. Exposes signet ActionSpecs as session-scoped
  * MCP tools via the Model Context Protocol SDK.
  * @module
  */

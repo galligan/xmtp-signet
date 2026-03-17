@@ -23,7 +23,7 @@ function testPaths(overrides?: Partial<ResolvedPaths>): ResolvedPaths {
   return {
     configFile: join(base, "config.toml"),
     dataDir: join(base, "data"),
-    pidFile: join(base, "broker.pid"),
+    pidFile: join(base, "signet.pid"),
     adminSocket: join(base, "admin.sock"),
     auditLog: join(base, "audit.jsonl"),
     identityKeyFile: join(base, "vault.db"),

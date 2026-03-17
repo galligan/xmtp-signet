@@ -1,4 +1,4 @@
-import type { ContentTypeId, MessageVisibility } from "@xmtp-broker/schemas";
+import type { ContentTypeId, MessageVisibility } from "@xmtp/signet-schemas";
 
 /**
  * Stage 4: Content projector. Applies redaction based on resolved visibility.

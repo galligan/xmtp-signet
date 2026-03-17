@@ -13,7 +13,7 @@ export interface ManagedClient {
  * Ephemeral in-memory registry of active XMTP clients.
  *
  * Keyed by identity ID. Rebuilt from the IdentityStore and XMTP network
- * state on every broker startup. The IdentityStore is the durable source
+ * state on every signet startup. The IdentityStore is the durable source
  * of truth for which identities exist; this registry is the runtime source
  * of truth for active connections.
  */

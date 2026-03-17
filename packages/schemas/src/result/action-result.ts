@@ -34,7 +34,7 @@ export const ActionResultMetaSchema: z.ZodType<ActionResultMeta> =
 
 // -- ActionError --
 
-/** Error detail in a failed ActionResult. Serializable subset of BrokerError. */
+/** Error detail in a failed ActionResult. Serializable subset of SignetError. */
 export type ActionError = {
   _tag: string;
   category: ErrorCategory;
@@ -57,7 +57,7 @@ const _ActionErrorSchema = z
   .describe("Error detail in a failed ActionResult");
 
 /**
- * Error detail in a failed ActionResult. Maps BrokerError fields
+ * Error detail in a failed ActionResult. Maps SignetError fields
  * to a serializable shape for transport rendering.
  */
 export const ActionErrorSchema: z.ZodType<ActionError> = _ActionErrorSchema;

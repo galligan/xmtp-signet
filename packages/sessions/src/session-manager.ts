@@ -12,15 +12,15 @@ import type {
   SessionRevocationReason,
   ViewConfig,
   GrantConfig,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import {
   AuthError,
   SessionExpiredError,
   NotFoundError,
   InternalError,
   ValidationError,
-} from "@xmtp-broker/schemas";
-import type { MaterialityCheck } from "@xmtp-broker/contracts";
+} from "@xmtp/signet-schemas";
+import type { MaterialityCheck } from "@xmtp/signet-contracts";
 import { generateToken, generateSessionId } from "./token.js";
 import { computePolicyHash } from "./policy-hash.js";
 import { checkMateriality as checkMaterialityImpl } from "./materiality.js";
@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: SessionManagerConfig = {
   heartbeatGracePeriod: 3,
 };
 
-/** Internal session record with all broker-side fields. */
+/** Internal session record with all signet-side fields. */
 export interface InternalSessionRecord {
   readonly sessionId: string;
   readonly token: string;

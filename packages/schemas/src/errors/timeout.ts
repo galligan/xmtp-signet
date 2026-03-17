@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class TimeoutError extends Error implements BrokerError {
+export class TimeoutError extends Error implements SignetError {
   readonly _tag = "TimeoutError" as const;
   readonly code = 1500;
   readonly category = "timeout" as const;

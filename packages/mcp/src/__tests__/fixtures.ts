@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Result } from "better-result";
-import { NotFoundError } from "@xmtp-broker/schemas";
+import { NotFoundError } from "@xmtp/signet-schemas";
 import type {
   ActionSpec,
   ActionRegistry,
@@ -9,8 +9,8 @@ import type {
   McpSurface,
   HandlerContext,
   SignerProvider,
-} from "@xmtp-broker/contracts";
-import { createActionRegistry } from "@xmtp-broker/contracts";
+} from "@xmtp/signet-contracts";
+import { createActionRegistry } from "@xmtp/signet-contracts";
 
 // ---------------------------------------------------------------------------
 // Session fixtures
@@ -186,7 +186,7 @@ export function createSendSpec(
     input: MessageSendInputSchema,
     output: MessageSendOutputSchema,
     mcp: {
-      toolName: "broker/message/send",
+      toolName: "signet/message/send",
       description: "Send a message to a conversation",
       readOnly: false,
     },
@@ -207,7 +207,7 @@ export function createListSpec(
     input: MessageListInputSchema,
     output: MessageListOutputSchema,
     mcp: {
-      toolName: "broker/message/list",
+      toolName: "signet/message/list",
       description: "List messages in a conversation",
       readOnly: true,
     },
@@ -220,7 +220,7 @@ export function createReadOnlySpec(): ActionSpec<unknown, unknown> {
     handler: async () => Result.ok({ conversations: [] }),
     input: z.object({}),
     mcp: {
-      toolName: "broker/conversation/list",
+      toolName: "signet/conversation/list",
       description: "List conversations",
       readOnly: true,
     },
@@ -233,7 +233,7 @@ export function createDestructiveSpec(): ActionSpec<unknown, unknown> {
     handler: async () => Result.ok(undefined),
     input: z.object({ conversationId: z.string() }),
     mcp: {
-      toolName: "broker/conversation/delete",
+      toolName: "signet/conversation/delete",
       description: "Delete a conversation",
       readOnly: false,
       destructive: true,

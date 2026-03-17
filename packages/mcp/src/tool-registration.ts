@@ -1,6 +1,6 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { ActionSpec } from "@xmtp-broker/contracts";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { ActionSpec } from "@xmtp/signet-contracts";
+import type { SignetError } from "@xmtp/signet-schemas";
 
 /**
  * MCP tool registration shape. Produced from an ActionSpec
@@ -21,7 +21,7 @@ export interface McpToolRegistration {
  * Returns undefined if the spec has no MCP surface metadata.
  */
 export function actionSpecToMcpTool(
-  spec: ActionSpec<unknown, unknown, BrokerError>,
+  spec: ActionSpec<unknown, unknown, SignetError>,
 ): McpToolRegistration | undefined {
   if (!spec.mcp) {
     return undefined;

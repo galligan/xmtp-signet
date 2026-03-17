@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { Result } from "better-result";
 import { mkdirSync } from "node:fs";
-import { createKeyManager } from "@xmtp-broker/keys";
+import { createKeyManager } from "@xmtp/signet-keys";
 import { loadConfig } from "../config/loader.js";
 import { resolvePaths } from "../config/paths.js";
 import { formatOutput } from "../output/formatter.js";

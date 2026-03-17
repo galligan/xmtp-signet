@@ -36,9 +36,7 @@ const _RequestFailure = z
     error: z
       .object({
         code: z.number().int().describe("Numeric error code"),
-        category: ErrorCategorySchema.describe(
-          "Error category from taxonomy",
-        ),
+        category: ErrorCategorySchema.describe("Error category from taxonomy"),
         message: z.string().describe("Human-readable error description"),
         context: z
           .record(z.string(), z.unknown())

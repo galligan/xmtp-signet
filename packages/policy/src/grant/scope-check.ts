@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { type ViewConfig, PermissionError } from "@xmtp-broker/schemas";
+import { type ViewConfig, PermissionError } from "@xmtp/signet-schemas";
 
 /**
  * Checks that the request's groupId appears in at least one of the

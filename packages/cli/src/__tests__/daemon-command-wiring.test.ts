@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
+import type { Command } from "commander";
 import type { AdminClient } from "../admin/client.js";
-import { createBrokerCommands } from "../commands/broker.js";
+import { createLifecycleCommands } from "../commands/lifecycle.js";
 import { createSessionCommands } from "../commands/session.js";
 
 const view = {
@@ -39,6 +40,14 @@ interface RequestCall {
   readonly params: Record<string, unknown> | undefined;
 }
 
+function findCommand(commands: Command[], name: string): Command {
+  const command = commands.find((candidate) => candidate.name() === name);
+  if (command === undefined) {
+    throw new Error(`Command not found: ${name}`);
+  }
+  return command;
+}
+
 function createHarness<T>(response: T) {
   const requestCalls: RequestCall[] = [];
   const withDaemonCalls: Array<{ configPath?: string | undefined }> = [];
@@ -62,8 +71,8 @@ function createHarness<T>(response: T) {
         options: { configPath?: string | undefined },
         run: (
           adminClient: AdminClient,
-        ) => Promise<Result<TResult, BrokerError>>,
-      ): Promise<Result<TResult, BrokerError>> {
+        ) => Promise<Result<TResult, SignetError>>,
+      ): Promise<Result<TResult, SignetError>> {
         withDaemonCalls.push(options);
         return run(client);
       },
@@ -135,7 +144,7 @@ describe("daemon-backed CLI command wiring", () => {
     expect(harness.stdout.join("")).toContain("sess_123");
   });
 
-  test("broker status routes through daemon client and prints response", async () => {
+  test("status routes through daemon client and prints response", async () => {
     const harness = createHarness({
       state: "running",
       coreState: "ready",
@@ -149,10 +158,12 @@ describe("daemon-backed CLI command wiring", () => {
       version: "0.1.0",
     });
 
-    const command = createBrokerCommands(harness.deps);
+    const command = findCommand(
+      createLifecycleCommands(harness.deps),
+      "status",
+    );
     await command.parseAsync([
       "node",
-      "broker",
       "status",
       "--config",
       "/tmp/test-config.toml",
@@ -163,7 +174,7 @@ describe("daemon-backed CLI command wiring", () => {
     ]);
     expect(harness.requestCalls).toEqual([
       {
-        method: "broker.status",
+        method: "signet.status",
         params: undefined,
       },
     ]);

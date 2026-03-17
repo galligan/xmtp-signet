@@ -34,7 +34,7 @@ export interface DecodedMessageLike {
   readonly sentAtNs: bigint;
 }
 
-/** Convert an SDK group + members to broker XmtpGroupInfo. */
+/** Convert an SDK group + members to signet XmtpGroupInfo. */
 export function toGroupInfo(
   group: GroupLike,
   members: readonly GroupMemberLike[],
@@ -48,7 +48,7 @@ export function toGroupInfo(
   };
 }
 
-/** Convert an SDK DecodedMessage to broker XmtpDecodedMessage. */
+/** Convert an SDK DecodedMessage to signet XmtpDecodedMessage. */
 export function toDecodedMessage(msg: DecodedMessageLike): XmtpDecodedMessage {
   return {
     messageId: msg.id,

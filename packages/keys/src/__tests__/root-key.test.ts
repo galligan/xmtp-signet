@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp-broker/schemas";
+import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 import { z } from "zod";
-import type { ActionSpec } from "@xmtp-broker/contracts";
-import { NotFoundError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { ActionSpec } from "@xmtp/signet-contracts";
+import { NotFoundError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
 import type {
   XmtpClientFactory,
   XmtpGroupInfo,
 } from "./xmtp-client-factory.js";
-import type { BrokerCoreConfig } from "./config.js";
+import type { SignetCoreConfig } from "./config.js";
 import { joinConversation } from "./convos/join.js";
 import { generateConvosInviteUrl } from "./convos/invite-generator.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
@@ -19,10 +19,10 @@ export interface ConversationActionDeps {
   readonly getManagedClient: (identityId: string) => ManagedClient | undefined;
   readonly getGroupInfo: (
     groupId: string,
-  ) => Promise<Result<XmtpGroupInfo, BrokerError>>;
+  ) => Promise<Result<XmtpGroupInfo, SignetError>>;
   readonly clientFactory?: XmtpClientFactory;
   readonly signerProviderFactory?: SignerProviderFactory;
-  readonly config?: Pick<BrokerCoreConfig, "dataDir" | "env" | "appVersion">;
+  readonly config?: Pick<SignetCoreConfig, "dataDir" | "env" | "appVersion">;
 }
 
 /**
@@ -33,12 +33,12 @@ async function resolveIdentity(
   identityStore: SqliteIdentityStore,
   label: string | undefined,
 ): Promise<
-  Result<{ identityId: string; inboxId: string | null }, BrokerError>
+  Result<{ identityId: string; inboxId: string | null }, SignetError>
 > {
   if (label) {
     const identity = await identityStore.getByLabel(label);
     if (!identity) {
-      return Result.err(NotFoundError.create("identity", label) as BrokerError);
+      return Result.err(NotFoundError.create("identity", label) as SignetError);
     }
     return Result.ok({
       identityId: identity.id,
@@ -51,7 +51,7 @@ async function resolveIdentity(
   const first = identities[0];
   if (!first) {
     return Result.err(
-      NotFoundError.create("identity", "(none)") as BrokerError,
+      NotFoundError.create("identity", "(none)") as SignetError,
     );
   }
   return Result.ok({
@@ -63,8 +63,8 @@ async function resolveIdentity(
 /** Create ActionSpecs for conversation operations. */
 export function createConversationActions(
   deps: ConversationActionDeps,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): ActionSpec<any, any, BrokerError>[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): ActionSpec<any, any, SignetError>[] {
   const create: ActionSpec<
     {
       memberInboxIds: string[];
@@ -77,7 +77,7 @@ export function createConversationActions(
       creatorInboxId: string;
       memberCount: number;
     },
-    BrokerError
+    SignetError
   > = {
     id: "conversation.create",
     input: z.object({
@@ -98,7 +98,7 @@ export function createConversationActions(
           NotFoundError.create(
             "managed-client",
             resolved.value.identityId,
-          ) as BrokerError,
+          ) as SignetError,
         );
       }
 
@@ -122,7 +122,7 @@ export function createConversationActions(
       rpcMethod: "conversation.create",
     },
     mcp: {
-      toolName: "broker/conversation/create",
+      toolName: "signet/conversation/create",
       description: "Create a new group conversation",
       readOnly: false,
     },
@@ -131,7 +131,7 @@ export function createConversationActions(
   const list: ActionSpec<
     { identityLabel?: string | undefined },
     { groups: readonly XmtpGroupInfo[] },
-    BrokerError
+    SignetError
   > = {
     id: "conversation.list",
     input: z.object({
@@ -150,7 +150,7 @@ export function createConversationActions(
           NotFoundError.create(
             "managed-client",
             resolved.value.identityId,
-          ) as BrokerError,
+          ) as SignetError,
         );
       }
 
@@ -164,13 +164,13 @@ export function createConversationActions(
       rpcMethod: "conversation.list",
     },
     mcp: {
-      toolName: "broker/conversation/list",
+      toolName: "signet/conversation/list",
       description: "List group conversations",
       readOnly: true,
     },
   };
 
-  const info: ActionSpec<{ groupId: string }, XmtpGroupInfo, BrokerError> = {
+  const info: ActionSpec<{ groupId: string }, XmtpGroupInfo, SignetError> = {
     id: "conversation.info",
     input: z.object({
       groupId: z.string(),
@@ -181,7 +181,7 @@ export function createConversationActions(
       rpcMethod: "conversation.info",
     },
     mcp: {
-      toolName: "broker/conversation/info",
+      toolName: "signet/conversation/info",
       description: "Get group conversation details",
       readOnly: true,
     },
@@ -201,7 +201,7 @@ export function createConversationActions(
       groupName: string | undefined;
       creatorInboxId: string;
     },
-    BrokerError
+    SignetError
   > = {
     id: "conversation.join",
     input: z.object({
@@ -215,7 +215,7 @@ export function createConversationActions(
           NotFoundError.create(
             "join-deps",
             "Join requires clientFactory, signerProviderFactory, and config",
-          ) as BrokerError,
+          ) as SignetError,
         );
       }
 
@@ -248,7 +248,7 @@ export function createConversationActions(
       description: "Join a Convos conversation via invite URL",
     },
     mcp: {
-      toolName: "broker/conversation/join",
+      toolName: "signet/conversation/join",
       description: "Join a Convos conversation via invite URL",
       readOnly: false,
     },
@@ -268,7 +268,7 @@ export function createConversationActions(
       creatorInboxId: string;
       inviteTag: string;
     },
-    BrokerError
+    SignetError
   > = {
     id: "conversation.invite",
     input: z.object({
@@ -283,7 +283,7 @@ export function createConversationActions(
           NotFoundError.create(
             "invite-deps",
             "Invite requires signerProviderFactory and config",
-          ) as BrokerError,
+          ) as SignetError,
         );
       }
 
@@ -300,7 +300,7 @@ export function createConversationActions(
           NotFoundError.create(
             "managed-client",
             resolved.value.identityId,
-          ) as BrokerError,
+          ) as SignetError,
         );
       }
 
@@ -359,7 +359,7 @@ export function createConversationActions(
       description: "Generate a Convos-compatible invite URL for a group",
     },
     mcp: {
-      toolName: "broker/conversation/invite",
+      toolName: "signet/conversation/invite",
       description: "Generate a Convos-compatible invite URL for a group",
       readOnly: true,
     },
@@ -372,7 +372,7 @@ export function createConversationActions(
       identityLabel?: string | undefined;
     },
     { groupId: string; memberCount: number },
-    BrokerError
+    SignetError
   > = {
     id: "conversation.add-member",
     input: z.object({
@@ -393,7 +393,7 @@ export function createConversationActions(
           NotFoundError.create(
             "managed-client",
             resolved.value.identityId,
-          ) as BrokerError,
+          ) as SignetError,
         );
       }
 
@@ -416,7 +416,7 @@ export function createConversationActions(
       rpcMethod: "conversation.add-member",
     },
     mcp: {
-      toolName: "broker/conversation/add-member",
+      toolName: "signet/conversation/add-member",
       description: "Add a member to a group conversation",
       readOnly: false,
     },
@@ -429,7 +429,7 @@ export function createConversationActions(
       members: readonly string[];
       memberCount: number;
     },
-    BrokerError
+    SignetError
   > = {
     id: "conversation.members",
     input: z.object({
@@ -450,7 +450,7 @@ export function createConversationActions(
       rpcMethod: "conversation.members",
     },
     mcp: {
-      toolName: "broker/conversation/members",
+      toolName: "signet/conversation/members",
       description: "List members of a group conversation",
       readOnly: true,
     },

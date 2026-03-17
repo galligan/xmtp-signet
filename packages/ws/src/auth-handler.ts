@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
-import { AuthError } from "@xmtp-broker/schemas";
-import type { SessionRecord } from "@xmtp-broker/contracts";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { AuthError } from "@xmtp/signet-schemas";
+import type { SessionRecord } from "@xmtp/signet-contracts";
 import type { AuthFrame } from "./frames.js";
 
 /**
@@ -11,7 +11,7 @@ import type { AuthFrame } from "./frames.js";
  */
 export type TokenLookup = (
   token: string,
-) => Promise<Result<SessionRecord, BrokerError>>;
+) => Promise<Result<SessionRecord, SignetError>>;
 
 /**
  * Validates an auth frame by looking up the token and checking
@@ -20,7 +20,7 @@ export type TokenLookup = (
 export async function handleAuth(
   frame: AuthFrame,
   lookup: TokenLookup,
-): Promise<Result<SessionRecord, BrokerError>> {
+): Promise<Result<SessionRecord, SignetError>> {
   const result = await lookup(frame.token);
   if (!result.isOk()) return result;
 

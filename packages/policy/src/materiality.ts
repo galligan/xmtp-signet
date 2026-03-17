@@ -1,6 +1,6 @@
-import type { PolicyDelta } from "@xmtp-broker/contracts";
+import type { PolicyDelta } from "@xmtp/signet-contracts";
 
-/** Material field prefixes that trigger attestation. */
+/** Material field prefixes that trigger seal rotation. */
 const MATERIAL_FIELD_PREFIXES = [
   "view.mode",
   "view.threadScopes",
@@ -34,7 +34,7 @@ function isMaterialField(field: string): boolean {
 
 /**
  * Classifies whether any delta in a set of policy changes is material
- * (triggers attestation) or routine (silent).
+ * (triggers a new seal) or routine (silent).
  */
 export function isMaterialChange(deltas: readonly PolicyDelta[]): boolean {
   return deltas.some((delta) => isSingleDeltaMaterial(delta));

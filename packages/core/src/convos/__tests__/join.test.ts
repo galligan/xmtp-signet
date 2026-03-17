@@ -4,7 +4,7 @@ import protobuf from "protobufjs";
 import Long from "long";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 import { SqliteIdentityStore } from "../../identity-store.js";
 import type {
   XmtpClient,
@@ -183,7 +183,7 @@ function createDeps(overrides?: {
     config: {
       dataDir: ":memory:",
       env: "dev",
-      appVersion: "xmtp-broker/test",
+      appVersion: "xmtp-signet/test",
     },
   };
 }
@@ -317,7 +317,7 @@ describe("joinConversation", () => {
       config: {
         dataDir: ":memory:",
         env: "dev",
-        appVersion: "xmtp-broker/test",
+        appVersion: "xmtp-signet/test",
       },
     };
 

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 
 /**
  * Daemon lifecycle states.

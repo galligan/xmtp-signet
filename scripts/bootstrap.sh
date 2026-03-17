@@ -13,7 +13,7 @@ fi
 EXPECTED_BUN_VERSION="$(< .bun-version)"
 CURRENT_BUN_VERSION="$(bun --version)"
 
-echo "==> Bootstrapping xmtp-broker"
+echo "==> Bootstrapping xmtp-signet"
 
 if [[ "$CURRENT_BUN_VERSION" != "$EXPECTED_BUN_VERSION" ]]; then
   echo "warning: expected Bun $EXPECTED_BUN_VERSION, found $CURRENT_BUN_VERSION" >&2

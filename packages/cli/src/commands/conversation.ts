@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
 import {
@@ -30,7 +30,7 @@ const defaultDeps: ConversationCommandDeps = {
 /**
  * Conversation operation commands. All require daemon and admin auth.
  *
- * - list: List conversations the broker participates in
+ * - list: List conversations the signet participates in
  * - info: Show group metadata
  * - create: Create a new group conversation
  * - add-member: Add a member to a group
@@ -334,7 +334,7 @@ function parseMembers(value: unknown): string[] {
 
 function writeError(
   deps: ConversationCommandDeps,
-  error: BrokerError,
+  error: SignetError,
   json: boolean,
 ): void {
   deps.writeStderr(

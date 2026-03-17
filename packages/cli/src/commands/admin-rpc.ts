@@ -1,4 +1,4 @@
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { Result } from "better-result";
 import type { z } from "zod";
 import type { AdminClient } from "../admin/client.js";
@@ -15,7 +15,7 @@ export function parseJsonInput<T>(
   input: string,
   schema: z.ZodType<T>,
   field: string,
-): Promise<Result<T, BrokerError>> {
+): Promise<Result<T, SignetError>> {
   return parseJsonInputImpl(input, field, schema);
 }
 
@@ -25,8 +25,8 @@ export async function withDaemonClient<T>(
   run: (
     client: AdminClient,
     context: DaemonCommandContext,
-  ) => Promise<Result<T, BrokerError>>,
-): Promise<Result<T, BrokerError>> {
+  ) => Promise<Result<T, SignetError>>,
+): Promise<Result<T, SignetError>> {
   return createWithDaemonClient(deps)(
     {
       configPath: options.config,

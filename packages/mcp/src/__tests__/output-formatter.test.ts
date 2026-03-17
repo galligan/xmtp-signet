@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import type { ActionResult } from "@xmtp-broker/contracts";
+import type { ActionResult } from "@xmtp/signet-contracts";
 import { formatActionResult } from "../output-formatter.js";
 
 describe("formatActionResult", () => {

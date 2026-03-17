@@ -1,7 +1,7 @@
-import type { CoreState } from "@xmtp-broker/contracts";
+import type { CoreState } from "@xmtp/signet-contracts";
 import { z } from "zod";
 
-/** Daemon status as returned by `broker status` and admin `ping()`. */
+/** Daemon status as returned by `status` and admin `ping()`. */
 export type DaemonStatus = {
   state: "running" | "draining" | "stopped";
   coreState: CoreState;
@@ -20,7 +20,7 @@ export type DaemonStatus = {
 
 /**
  * Daemon status response schema.
- * Returned by the `broker status` command and admin `ping()`.
+ * Returned by the `status` command and admin `ping()`.
  */
 export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
   .object({
@@ -37,7 +37,7 @@ export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
         "stopped",
         "error",
       ])
-      .describe("Current broker core state"),
+      .describe("Current signet core state"),
     pid: z.number().int().positive().describe("Daemon process ID"),
     uptime: z.number().nonnegative().describe("Uptime in seconds"),
     activeSessions: z
@@ -57,7 +57,7 @@ export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
       .enum(["per-group", "shared"])
       .describe("Identity isolation strategy"),
     wsPort: z.number().int().nonnegative().describe("WebSocket server port"),
-    version: z.string().describe("Broker version string"),
+    version: z.string().describe("Signet version string"),
     identityCount: z
       .number()
       .int()
@@ -65,7 +65,7 @@ export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
       .describe("Number of registered identities"),
     networkState: z
       .enum(["disconnected", "connected"])
-      .describe("Whether the broker core has reached the network"),
+      .describe("Whether the signet core has reached the network"),
     connectedInboxIds: z
       .array(z.string())
       .describe("List of connected XMTP inbox IDs"),

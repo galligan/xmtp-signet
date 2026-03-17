@@ -2,7 +2,7 @@ import type {
   ContentTypeId,
   GrantDeniedError,
   PermissionError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
 /** Describes a change between two policy configurations. */
 export interface PolicyDelta {

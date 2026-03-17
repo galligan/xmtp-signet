@@ -2,7 +2,7 @@ import type {
   ContentTypeId,
   RevealGrant,
   RevealRequest,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
 /** Internal entry pairing a grant with its request context for matching. */
 interface RevealEntry {

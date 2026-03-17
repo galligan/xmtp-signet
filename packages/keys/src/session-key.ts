@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp-broker/schemas";
+import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
 import type { SessionKey } from "./types.js";
 import {
   generateEd25519KeyPair,

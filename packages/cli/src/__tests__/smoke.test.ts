@@ -40,19 +40,19 @@ async function makeWorkspace(): Promise<{
   wsPort: number;
   adminSocket: string;
 }> {
-  const dir = await mkdtemp(join(tmpdir(), "xmtp-broker-smoke-"));
+  const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-smoke-"));
   tempDirs.push(dir);
 
   const wsPort = randomPort();
   const dataDir = join(dir, "data");
   const adminSocket = join(dir, "admin.sock");
   const auditLog = join(dir, "audit.jsonl");
-  const configPath = join(dir, "broker.toml");
+  const configPath = join(dir, "signet.toml");
 
   await writeFile(
     configPath,
     [
-      "[broker]",
+      "[signet]",
       `env = "local"`,
       `dataDir = "${dataDir}"`,
       "",
@@ -175,10 +175,9 @@ async function nextMessage(ws: WebSocket, timeoutMs = 5000): Promise<unknown> {
 }
 
 describe("Phase 2B smoke tests", () => {
-  test("broker start boots from an empty directory without creating admin credentials", async () => {
+  test("start boots from an empty directory without creating admin credentials", async () => {
     const workspace = await makeWorkspace();
     const daemon = startDaemon([
-      "broker",
       "start",
       "--config",
       workspace.configPath,
@@ -251,7 +250,6 @@ describe("Phase 2B smoke tests", () => {
     expect(initResult.exitCode).toBe(0);
 
     const daemon = startDaemon([
-      "broker",
       "start",
       "--config",
       workspace.configPath,
@@ -260,7 +258,6 @@ describe("Phase 2B smoke tests", () => {
     await waitForHealthyStart(daemon, workspace.adminSocket);
 
     const statusResult = await runCli([
-      "broker",
       "status",
       "--config",
       workspace.configPath,
@@ -386,7 +383,6 @@ describe("Phase 2B smoke tests", () => {
     ws.close();
 
     const stopResult = await runCli([
-      "broker",
       "stop",
       "--config",
       workspace.configPath,

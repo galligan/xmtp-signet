@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import { sequenceEvent } from "../event-broadcaster.js";
 import { CircularBuffer } from "../replay-buffer.js";
 import type { SessionReplayState } from "../connection-state.js";
-import type { BrokerEvent } from "@xmtp-broker/schemas";
+import type { SignetEvent } from "@xmtp/signet-schemas";
 import type { SequencedFrame } from "../frames.js";
 
 function makeSessionState(bufferSize = 100): SessionReplayState {
@@ -13,7 +13,7 @@ function makeSessionState(bufferSize = 100): SessionReplayState {
 }
 
 describe("sequenceEvent", () => {
-  const heartbeatEvent: BrokerEvent = {
+  const heartbeatEvent: SignetEvent = {
     type: "heartbeat",
     sessionId: "sess_1",
     timestamp: "2024-01-01T00:00:00Z",

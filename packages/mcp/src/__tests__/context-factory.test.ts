@@ -8,7 +8,7 @@ describe("createHandlerContext", () => {
 
   test("context has requestId in UUID format", () => {
     const ctx = createHandlerContext({
-      brokerId: "broker_1",
+      signetId: "signet_1",
       signerProvider,
       sessionId: sessionRecord.sessionId,
       requestTimeoutMs: 30_000,
@@ -23,7 +23,7 @@ describe("createHandlerContext", () => {
 
   test("context has signal as AbortSignal", () => {
     const ctx = createHandlerContext({
-      brokerId: "broker_1",
+      signetId: "signet_1",
       signerProvider,
       sessionId: sessionRecord.sessionId,
       requestTimeoutMs: 30_000,
@@ -35,7 +35,7 @@ describe("createHandlerContext", () => {
 
   test("context has sessionId from session record", () => {
     const ctx = createHandlerContext({
-      brokerId: "broker_1",
+      signetId: "signet_1",
       signerProvider,
       sessionId: "sess_custom",
       requestTimeoutMs: 30_000,
@@ -46,7 +46,7 @@ describe("createHandlerContext", () => {
 
   test("context does NOT have adminAuth", () => {
     const ctx = createHandlerContext({
-      brokerId: "broker_1",
+      signetId: "signet_1",
       signerProvider,
       sessionId: sessionRecord.sessionId,
       requestTimeoutMs: 30_000,

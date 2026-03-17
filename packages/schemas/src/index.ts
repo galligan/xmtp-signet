@@ -29,7 +29,7 @@ export {
   GrantConfig,
 } from "./grant.js";
 
-// Attestation
+// Seal
 export {
   InferenceMode,
   ContentEgressScope,
@@ -37,9 +37,9 @@ export {
   HostingMode,
   TrustTier,
   RevocationRules,
-  AttestationSchema,
-  type Attestation,
-} from "./attestation.js";
+  SealSchema,
+  type Seal,
+} from "./seal.js";
 
 // Session
 export {
@@ -61,14 +61,14 @@ export {
 export {
   AgentRevocationReason,
   SessionRevocationReason,
-  RevocationAttestation,
+  RevocationSeal,
 } from "./revocation.js";
 
 // Events
 export {
   MessageVisibility,
   MessageEvent,
-  AttestationEvent,
+  SealStampedEvent,
   SessionStartedEvent,
   SessionExpiredEvent,
   SessionReauthRequiredEvent,
@@ -78,8 +78,8 @@ export {
   GrantUpdatedEvent,
   AgentRevokedEvent,
   ActionConfirmationEvent,
-  BrokerRecoveryEvent,
-  BrokerEvent,
+  SignetRecoveryEvent,
+  SignetEvent,
 } from "./events.js";
 
 // Requests
@@ -117,11 +117,11 @@ export {
   type ErrorCategoryMeta,
   ERROR_CATEGORY_META,
   errorCategoryMeta,
-  type BrokerError,
-  type AnyBrokerError,
+  type SignetError,
+  type AnySignetError,
   matchError,
   ValidationError,
-  AttestationError,
+  SealError,
   NotFoundError,
   PermissionError,
   GrantDeniedError,

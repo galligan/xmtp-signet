@@ -1,15 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createSchemaComplianceCheck } from "../checks/schema-compliance.js";
-import {
-  createTestVerificationRequest,
-  createTestAttestation,
-} from "./fixtures.js";
+import { createTestVerificationRequest, createTestSeal } from "./fixtures.js";
 
 describe("schema_compliance check", () => {
-  test("skips when no attestation provided", async () => {
+  test("skips when no seal provided", async () => {
     const check = createSchemaComplianceCheck();
     const result = await check.execute(
-      createTestVerificationRequest({ attestation: null }),
+      createTestVerificationRequest({ seal: null }),
     );
 
     expect(result.isOk()).toBe(true);
@@ -19,7 +16,7 @@ describe("schema_compliance check", () => {
     }
   });
 
-  test("passes when attestation is schema-compliant", async () => {
+  test("passes when seal is schema-compliant", async () => {
     const check = createSchemaComplianceCheck();
     const result = await check.execute(createTestVerificationRequest());
 
@@ -30,18 +27,17 @@ describe("schema_compliance check", () => {
     }
   });
 
-  test("fails when attestation has invalid fields", async () => {
+  test("fails when seal has invalid fields", async () => {
     const check = createSchemaComplianceCheck();
-    // Create a request with a malformed attestation
-    const badAttestation = {
-      ...createTestAttestation(),
+    const badSeal = {
+      ...createTestSeal(),
       viewMode: "invalid-mode",
     };
 
     const result = await check.execute(
       createTestVerificationRequest({
-        // Force the bad attestation through by bypassing the schema
-        attestation: badAttestation as ReturnType<typeof createTestAttestation>,
+        // Force the bad seal through by bypassing the schema.
+        seal: badSeal as ReturnType<typeof createTestSeal>,
       }),
     );
 

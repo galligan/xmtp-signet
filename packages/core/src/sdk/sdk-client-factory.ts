@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
-import { InternalError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { InternalError } from "@xmtp/signet-schemas";
 import type {
   XmtpClientFactory,
   XmtpClientCreateOptions,
@@ -51,7 +51,7 @@ export function createSdkClientFactory(
   return {
     async create(
       options: XmtpClientCreateOptions,
-    ): Promise<Result<XmtpClient, BrokerError>> {
+    ): Promise<Result<XmtpClient, SignetError>> {
       try {
         const signer = createXmtpSigner({
           privateKey: options.signerPrivateKey,
@@ -117,8 +117,7 @@ async function defaultSdkCreate(
       if (id instanceof Promise) {
         return id.then((resolved) => ({
           identifier: resolved.identifier,
-          identifierKind:
-            IDENTIFIER_KIND_MAP[resolved.identifierKind] ?? 0,
+          identifierKind: IDENTIFIER_KIND_MAP[resolved.identifierKind] ?? 0,
         }));
       }
       return {

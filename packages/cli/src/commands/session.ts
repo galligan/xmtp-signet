@@ -1,16 +1,16 @@
 import { Command } from "commander";
 import { Result } from "better-result";
-import type { SessionRecord } from "@xmtp-broker/contracts";
+import type { SessionRecord } from "@xmtp/signet-contracts";
 import {
   GrantConfig,
   SessionConfig,
   SessionRevocationReason,
   ValidationError,
   ViewConfig,
-  type BrokerError,
+  type SignetError,
   type IssuedSession,
   type SessionRevocationReason as SessionRevocationReasonType,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
 import {
@@ -218,7 +218,7 @@ async function buildSessionConfig(options: {
   ttl?: string | undefined;
   view: string;
   grant: string;
-}): Promise<Result<typeof SessionConfig._type, BrokerError>> {
+}): Promise<Result<typeof SessionConfig._type, SignetError>> {
   const ttlResult = parseTtl(options.ttl);
   if (ttlResult.isErr()) {
     return ttlResult;
@@ -254,7 +254,7 @@ async function buildSessionConfig(options: {
 
 function parseReason(
   value: unknown,
-): Result<SessionRevocationReasonType, BrokerError> {
+): Result<SessionRevocationReasonType, SignetError> {
   const parsed = SessionRevocationReason.safeParse(value);
   if (!parsed.success) {
     return Result.err(
@@ -266,7 +266,7 @@ function parseReason(
   return Result.ok(parsed.data);
 }
 
-function parseTtl(value: unknown): Result<number | undefined, BrokerError> {
+function parseTtl(value: unknown): Result<number | undefined, SignetError> {
   if (value === undefined) {
     return Result.ok(undefined);
   }
@@ -283,7 +283,7 @@ function parseTtl(value: unknown): Result<number | undefined, BrokerError> {
 
 function writeError(
   deps: SessionCommandDeps,
-  error: BrokerError,
+  error: SignetError,
   json: boolean,
 ): void {
   deps.writeStderr(

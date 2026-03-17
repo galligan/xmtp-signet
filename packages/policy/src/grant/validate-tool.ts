@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import { type GrantConfig, GrantDeniedError } from "@xmtp-broker/schemas";
-import type { GrantError } from "@xmtp-broker/contracts";
+import { type GrantConfig, GrantDeniedError } from "@xmtp/signet-schemas";
+import type { GrantError } from "@xmtp/signet-contracts";
 
 /**
  * Validates a tool invocation against the active grant.

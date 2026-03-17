@@ -18,7 +18,7 @@ export const McpServerConfigSchema: z.ZodObject<{
     .describe("Transport mode: stdio for standalone, embedded for daemon"),
   serverName: z
     .string()
-    .default("xmtp-broker")
+    .default("xmtp-signet")
     .describe("Server name advertised during MCP initialization"),
   serverVersion: z
     .string()
@@ -26,8 +26,8 @@ export const McpServerConfigSchema: z.ZodObject<{
     .describe("Server version advertised during MCP initialization"),
   toolPrefix: z
     .string()
-    .default("broker")
-    .describe("Prefix for all tool names (e.g., broker/message/send)"),
+    .default("signet")
+    .describe("Prefix for all tool names (e.g., signet/message/send)"),
   sessionToken: z
     .string()
     .describe("Session bearer token for authenticating the MCP caller"),

@@ -10,8 +10,8 @@ import {
 import { createSourceAvailableCheck } from "../checks/source-available.js";
 import { createBuildProvenanceCheck } from "../checks/build-provenance.js";
 import { createReleaseSigningCheck } from "../checks/release-signing.js";
-import { createAttestationSignatureCheck } from "../checks/attestation-signature.js";
-import { createAttestationChainCheck } from "../checks/attestation-chain.js";
+import { createSealSignatureCheck } from "../checks/seal-signature.js";
+import { createSealChainCheck } from "../checks/seal-chain.js";
 import { createSchemaComplianceCheck } from "../checks/schema-compliance.js";
 
 function createTestService(overrides?: {
@@ -36,13 +36,13 @@ function createTestService(overrides?: {
     checks: [
       createSourceAvailableCheck({
         fetcher: createTestFetcher({
-          "https://github.com/xmtp/xmtp-broker": { status: 200 },
+          "https://github.com/xmtp/xmtp-signet": { status: 200 },
         }),
       }),
       createBuildProvenanceCheck(),
       createReleaseSigningCheck(),
-      createAttestationSignatureCheck(),
-      createAttestationChainCheck(),
+      createSealSignatureCheck(),
+      createSealChainCheck(),
       createSchemaComplianceCheck(),
     ],
   });
@@ -58,7 +58,7 @@ describe("VerifierService", () => {
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         // source_available passes, build_provenance skips (null),
-        // release_signing skips (null), attestation_* pass, schema passes
+        // release_signing skips (null), seal_* pass, schema passes
         // Some skip -> partial
         expect(result.value.verdict).toBe("partial");
         expect(result.value.verifiedTier).toBe("unverified");
@@ -91,13 +91,13 @@ describe("VerifierService", () => {
         checks: [
           createSourceAvailableCheck({
             fetcher: createTestFetcher({
-              "https://github.com/xmtp/xmtp-broker": { status: 404 },
+              "https://github.com/xmtp/xmtp-signet": { status: 404 },
             }),
           }),
           createBuildProvenanceCheck(),
           createReleaseSigningCheck(),
-          createAttestationSignatureCheck(),
-          createAttestationChainCheck(),
+          createSealSignatureCheck(),
+          createSealChainCheck(),
           createSchemaComplianceCheck(),
         ],
       });
@@ -121,7 +121,7 @@ describe("VerifierService", () => {
     test("returns partial when only source passes and others skip", async () => {
       const service = createTestService();
       const request = createTestVerificationRequest({
-        attestation: null,
+        seal: null,
         buildProvenanceBundle: null,
         releaseTag: null,
       });
@@ -148,8 +148,8 @@ describe("VerifierService", () => {
         expect(checkIds).toContain("source_available");
         expect(checkIds).toContain("build_provenance");
         expect(checkIds).toContain("release_signing");
-        expect(checkIds).toContain("attestation_signature");
-        expect(checkIds).toContain("attestation_chain");
+        expect(checkIds).toContain("seal_signature");
+        expect(checkIds).toContain("seal_chain");
         expect(checkIds).toContain("schema_compliance");
       }
     });
@@ -204,7 +204,7 @@ describe("VerifierService", () => {
         checks: [
           createSourceAvailableCheck({
             fetcher: createTestFetcher({
-              "https://github.com/xmtp/xmtp-broker": { status: 200 },
+              "https://github.com/xmtp/xmtp-signet": { status: 200 },
             }),
           }),
         ],
@@ -250,7 +250,7 @@ describe("VerifierService", () => {
         checks: [
           createSourceAvailableCheck({
             fetcher: createTestFetcher({
-              "https://github.com/xmtp/xmtp-broker": { status: 200 },
+              "https://github.com/xmtp/xmtp-signet": { status: 200 },
             }),
           }),
         ],
@@ -270,26 +270,26 @@ describe("VerifierService", () => {
     });
   });
 
-  describe("selfAttestation", () => {
+  describe("selfSeal", () => {
     test("returns verifier capabilities", () => {
       const service = createTestService();
-      const attestation = service.selfAttestation();
+      const selfSeal = service.selfSeal();
 
-      expect(attestation.verifierInboxId).toBe("verifier-inbox-001");
-      expect(attestation.capabilities.supportedTiers).toEqual(["unverified"]);
-      expect(attestation.capabilities.supportedChecks).toContain(
+      expect(selfSeal.verifierInboxId).toBe("verifier-inbox-001");
+      expect(selfSeal.capabilities.supportedTiers).toEqual(["unverified"]);
+      expect(selfSeal.capabilities.supportedChecks).toContain(
         "source_available",
       );
-      expect(attestation.capabilities.maxRequestsPerHour).toBe(10);
-      expect(attestation.sourceRepoUrl).toBe(
+      expect(selfSeal.capabilities.maxRequestsPerHour).toBe(10);
+      expect(selfSeal.sourceRepoUrl).toBe(
         "https://github.com/xmtp/xmtp-verifier",
       );
     });
 
     test("returns cached instance on subsequent calls", () => {
       const service = createTestService();
-      const a1 = service.selfAttestation();
-      const a2 = service.selfAttestation();
+      const a1 = service.selfSeal();
+      const a2 = service.selfSeal();
       expect(a1).toBe(a2); // same reference
     });
   });

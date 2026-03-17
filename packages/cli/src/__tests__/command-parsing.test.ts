@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { Command } from "commander";
-import { createBrokerCommands } from "../commands/broker.js";
+import { createLifecycleCommands } from "../commands/lifecycle.js";
 import { createIdentityCommands } from "../commands/identity.js";
 import { createSessionCommands } from "../commands/session.js";
 import { createGrantCommands } from "../commands/grant.js";
-import { createAttestationCommands } from "../commands/attestation.js";
+import { createSealCommands } from "../commands/seal.js";
 import { createMessageCommands } from "../commands/message.js";
 import { createConversationCommands } from "../commands/conversation.js";
 import { createAdminCommands } from "../commands/admin.js";
@@ -21,11 +21,15 @@ function findSubcommand(parent: Command, name: string): Command | undefined {
   return parent.commands.find((c) => c.name() === name);
 }
 
-describe("broker commands", () => {
-  const cmd = createBrokerCommands();
+function findCommand(commands: Command[], name: string): Command | undefined {
+  return commands.find((command) => command.name() === name);
+}
 
-  test("registers all subcommands", () => {
-    const names = getSubcommandNames(cmd);
+describe("lifecycle commands", () => {
+  const commands = createLifecycleCommands();
+
+  test("registers the public top-level commands", () => {
+    const names = commands.map((command) => command.name());
     expect(names).toContain("start");
     expect(names).toContain("stop");
     expect(names).toContain("status");
@@ -33,28 +37,28 @@ describe("broker commands", () => {
   });
 
   test("start has --daemon and --config options", () => {
-    const start = findSubcommand(cmd, "start");
+    const start = findCommand(commands, "start");
     expect(start).toBeDefined();
     expect(hasOption(start!, "--daemon")).toBe(true);
     expect(hasOption(start!, "--config")).toBe(true);
   });
 
   test("stop has --config and --timeout options", () => {
-    const stop = findSubcommand(cmd, "stop");
+    const stop = findCommand(commands, "stop");
     expect(stop).toBeDefined();
     expect(hasOption(stop!, "--config")).toBe(true);
     expect(hasOption(stop!, "--timeout")).toBe(true);
   });
 
   test("status has --config and --json options", () => {
-    const status = findSubcommand(cmd, "status");
+    const status = findCommand(commands, "status");
     expect(status).toBeDefined();
     expect(hasOption(status!, "--config")).toBe(true);
     expect(hasOption(status!, "--json")).toBe(true);
   });
 
   test("config has show and validate subcommands", () => {
-    const config = findSubcommand(cmd, "config");
+    const config = findCommand(commands, "config");
     expect(config).toBeDefined();
     const configSubs = getSubcommandNames(config!);
     expect(configSubs).toContain("show");
@@ -134,22 +138,20 @@ describe("grant commands", () => {
   });
 });
 
-describe("attestation commands", () => {
-  const cmd = createAttestationCommands();
+describe("seal commands", () => {
+  const cmd = createSealCommands();
 
   test("registers all subcommands", () => {
     const names = getSubcommandNames(cmd);
-    expect(names).toContain("list");
     expect(names).toContain("inspect");
     expect(names).toContain("verify");
-    expect(names).toContain("revoke");
+    expect(names).toContain("history");
   });
 
-  test("list has --group and --agent filter options", () => {
-    const list = findSubcommand(cmd, "list");
-    expect(list).toBeDefined();
-    expect(hasOption(list!, "--group")).toBe(true);
-    expect(hasOption(list!, "--agent")).toBe(true);
+  test("inspect has --json output", () => {
+    const inspect = findSubcommand(cmd, "inspect");
+    expect(inspect).toBeDefined();
+    expect(hasOption(inspect!, "--json")).toBe(true);
   });
 });
 
@@ -245,14 +247,17 @@ describe("admin commands", () => {
 });
 
 describe("all commands on program", () => {
-  test("all 8 command groups are wired into the program", async () => {
+  test("public commands are wired into the program", async () => {
     const { program } = await import("../index.js");
     const names = program.commands.map((c) => c.name());
-    expect(names).toContain("broker");
+    expect(names).toContain("start");
+    expect(names).toContain("stop");
+    expect(names).toContain("status");
+    expect(names).toContain("config");
     expect(names).toContain("identity");
     expect(names).toContain("session");
     expect(names).toContain("grant");
-    expect(names).toContain("attestation");
+    expect(names).toContain("seal");
     expect(names).toContain("message");
     expect(names).toContain("conversation");
     expect(names).toContain("admin");
@@ -273,11 +278,11 @@ describe("all commands on program", () => {
     }
 
     const allCommands = [
-      createBrokerCommands(),
+      ...createLifecycleCommands(),
       createIdentityCommands(),
       createSessionCommands(),
       createGrantCommands(),
-      createAttestationCommands(),
+      createSealCommands(),
       createMessageCommands(),
       createConversationCommands(),
       createAdminCommands(),

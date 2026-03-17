@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp-broker/schemas";
+import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
 import { join } from "node:path";
 import { chmodSync } from "node:fs";
 

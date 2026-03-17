@@ -1,15 +1,15 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Result } from "better-result";
-import { InternalError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import { InternalError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import { privateKeyToAccount } from "viem/accounts";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type {
   XmtpClientFactory,
   SignerProviderLike,
 } from "./xmtp-client-factory.js";
-import type { XmtpEnv, BrokerCoreConfig } from "./config.js";
+import type { XmtpEnv, SignetCoreConfig } from "./config.js";
 
 /** Factory that creates a signer provider scoped to an identity. */
 export type SignerProviderFactory = (identityId: string) => SignerProviderLike;
@@ -19,7 +19,7 @@ export interface IdentityRegistrationDeps {
   readonly identityStore: SqliteIdentityStore;
   readonly clientFactory: XmtpClientFactory;
   readonly signerProviderFactory: SignerProviderFactory;
-  readonly config: Pick<BrokerCoreConfig, "dataDir" | "env" | "appVersion">;
+  readonly config: Pick<SignetCoreConfig, "dataDir" | "env" | "appVersion">;
 }
 
 /** Input for registering a new identity. */
@@ -66,7 +66,7 @@ function resolveDbPath(
 export async function registerIdentity(
   deps: IdentityRegistrationDeps,
   input: RegisterIdentityInput,
-): Promise<Result<RegisteredIdentity, BrokerError>> {
+): Promise<Result<RegisteredIdentity, SignetError>> {
   const { identityStore, clientFactory, signerProviderFactory, config } = deps;
   const groupId = input.groupId ?? null;
 

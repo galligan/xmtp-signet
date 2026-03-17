@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import {
   InternalError,
   NotFoundError,
   TimeoutError,
-} from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
 
-/** Hints for classifying SDK errors into broker error types. */
+/** Hints for classifying SDK errors into signet error types. */
 export interface WrapSdkCallHints {
   /** If provided, "not found" errors become NotFoundError. */
   readonly resourceType?: string;
@@ -27,13 +27,13 @@ function matchesAny(message: string, patterns: readonly string[]): boolean {
 
 /**
  * Wraps an async SDK call, converting exceptions to Result.err
- * with appropriate broker error types.
+ * with appropriate signet error types.
  */
 export async function wrapSdkCall<T>(
   fn: () => Promise<T>,
   context: string,
   hints?: WrapSdkCallHints,
-): Promise<Result<T, BrokerError>> {
+): Promise<Result<T, SignetError>> {
   try {
     const value = await fn();
     return Result.ok(value);

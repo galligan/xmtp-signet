@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import type {
-  BrokerError,
+  SignetError,
   IssuedSession,
   SessionConfig,
   SessionRevocationReason,
-} from "@xmtp-broker/schemas";
-import type { SessionManager, SessionRecord } from "@xmtp-broker/contracts";
+} from "@xmtp/signet-schemas";
+import type { SessionManager, SessionRecord } from "@xmtp/signet-contracts";
 import { generateSessionId } from "./token.js";
 import { computePolicyHash } from "./policy-hash.js";
 import type {
@@ -19,8 +19,8 @@ export interface SessionServiceDeps {
     issueSessionKey(
       sessionId: string,
       ttlSeconds: number,
-    ): Promise<Result<{ fingerprint: string }, BrokerError>>;
-    revokeSessionKey?(keyId: string): Result<void, BrokerError>;
+    ): Promise<Result<{ fingerprint: string }, SignetError>>;
+    revokeSessionKey?(keyId: string): Result<void, SignetError>;
   };
 }
 

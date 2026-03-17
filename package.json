@@ -1,5 +1,5 @@
 {
-  "name": "xmtp-broker",
+  "name": "xmtp-signet",
   "private": true,
   "workspaces": [
     "packages/*",

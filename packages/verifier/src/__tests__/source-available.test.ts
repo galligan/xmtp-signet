@@ -9,7 +9,7 @@ describe("source_available check", () => {
   test("passes when source repo returns 200", async () => {
     const check = createSourceAvailableCheck({
       fetcher: createTestFetcher({
-        "https://github.com/xmtp/xmtp-broker": { status: 200 },
+        "https://github.com/xmtp/xmtp-signet": { status: 200 },
       }),
     });
 
@@ -24,7 +24,7 @@ describe("source_available check", () => {
   test("fails when source repo returns 404", async () => {
     const check = createSourceAvailableCheck({
       fetcher: createTestFetcher({
-        "https://github.com/xmtp/xmtp-broker": { status: 404 },
+        "https://github.com/xmtp/xmtp-signet": { status: 404 },
       }),
     });
 
@@ -79,7 +79,7 @@ describe("source_available check", () => {
   test("includes evidence with url and timing", async () => {
     const check = createSourceAvailableCheck({
       fetcher: createTestFetcher({
-        "https://github.com/xmtp/xmtp-broker": { status: 200 },
+        "https://github.com/xmtp/xmtp-signet": { status: 200 },
       }),
     });
 
@@ -88,7 +88,7 @@ describe("source_available check", () => {
     if (result.isOk()) {
       expect(result.value.evidence).not.toBeNull();
       const evidence = result.value.evidence as Record<string, unknown>;
-      expect(evidence["url"]).toBe("https://github.com/xmtp/xmtp-broker");
+      expect(evidence["url"]).toBe("https://github.com/xmtp/xmtp-signet");
       expect(typeof evidence["responseTimeMs"]).toBe("number");
     }
   });

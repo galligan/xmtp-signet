@@ -1,4 +1,4 @@
-import type { TrustTier } from "@xmtp-broker/schemas";
+import type { TrustTier } from "@xmtp/signet-schemas";
 import type { PlatformCapability } from "./config.js";
 
 /**
@@ -7,7 +7,7 @@ import type { PlatformCapability } from "./config.js";
  */
 export function detectPlatform(): PlatformCapability {
   // v0: software fallback only.
-  // Future: check for Secure Enclave via broker-signer subprocess.
+  // Future: check for Secure Enclave via signet-signer subprocess.
   return "software-vault";
 }
 

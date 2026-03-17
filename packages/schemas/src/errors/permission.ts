@@ -1,6 +1,6 @@
-import type { BrokerError } from "./base.js";
+import type { SignetError } from "./base.js";
 
-export class PermissionError extends Error implements BrokerError {
+export class PermissionError extends Error implements SignetError {
   readonly _tag = "PermissionError" as const;
   readonly code = 1200;
   readonly category = "permission" as const;
@@ -21,7 +21,7 @@ export class PermissionError extends Error implements BrokerError {
   }
 }
 
-export class GrantDeniedError extends Error implements BrokerError {
+export class GrantDeniedError extends Error implements SignetError {
   readonly _tag = "GrantDeniedError" as const;
   readonly code = 1210;
   readonly category = "permission" as const;

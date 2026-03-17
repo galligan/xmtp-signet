@@ -10,7 +10,7 @@ import type {
   XmtpClientCreateOptions,
   XmtpDecodedMessage,
   XmtpGroupEvent,
-} from "@xmtp-broker/core";
+} from "@xmtp/signet-core";
 import {
   createMockXmtpClient,
   type MockXmtpClient,
@@ -46,9 +46,7 @@ export function createMockXmtpClientFactory(
       return clients;
     },
 
-    async create(
-      options: XmtpClientCreateOptions,
-    ) {
+    async create(options: XmtpClientCreateOptions) {
       const { client, streams } = createMockXmtpClient({
         inboxId: defaultOptions?.inboxId ?? `inbox_${options.identityId}`,
         ...(defaultOptions?.groups ? { groups: defaultOptions.groups } : {}),

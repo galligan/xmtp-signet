@@ -2,7 +2,7 @@
 export type {
   RawMessage,
   ProjectionResult,
-  BrokerContentTypeConfig,
+  SignetContentTypeConfig,
 } from "./types.js";
 
 // View projection pipeline

@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { isContentTypeAllowed } from "../pipeline/content-type-filter.js";
-import type { ContentTypeId } from "@xmtp-broker/schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 
 describe("isContentTypeAllowed", () => {
   test("returns true when content type is in allowlist", () => {

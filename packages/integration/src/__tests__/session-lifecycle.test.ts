@@ -6,8 +6,8 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { createSessionManager } from "@xmtp-broker/sessions";
-import type { ViewConfig, GrantConfig } from "@xmtp-broker/schemas";
+import { createSessionManager } from "@xmtp/signet-sessions";
+import type { ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
 
 function makeView(mode: ViewConfig["mode"] = "full"): ViewConfig {
   return {

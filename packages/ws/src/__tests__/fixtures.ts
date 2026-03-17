@@ -3,14 +3,14 @@ import type {
   HarnessRequest,
   IssuedSession,
   SessionToken,
-} from "@xmtp-broker/schemas";
-import { AuthError, NotFoundError } from "@xmtp-broker/schemas";
+} from "@xmtp/signet-schemas";
+import { AuthError, NotFoundError } from "@xmtp/signet-schemas";
 import type {
-  BrokerCore,
+  SignetCore,
   SessionManager,
-  AttestationManager,
+  SealManager,
   SessionRecord,
-} from "@xmtp-broker/contracts";
+} from "@xmtp/signet-contracts";
 import type { WsServerDeps } from "../server.js";
 
 /** Default session record used in tests. */
@@ -120,8 +120,8 @@ export function createMockSessionManager(
   } as SessionManager & { _validToken: string; _record: SessionRecord };
 }
 
-/** Creates a mock BrokerCore. */
-export function createMockBrokerCore(): BrokerCore {
+/** Creates a mock SignetCore. */
+export function createMockSignetCore(): SignetCore {
   return {
     state: "ready",
     async initializeLocal() {
@@ -147,13 +147,13 @@ export function createMockBrokerCore(): BrokerCore {
   };
 }
 
-/** Creates a mock AttestationManager. */
-export function createMockAttestationManager(): AttestationManager {
+/** Creates a mock SealManager. */
+export function createMockSealManager(): SealManager {
   return {
     async issue() {
       return Result.ok({
         envelope: {
-          attestation: {},
+          seal: {},
           signature: new Uint8Array(),
           publicKey: new Uint8Array(),
         },
@@ -181,8 +181,8 @@ export function createMockDeps(validToken = "valid_token"): {
   return {
     deps: {
       sessionManager,
-      core: createMockBrokerCore(),
-      attestationManager: createMockAttestationManager(),
+      core: createMockSignetCore(),
+      sealManager: createMockSealManager(),
       tokenLookup: async (token: string) => {
         if (
           token ===

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createKeyManager, type KeyManager } from "../key-manager.js";
 import { createSignerProvider } from "../signer-provider.js";
-import type { SignerProvider } from "@xmtp-broker/contracts";
+import type { SignerProvider } from "@xmtp/signet-contracts";
 
 describe("SignerProvider", () => {
   let dataDir: string;

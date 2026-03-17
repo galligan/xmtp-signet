@@ -4,8 +4,8 @@ import {
   MessageEvent,
   SessionStartedEvent,
   HeartbeatEvent,
-  BrokerRecoveryEvent,
-  BrokerEvent,
+  SignetRecoveryEvent,
+  SignetEvent,
 } from "../events.js";
 
 describe("MessageVisibility", () => {
@@ -32,17 +32,17 @@ describe("MessageEvent", () => {
     content: { text: "hello" },
     visibility: "visible",
     sentAt: "2024-01-01T00:00:00Z",
-    attestationId: null,
+    sealId: null,
   };
 
   it("accepts valid message event", () => {
     expect(MessageEvent.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts message with attestation ID", () => {
-    expect(
-      MessageEvent.safeParse({ ...valid, attestationId: "att-1" }).success,
-    ).toBe(true);
+  it("accepts message with seal ID", () => {
+    expect(MessageEvent.safeParse({ ...valid, sealId: "att-1" }).success).toBe(
+      true,
+    );
   });
 
   it("rejects wrong type discriminator", () => {
@@ -102,24 +102,24 @@ describe("HeartbeatEvent", () => {
   });
 });
 
-describe("BrokerRecoveryEvent", () => {
+describe("SignetRecoveryEvent", () => {
   it("accepts valid recovery event", () => {
     const valid = {
-      type: "broker.recovery.complete",
+      type: "signet.recovery.complete",
       caughtUpThrough: "2024-01-01T00:00:00Z",
     };
-    expect(BrokerRecoveryEvent.safeParse(valid).success).toBe(true);
+    expect(SignetRecoveryEvent.safeParse(valid).success).toBe(true);
   });
 });
 
-describe("BrokerEvent discriminated union", () => {
+describe("SignetEvent discriminated union", () => {
   it("discriminates on type field", () => {
     const heartbeat = {
       type: "heartbeat",
       sessionId: "sess-1",
       timestamp: "2024-01-01T00:00:00Z",
     };
-    const result = BrokerEvent.safeParse(heartbeat);
+    const result = SignetEvent.safeParse(heartbeat);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.type).toBe("heartbeat");
@@ -128,13 +128,13 @@ describe("BrokerEvent discriminated union", () => {
 
   it("rejects events with unknown type", () => {
     const invalid = { type: "unknown.event", data: {} };
-    expect(BrokerEvent.safeParse(invalid).success).toBe(false);
+    expect(SignetEvent.safeParse(invalid).success).toBe(false);
   });
 
   it("accepts all 12 event types", () => {
-    const validAttestation = {
-      attestationId: "att-001",
-      previousAttestationId: null,
+    const validSeal = {
+      sealId: "att-001",
+      previousSealId: null,
       agentInboxId: "agent-1",
       ownerInboxId: "owner-1",
       groupId: "group-1",
@@ -162,7 +162,7 @@ describe("BrokerEvent discriminated union", () => {
         ownerCanRevoke: true,
         adminCanRemove: false,
       },
-      issuer: "broker-1",
+      issuer: "signet-1",
     };
 
     const validGrant = {
@@ -193,9 +193,9 @@ describe("BrokerEvent discriminated union", () => {
         content: {},
         visibility: "visible",
         sentAt: "2024-01-01T00:00:00Z",
-        attestationId: null,
+        sealId: null,
       },
-      { type: "attestation.updated", attestation: validAttestation },
+      { type: "seal.stamped", seal: validSeal },
       {
         type: "session.started",
         session: {
@@ -243,13 +243,13 @@ describe("BrokerEvent discriminated union", () => {
       {
         type: "agent.revoked",
         revocation: {
-          attestationId: "rev-1",
-          previousAttestationId: "att-001",
+          sealId: "rev-1",
+          previousSealId: "att-001",
           agentInboxId: "a1",
           groupId: "g1",
           reason: "owner-initiated",
           revokedAt: "2024-01-01T00:00:00Z",
-          issuer: "broker-1",
+          issuer: "signet-1",
         },
       },
       {
@@ -259,13 +259,13 @@ describe("BrokerEvent discriminated union", () => {
         preview: { text: "hello" },
       },
       {
-        type: "broker.recovery.complete",
+        type: "signet.recovery.complete",
         caughtUpThrough: "2024-01-01T00:00:00Z",
       },
     ];
 
     for (const event of events) {
-      const result = BrokerEvent.safeParse(event);
+      const result = SignetEvent.safeParse(event);
       expect(result.success).toBe(true);
     }
   });

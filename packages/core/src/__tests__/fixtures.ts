@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import { NotFoundError } from "@xmtp-broker/schemas";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import { NotFoundError } from "@xmtp/signet-schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type {
   SignerProviderLike,
   XmtpClient,
@@ -9,7 +9,7 @@ import type {
   XmtpDecodedMessage,
   XmtpGroupInfo,
 } from "../xmtp-client-factory.js";
-import type { BrokerCoreConfig } from "../config.js";
+import type { SignetCoreConfig } from "../config.js";
 
 /** A fixed test secp256k1 private key (not used for real signing). */
 const TEST_XMTP_IDENTITY_KEY =
@@ -66,7 +66,7 @@ export function createMockXmtpClient(options?: {
       const group = groups.find((g) => g.groupId === groupId);
       if (!group) {
         return Result.err(
-          NotFoundError.create("group", groupId) as BrokerError,
+          NotFoundError.create("group", groupId) as SignetError,
         );
       }
       return Result.ok(group);
@@ -109,17 +109,17 @@ export function createMockClientFactory(
   };
 }
 
-/** Create a minimal BrokerCoreConfig for testing. */
+/** Create a minimal SignetCoreConfig for testing. */
 export function createTestConfig(
-  overrides?: Partial<BrokerCoreConfig>,
-): BrokerCoreConfig {
+  overrides?: Partial<SignetCoreConfig>,
+): SignetCoreConfig {
   return {
     dataDir: ":memory:",
     env: "dev",
     identityMode: "per-group",
     heartbeatIntervalMs: 30_000,
     syncTimeoutMs: 30_000,
-    appVersion: "xmtp-broker/test",
+    appVersion: "xmtp-signet/test",
     ...overrides,
   };
 }

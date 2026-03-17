@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import type { z } from "zod";
-import { createKeyManager, type KeyManager } from "@xmtp-broker/keys";
+import { createKeyManager, type KeyManager } from "@xmtp/signet-keys";
 import {
   AuthError,
   InternalError,
   ValidationError,
-  type BrokerError,
-} from "@xmtp-broker/schemas";
+  type SignetError,
+} from "@xmtp/signet-schemas";
 import type { AdminClient } from "../admin/client.js";
 import { createAdminClient } from "../admin/client.js";
 import { loadConfig } from "../config/loader.js";
@@ -23,7 +23,7 @@ export interface DaemonCommandDeps {
   readonly resolvePaths: typeof resolvePaths;
   readonly createKeyManager: (
     config: Parameters<typeof createKeyManager>[0],
-  ) => Promise<Result<RpcKeyManager, BrokerError>>;
+  ) => Promise<Result<RpcKeyManager, SignetError>>;
   readonly createAdminClient: (socketPath: string) => AdminClient;
 }
 
@@ -36,8 +36,8 @@ export type WithDaemonClient = <T>(
   run: (
     client: AdminClient,
     context: DaemonCommandContext,
-  ) => Promise<Result<T, BrokerError>>,
-) => Promise<Result<T, BrokerError>>;
+  ) => Promise<Result<T, SignetError>>,
+) => Promise<Result<T, SignetError>>;
 
 const defaultDeps: DaemonCommandDeps = {
   loadConfig,
@@ -63,8 +63,8 @@ export function createWithDaemonClient(
     run: (
       client: AdminClient,
       context: DaemonCommandContext,
-    ) => Promise<Result<T, BrokerError>>,
-  ): Promise<Result<T, BrokerError>> => {
+    ) => Promise<Result<T, SignetError>>,
+  ): Promise<Result<T, SignetError>> => {
     const configResult = await resolvedDeps.loadConfig(
       options.configPath !== undefined
         ? { configPath: options.configPath }
@@ -104,8 +104,8 @@ async function runWithKeyManager<T>(
   run: (
     client: AdminClient,
     context: DaemonCommandContext,
-  ) => Promise<Result<T, BrokerError>>,
-): Promise<Result<T, BrokerError>> {
+  ) => Promise<Result<T, SignetError>>,
+): Promise<Result<T, SignetError>> {
   const client = makeClient(paths.adminSocket);
 
   try {
@@ -117,7 +117,7 @@ async function runWithKeyManager<T>(
     if (!keyManager.admin.exists()) {
       return Result.err(
         AuthError.create(
-          "No admin key found. Run 'xmtp-broker identity init' first.",
+          "No admin key found. Run 'xmtp-signet identity init' first.",
         ),
       );
     }
@@ -143,7 +143,7 @@ export async function parseJsonInput<T>(
   value: string,
   field: string,
   schema: z.ZodType<T>,
-): Promise<Result<T, BrokerError>> {
+): Promise<Result<T, SignetError>> {
   let rawText: string;
   try {
     rawText = await readInputValue(value);

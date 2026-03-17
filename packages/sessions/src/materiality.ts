@@ -7,8 +7,8 @@
  * in-place).
  */
 
-import type { ViewConfig, GrantConfig, ViewMode } from "@xmtp-broker/schemas";
-import type { MaterialityCheck } from "@xmtp-broker/contracts";
+import type { ViewConfig, GrantConfig, ViewMode } from "@xmtp/signet-schemas";
+import type { MaterialityCheck } from "@xmtp/signet-contracts";
 
 /** Extended materiality result with changed field names for diagnostics. */
 export interface DetailedMaterialityCheck extends MaterialityCheck {

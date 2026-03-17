@@ -3,9 +3,9 @@ import { Result } from "better-result";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdir, rm } from "node:fs/promises";
-import { InternalError } from "@xmtp-broker/schemas";
-import type { CoreState } from "@xmtp-broker/contracts";
-import { createBrokerRuntime, type BrokerRuntimeDeps } from "../runtime.js";
+import { InternalError } from "@xmtp/signet-schemas";
+import type { CoreState } from "@xmtp/signet-contracts";
+import { createSignetRuntime, type SignetRuntimeDeps } from "../runtime.js";
 import { CliConfigSchema, type CliConfig } from "../config/schema.js";
 
 // ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ function makeConfig(
   overrides?: { env?: "local" | "dev" | "production" },
 ): CliConfig {
   return CliConfigSchema.parse({
-    broker: { dataDir: join(tempDir, "data"), env: overrides?.env },
+    signet: { dataDir: join(tempDir, "data"), env: overrides?.env },
     admin: { socketPath: join(tempDir, "admin.sock") },
     logging: { auditLogPath: join(tempDir, "audit.jsonl") },
   });
@@ -47,11 +47,11 @@ function makeMockDeps(
   tracker: { calls: string[]; record(name: string): void },
   options?: {
     coreInitializeResult?: () => Promise<
-      Result<void, import("@xmtp-broker/schemas").BrokerError>
+      Result<void, import("@xmtp/signet-schemas").SignetError>
     >;
     coreStateGetter?: () => CoreState;
   },
-): BrokerRuntimeDeps {
+): SignetRuntimeDeps {
   let coreState: CoreState = "uninitialized";
 
   return {
@@ -126,20 +126,20 @@ function makeMockDeps(
         signWithOperationalKey: async () => Result.ok(new Uint8Array()),
       });
     },
-    createBrokerCore: () => {
-      tracker.record("brokerCore.create");
+    createSignetCore: () => {
+      tracker.record("signetCore.create");
       return {
         get state() {
           if (options?.coreStateGetter) return options.coreStateGetter();
           return coreState;
         },
         initializeLocal: async () => {
-          tracker.record("brokerCore.initializeLocal");
+          tracker.record("signetCore.initializeLocal");
           coreState = "ready-local";
           return Result.ok(undefined);
         },
         initialize: async () => {
-          tracker.record("brokerCore.initialize");
+          tracker.record("signetCore.initialize");
           if (options?.coreInitializeResult) {
             return options.coreInitializeResult();
           }
@@ -147,7 +147,7 @@ function makeMockDeps(
           return Result.ok(undefined);
         },
         shutdown: async () => {
-          tracker.record("brokerCore.shutdown");
+          tracker.record("signetCore.shutdown");
           return Result.ok(undefined);
         },
         sendMessage: async () =>
@@ -179,8 +179,8 @@ function makeMockDeps(
         isActive: async () => Result.ok(false),
       };
     },
-    createAttestationManager: () => {
-      tracker.record("attestationManager.create");
+    createSealManager: () => {
+      tracker.record("sealManager.create");
       return {
         issue: async () => Result.err(InternalError.create("not impl")),
         refresh: async () => Result.err(InternalError.create("not impl")),
@@ -242,15 +242,15 @@ describe("network startup", () => {
     const config = makeConfig(tempDir, { env: "local" });
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
     const startResult = await result.value.start();
     expect(Result.isOk(startResult)).toBe(true);
     expect(result.value.state).toBe("running");
-    expect(tracker.calls).not.toContain("brokerCore.initialize");
-    expect(tracker.calls).toContain("brokerCore.initializeLocal");
+    expect(tracker.calls).not.toContain("signetCore.initialize");
+    expect(tracker.calls).toContain("signetCore.initializeLocal");
   });
 
   test("calls core.initialize() when env is dev", async () => {
@@ -258,14 +258,14 @@ describe("network startup", () => {
     const config = makeConfig(tempDir, { env: "dev" });
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
     const startResult = await result.value.start();
     expect(Result.isOk(startResult)).toBe(true);
     expect(result.value.state).toBe("running");
-    expect(tracker.calls).toContain("brokerCore.initialize");
+    expect(tracker.calls).toContain("signetCore.initialize");
   });
 
   test("continues running when core.initialize() fails (graceful degradation)", async () => {
@@ -277,14 +277,14 @@ describe("network startup", () => {
       coreStateGetter: () => "ready-local",
     });
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
     const startResult = await result.value.start();
     expect(Result.isOk(startResult)).toBe(true);
     expect(result.value.state).toBe("running");
-    expect(tracker.calls).toContain("brokerCore.initialize");
+    expect(tracker.calls).toContain("signetCore.initialize");
   });
 });
 
@@ -309,7 +309,7 @@ describe("status networkState field", () => {
     const config = makeConfig(tempDir, { env: "dev" });
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 
@@ -326,7 +326,7 @@ describe("status networkState field", () => {
     const config = makeConfig(tempDir, { env: "local" });
     const deps = makeMockDeps(tracker);
 
-    const result = await createBrokerRuntime(config, deps);
+    const result = await createSignetRuntime(config, deps);
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) return;
 

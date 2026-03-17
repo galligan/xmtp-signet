@@ -3,7 +3,7 @@ import { VerificationRequestSchema } from "../schemas/request.js";
 import { createTestVerificationRequest } from "./fixtures.js";
 
 describe("VerificationRequestSchema", () => {
-  test("accepts a valid request with attestation", () => {
+  test("accepts a valid request with seal", () => {
     const request = createTestVerificationRequest();
     const result = VerificationRequestSchema.safeParse(request);
     expect(result.success).toBe(true);
@@ -11,7 +11,7 @@ describe("VerificationRequestSchema", () => {
 
   test("accepts a valid request with null optional fields", () => {
     const request = createTestVerificationRequest({
-      attestation: null,
+      seal: null,
       groupId: null,
       buildProvenanceBundle: null,
       releaseTag: null,

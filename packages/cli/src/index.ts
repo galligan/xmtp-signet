@@ -1,31 +1,33 @@
 /**
- * CLI package for xmtp-broker. Provides the `xmtp-broker` command,
+ * CLI package for xmtp-signet. Provides the `xmtp-signet` (alias `xs`) command,
  * daemon lifecycle, admin socket client/server, configuration loading,
  * and direct-mode fallback.
  * @module
  */
 
 import { Command } from "commander";
-import { createBrokerCommands } from "./commands/broker.js";
+import { createLifecycleCommands } from "./commands/lifecycle.js";
 import { createIdentityCommands } from "./commands/identity.js";
 import { createSessionCommands } from "./commands/session.js";
 import { createGrantCommands } from "./commands/grant.js";
-import { createAttestationCommands } from "./commands/attestation.js";
+import { createSealCommands } from "./commands/seal.js";
 import { createMessageCommands } from "./commands/message.js";
 import { createConversationCommands } from "./commands/conversation.js";
 import { createAdminCommands } from "./commands/admin.js";
 
 const program: Command = new Command()
-  .name("xmtp-broker")
+  .name("xmtp-signet")
+  .alias("xs")
   .version("0.1.0")
-  .description("Agent broker for XMTP");
+  .description("Agent signet for XMTP");
 
-// Wire all command groups
-program.addCommand(createBrokerCommands());
+for (const command of createLifecycleCommands()) {
+  program.addCommand(command);
+}
 program.addCommand(createIdentityCommands());
 program.addCommand(createSessionCommands());
 program.addCommand(createGrantCommands());
-program.addCommand(createAttestationCommands());
+program.addCommand(createSealCommands());
 program.addCommand(createMessageCommands());
 program.addCommand(createConversationCommands());
 program.addCommand(createAdminCommands());
@@ -72,11 +74,11 @@ export type {
   AdminAuthFrame,
 } from "./admin/protocol.js";
 
-export { createBrokerCommands } from "./commands/broker.js";
+export { createLifecycleCommands } from "./commands/lifecycle.js";
 export { createIdentityCommands } from "./commands/identity.js";
 export { createSessionCommands } from "./commands/session.js";
 export { createGrantCommands } from "./commands/grant.js";
-export { createAttestationCommands } from "./commands/attestation.js";
+export { createSealCommands } from "./commands/seal.js";
 export { createMessageCommands } from "./commands/message.js";
 export { createConversationCommands } from "./commands/conversation.js";
 export type { ConversationCommandDeps } from "./commands/conversation.js";

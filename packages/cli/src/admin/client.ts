@@ -11,8 +11,8 @@ import {
   TimeoutError,
   ValidationError,
   type ActionError,
-  type BrokerError,
-} from "@xmtp-broker/schemas";
+  type SignetError,
+} from "@xmtp/signet-schemas";
 import { JSON_RPC_ERRORS } from "./protocol.js";
 
 /**
@@ -27,7 +27,7 @@ export interface AdminClient {
   request<T>(
     method: string,
     params?: Record<string, unknown>,
-  ): Promise<Result<T, BrokerError>>;
+  ): Promise<Result<T, SignetError>>;
 
   /** Close the underlying socket connection. */
   close(): Promise<void>;
@@ -35,7 +35,7 @@ export interface AdminClient {
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
-  reject: (error: BrokerError) => void;
+  reject: (error: SignetError) => void;
 };
 
 type SocketHandle = {
@@ -47,7 +47,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isBrokerError(value: unknown): value is BrokerError {
+function isSignetError(value: unknown): value is SignetError {
   return (
     isRecord(value) &&
     typeof value["_tag"] === "string" &&
@@ -57,7 +57,7 @@ function isBrokerError(value: unknown): value is BrokerError {
   );
 }
 
-function toBrokerErrorFromActionError(error: ActionError): BrokerError {
+function toSignetErrorFromActionError(error: ActionError): SignetError {
   const context = error.context ?? undefined;
 
   switch (error._tag) {
@@ -136,11 +136,11 @@ function toBrokerErrorFromActionError(error: ActionError): BrokerError {
   }
 }
 
-function toBrokerErrorFromJsonRpc(error: {
+function toSignetErrorFromJsonRpc(error: {
   code: number;
   message: string;
   data?: unknown;
-}): BrokerError {
+}): SignetError {
   if (
     isRecord(error.data) &&
     typeof error.data["_tag"] === "string" &&
@@ -150,7 +150,7 @@ function toBrokerErrorFromJsonRpc(error: {
       ? error.data["context"] === null || isRecord(error.data["context"])
       : true)
   ) {
-    return toBrokerErrorFromActionError({
+    return toSignetErrorFromActionError({
       _tag: error.data["_tag"],
       category: error.data["category"] as ActionError["category"],
       message: error.data["message"],
@@ -178,8 +178,8 @@ function toBrokerErrorFromJsonRpc(error: {
   }
 }
 
-function normalizeUnknownError(error: unknown): BrokerError {
-  if (isBrokerError(error)) {
+function normalizeUnknownError(error: unknown): SignetError {
+  if (isSignetError(error)) {
     return error;
   }
   if (error instanceof Error) {
@@ -198,7 +198,7 @@ export function createAdminClient(socketPath: string): AdminClient {
   let buffer = "";
   const pending = new Map<string, PendingRequest>();
 
-  function rejectAll(error: BrokerError): void {
+  function rejectAll(error: SignetError): void {
     for (const request of pending.values()) {
       request.reject(error);
     }
@@ -239,7 +239,7 @@ export function createAdminClient(socketPath: string): AdminClient {
       if (authRequest !== undefined) {
         pending.delete("auth");
         authRequest.reject(
-          toBrokerErrorFromJsonRpc({
+          toSignetErrorFromJsonRpc({
             code:
               typeof parsed["error"]["code"] === "number"
                 ? parsed["error"]["code"]
@@ -267,7 +267,7 @@ export function createAdminClient(socketPath: string): AdminClient {
 
     if (isRecord(parsed["error"])) {
       pendingRequest.reject(
-        toBrokerErrorFromJsonRpc({
+        toSignetErrorFromJsonRpc({
           code:
             typeof parsed["error"]["code"] === "number"
               ? parsed["error"]["code"]
@@ -293,7 +293,7 @@ export function createAdminClient(socketPath: string): AdminClient {
         const authPromise = new Promise<void>((resolve, reject) => {
           pending.set("auth", {
             resolve: resolve as (value: unknown) => void,
-            reject: reject as (error: BrokerError) => void,
+            reject: reject as (error: SignetError) => void,
           });
         });
 
@@ -350,13 +350,13 @@ export function createAdminClient(socketPath: string): AdminClient {
           socket = undefined;
         }
 
-        const brokerError = normalizeUnknownError(error);
-        if (brokerError.category === "auth") {
-          return Result.err(AuthError.create(brokerError.message));
+        const signetError = normalizeUnknownError(error);
+        if (signetError.category === "auth") {
+          return Result.err(AuthError.create(signetError.message));
         }
         return Result.err(
           InternalError.create("Failed to connect to admin socket", {
-            cause: brokerError.message,
+            cause: signetError.message,
           }),
         );
       }
@@ -365,7 +365,7 @@ export function createAdminClient(socketPath: string): AdminClient {
     async request<T>(
       method: string,
       params?: Record<string, unknown>,
-    ): Promise<Result<T, BrokerError>> {
+    ): Promise<Result<T, SignetError>> {
       if (socket === undefined) {
         return Result.err(
           InternalError.create("Not connected to admin socket"),
@@ -378,7 +378,7 @@ export function createAdminClient(socketPath: string): AdminClient {
         const responsePromise = new Promise<unknown>((resolve, reject) => {
           pending.set(String(id), {
             resolve,
-            reject: reject as (error: BrokerError) => void,
+            reject: reject as (error: SignetError) => void,
           });
         });
 
@@ -410,7 +410,7 @@ export function createAdminClient(socketPath: string): AdminClient {
           typeof response["error"]["message"] === "string"
         ) {
           return Result.err(
-            toBrokerErrorFromActionError({
+            toSignetErrorFromActionError({
               _tag: response["error"]["_tag"],
               category: response["error"][
                 "category"

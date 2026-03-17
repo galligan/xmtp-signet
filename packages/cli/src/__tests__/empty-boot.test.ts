@@ -4,7 +4,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { createBrokerRuntime } from "../runtime.js";
+import { createSignetRuntime } from "../runtime.js";
 import { createProductionDeps } from "../start.js";
 import { loadConfig } from "../config/loader.js";
 import { resolvePaths } from "../config/paths.js";
@@ -43,7 +43,7 @@ async function createTempConfig(rootDir: string): Promise<{
   await writeFile(
     configPath,
     [
-      "[broker]",
+      "[signet]",
       `dataDir = "${dataDir}"`,
       "",
       "[ws]",
@@ -76,7 +76,7 @@ afterEach(async () => {
 
 let testCounter = 0;
 
-describe("empty-dir broker boot", () => {
+describe("empty-dir signet boot", () => {
   test("runtime starts from an empty dir without creating admin or operational keys", async () => {
     testCounter += 1;
     const rootDir = join(tmpdir(), `xbe-${Date.now()}-${testCounter}`);
@@ -100,7 +100,7 @@ describe("empty-dir broker boot", () => {
       await mkdir(dir, { recursive: true });
     }
 
-    const runtimeResult = await createBrokerRuntime(
+    const runtimeResult = await createSignetRuntime(
       configResult.value,
       createProductionDeps(),
     );

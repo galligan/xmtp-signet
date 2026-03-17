@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Ok } from "better-result";
 import { z } from "zod";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import { createActionRegistry } from "../action-registry.js";
 import type { ActionSpec, CliSurface, McpSurface } from "../action-spec.js";
 import type { HandlerContext } from "../handler-types.js";
@@ -14,7 +14,7 @@ const testCliSurface: CliSurface = {
 
 /** Minimal MCP surface for testing. */
 const testMcpSurface: McpSurface = {
-  toolName: "broker/test/run",
+  toolName: "signet/test/run",
   description: "A test tool",
   readOnly: true,
 };
@@ -23,7 +23,7 @@ const testMcpSurface: McpSurface = {
 function createTestSpec(
   id: string,
   surfaces?: { cli?: CliSurface; mcp?: McpSurface },
-): ActionSpec<unknown, unknown, BrokerError> {
+): ActionSpec<unknown, unknown, SignetError> {
   return {
     id,
     handler: (_input: unknown, _ctx: HandlerContext) =>
@@ -72,7 +72,7 @@ describe("ActionRegistry", () => {
 
   it("filters by mcp surface", () => {
     const registry = createActionRegistry();
-    const cliOnly = createTestSpec("broker.stop", {
+    const cliOnly = createTestSpec("signet.stop", {
       cli: testCliSurface,
     });
     const mcpOnly = createTestSpec("message.list", {
@@ -94,7 +94,7 @@ describe("ActionRegistry", () => {
 
   it("filters by cli surface", () => {
     const registry = createActionRegistry();
-    const cliOnly = createTestSpec("broker.stop", {
+    const cliOnly = createTestSpec("signet.stop", {
       cli: testCliSurface,
     });
     const mcpOnly = createTestSpec("message.list", {

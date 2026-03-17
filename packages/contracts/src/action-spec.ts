@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { BrokerError } from "@xmtp-broker/schemas";
+import type { SignetError } from "@xmtp/signet-schemas";
 import type { Handler } from "./handler-types.js";
 
 /**
@@ -57,8 +57,8 @@ export interface CliSurface {
  */
 export interface McpSurface {
   /**
-   * MCP tool name. Convention: `broker/{group}/{action}`
-   * (e.g., `broker/session/list`).
+   * MCP tool name. Convention: `signet/{group}/{action}`
+   * (e.g., `signet/session/list`).
    */
   readonly toolName: string;
 
@@ -89,7 +89,7 @@ export interface McpSurface {
 export interface ActionSpec<
   TInput,
   TOutput,
-  TError extends BrokerError = BrokerError,
+  TError extends SignetError = SignetError,
 > {
   /** Unique action identifier. Convention: `{domain}.{verb}` (e.g., `session.list`). */
   readonly id: string;

@@ -1,0 +1,29 @@
+{
+  "name": "@xmtp/signet-seals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun && tsc --declaration --emitDeclarationOnly --outDir ./dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-policy": "workspace:*",
+    "@xmtp/signet-schemas": "workspace:*",
+    "better-result": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "bun-types": "catalog:",
+    "typescript": "catalog:"
+  }
+}

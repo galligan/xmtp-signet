@@ -2,9 +2,9 @@ import type { Result } from "better-result";
 import type {
   HarnessRequest,
   RequestResponse,
-  BrokerError,
-} from "@xmtp-broker/schemas";
-import type { SessionRecord } from "@xmtp-broker/contracts";
+  SignetError,
+} from "@xmtp/signet-schemas";
+import type { SessionRecord } from "@xmtp/signet-contracts";
 
 /**
  * Callback to handle a validated harness request.
@@ -14,7 +14,7 @@ import type { SessionRecord } from "@xmtp-broker/contracts";
 export type RequestHandler = (
   request: HarnessRequest,
   session: SessionRecord,
-) => Promise<Result<unknown, BrokerError>>;
+) => Promise<Result<unknown, SignetError>>;
 
 /**
  * Routes a parsed request through the handler and converts
