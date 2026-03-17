@@ -83,7 +83,9 @@ bun run test
 
 ### Run the broker
 
-## Status
+```bash
+# Initialize an identity on devnet
+bun run packages/cli/src/bin.ts identity init --env dev --label my-agent
 
 # Start the daemon
 bun run packages/cli/src/bin.ts broker start
