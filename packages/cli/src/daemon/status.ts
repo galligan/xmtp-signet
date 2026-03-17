@@ -56,7 +56,7 @@ export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
     identityMode: z
       .enum(["per-group", "shared"])
       .describe("Identity isolation strategy"),
-    wsPort: z.number().int().positive().describe("WebSocket server port"),
+    wsPort: z.number().int().nonnegative().describe("WebSocket server port"),
     version: z.string().describe("Broker version string"),
     identityCount: z
       .number()

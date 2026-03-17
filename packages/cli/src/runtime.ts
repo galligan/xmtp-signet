@@ -79,6 +79,9 @@ export interface BrokerRuntimeDeps {
   /** Optional factory for conversation action specs, wired in production by start.ts. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createConversationActions?: () => ActionSpec<any, any, BrokerError>[];
+
+  /** Optional callback to list registered identities with their inbox IDs. */
+  listIdentities?: () => Promise<readonly { inboxId: string | null }[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +239,9 @@ export async function createBrokerRuntime(
     },
 
     async status(): Promise<DaemonStatus> {
+      const identitySnapshot = deps.listIdentities
+        ? await deps.listIdentities()
+        : [];
       const sessionsResult = await sessionManager.list();
       const daemonStatusState: DaemonStatus["state"] =
         currentState === "running" || currentState === "draining"
@@ -255,9 +261,11 @@ export async function createBrokerRuntime(
         identityMode: config.broker.identityMode,
         wsPort: config.ws.port,
         version: "0.1.0",
-        identityCount: 0,
+        identityCount: identitySnapshot.length,
         networkState: core.state === "ready" ? "connected" : "disconnected",
-        connectedInboxIds: [],
+        connectedInboxIds: identitySnapshot
+          .map((i) => i.inboxId)
+          .filter((id): id is string => id !== null),
       };
     },
 

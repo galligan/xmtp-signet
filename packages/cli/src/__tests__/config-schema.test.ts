@@ -57,9 +57,16 @@ describe("CliConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("rejects zero ws port", () => {
+  test("accepts zero ws port for dynamic allocation", () => {
     const result = CliConfigSchema.safeParse({
       ws: { port: 0 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("rejects negative ws port", () => {
+    const result = CliConfigSchema.safeParse({
+      ws: { port: -1 },
     });
     expect(result.success).toBe(false);
   });

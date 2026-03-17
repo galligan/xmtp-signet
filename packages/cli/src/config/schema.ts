@@ -136,9 +136,9 @@ export const CliConfigSchema: z.ZodType<
       port: z
         .number()
         .int()
-        .positive()
+        .nonnegative()
         .default(8393)
-        .describe("WebSocket server port"),
+        .describe("WebSocket server port (0 for dynamic allocation)"),
       host: z
         .string()
         .default("127.0.0.1")

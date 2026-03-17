@@ -1,9 +1,9 @@
 # Phase 2C Execution Plan — Real XMTP Network
 
-**Version:** 2.0
+**Version:** 3.0
 **Created:** 2026-03-16
 **Updated:** 2026-03-16
-**Status:** Ready to execute
+**Status:** Revised after production tracer bullet discovery
 **Prerequisite:** Phase 2B complete (tracer bullet passes in local mode)
 
 ## Overview
@@ -27,11 +27,21 @@ This proves:
 4. Message delivery through the network
 5. Stream-based message reception
 
-Then Phase 2C goes further: a production tracer bullet where the broker
-creates a group, generates a joinable QR code in the terminal, and an
-external XMTP app (e.g., Convos) joins the conversation. This proves the
-broker can interoperate with the real-world XMTP ecosystem, not just talk
-to itself.
+Then Phase 2C goes further with two real-world conversation flows:
+
+**Flow A — "Join my chat" (user invites broker):** The user creates a
+conversation in Convos, shares an invite link. The broker parses the Convos
+invite tag, creates an identity, and joins via the Convos protocol.
+
+**Flow B — "Join the agent's chat" (broker invites user):** The broker
+creates a group, generates a Convos-compatible invite URL, and renders it
+as a QR code in the terminal. The user scans it in Convos to join.
+
+Both flows were discovered during the production tracer bullet when we
+found that Convos users don't have visible inbox IDs — they share invite
+links (`popup.convos.org/v2?i=<base64url-protobuf>`). The original plan
+assumed the broker would add users by inbox ID, which doesn't match real
+Convos UX.
 
 ### Design Principles
 
@@ -54,14 +64,33 @@ maps directly to the broker's `per-group` identity mode.
 
 ```text
 v0/tracer-bullet-skill (current top)
-  +-- v0/identity-registration    Step 1: register identities with XMTP network
-       +-- v0/core-network-start  Step 2: broker start with real SDK clients
-            +-- v0/conversation-commands  Step 3: create/list/info group commands
-                 +-- v0/dev-tracer-bullet  Step 4: dual-identity dev-network tracer
-                      +-- v0/prod-tracer-bullet  Step 5: production + external client join + QR codes
+  +-- v0/identity-registration      Step 1: register identities with XMTP network
+       +-- v0/core-network-start    Step 2: broker start with real SDK clients
+            +-- v0/conversation-commands  Step 3a: create/list/info group commands
+                 +-- v0/convos-join  Step 3b: parse Convos invite + join protocol (Flow A)
+                      +-- v0/convos-invite  Step 3c: generate Convos-compatible invite (Flow B)
+                           +-- v0/dev-tracer-bullet  Step 4: dual-identity dev-network tracer
+                                +-- v0/prod-tracer-bullet  Step 5: production tracer (direct inbox ID)
+                                     +-- v0/convos-tracer  Step 6: Convos interop tracer (invite flows)
 ```
 
 Each branch = one commit. One commit per PR.
+
+## What's Already Proven
+
+Steps 1-2 and the dev network tracer have been validated:
+
+| What | Status | Evidence |
+|------|--------|----------|
+| Identity registration (dev) | PASS | Two identities with distinct inbox IDs on devnet |
+| Identity registration (prod) | PASS | Inbox `c41d9d16...` on production network |
+| Core network startup | PASS | `networkState: "connected"`, `identityCount: 2` |
+| Group creation (dev) | PASS | Group created, both members added |
+| Message delivery (dev) | PASS | `messageId: c0ffb42a...` returned, real network delivery |
+| Session + WS harness (dev) | PASS | Auth, scope enforcement, heartbeat all work |
+| Production daemon | PASS | Daemon starts, connects to production XMTP |
+
+Steps 3b, 3c, and 5 need implementation based on the Convos invite discovery.
 
 ---
 
@@ -902,6 +931,199 @@ mocked `BrokerCoreImpl` with mock `XmtpClient`:
 
 ---
 
+## Step 3b: Convos Join Protocol (Flow A — User Invites Broker)
+
+**Branch:** `v0/convos-join`
+**Scope:** `packages/core/`, `packages/cli/`
+**Estimated size:** ~350 LOC
+
+### Problem
+
+Convos users share invite links, not inbox IDs. The broker needs to parse
+a Convos invite URL (`popup.convos.org/v2?i=<base64url-protobuf>`) and
+follow the Convos join protocol to enter an existing conversation.
+
+Example invite URL from production:
+```
+https://popup.convos.org/v2?i=Cm8KPwET31HR_I4wpf7qBc3HSMjBTTUYUebjLSUMoR_IhzXE5o-XDwn13fgW1bRr8y-FD99rZjOVpur8-yS9SkDWAxIgPzfzZX5NcRK7Fk1inZn0GntX-a9UYLGGVQo5-6GUg5UaClpub0ZnbnBTcWgSQVIYxct-vKqL-1q7qRLplI-NdlAylAoINg6NzEpeL2hYCd470sEdotgkF08y2VX-WwaRr0hMTdYQh17ojgewVd4B
+```
+
+### Research Needed (Before Implementation)
+
+The exact invite tag format and join protocol must be extracted from the
+reference codebases. Key files to study:
+
+**`.reference/convos-node-sdk/`:**
+- `src/conversations/join.ts` — the full join flow
+- `src/identities.ts` — identity creation and invite tag storage
+- `src/client.ts` — how clients are created per-conversation
+- `src/conversations/create.ts` — how `appData.inviteTag` is set
+
+**`.reference/convos-cli/`:**
+- Look for `join` command and how it consumes invite URLs
+- How the CLI parses the `?i=` parameter
+
+Specific questions to answer:
+
+1. What is the protobuf schema for the invite tag? (or is it a different
+   binary format?)
+2. What fields does it contain? (creator inbox ID, group ID, encryption
+   key, nonce?)
+3. What is the DM-based join handshake? (joiner sends DM → creator adds
+   joiner → joiner verifies?)
+4. How does `disableDeviceSync: true` affect the join flow?
+5. Is the join protocol symmetric (both sides use same SDK methods)?
+
+### Anticipated Changes
+
+**`packages/core/src/convos/invite-parser.ts`** — New file. Parse Convos
+invite URLs:
+
+```typescript
+export interface ConvosInvite {
+  readonly raw: string;           // original URL
+  readonly inviteTag: Uint8Array; // decoded binary tag
+  readonly creatorInboxId: string;
+  readonly groupId?: string;      // if embedded in tag
+  // ... other fields TBD from research
+}
+
+export function parseConvosInviteUrl(
+  url: string,
+): Result<ConvosInvite, BrokerError>
+```
+
+**`packages/core/src/convos/join.ts`** — New file. Join protocol:
+
+```typescript
+export interface JoinConversationDeps {
+  readonly identityStore: SqliteIdentityStore;
+  readonly clientFactory: XmtpClientFactory;
+  readonly signerProviderFactory: SignerProviderFactory;
+  readonly config: Pick<BrokerCoreConfig, "dataDir" | "env" | "appVersion">;
+}
+
+export interface JoinResult {
+  readonly identityId: string;
+  readonly inboxId: string;
+  readonly groupId: string;
+  readonly memberCount: number;
+}
+
+/**
+ * Join a Convos conversation via invite URL.
+ *
+ * 1. Parse invite tag from URL
+ * 2. Create new broker identity for this conversation
+ * 3. Send DM to creator's inbox (join request)
+ * 4. Poll until creator adds broker to the group
+ * 5. Verify invite tag matches group's appData
+ * 6. Return joined group info
+ */
+export async function joinConversation(
+  deps: JoinConversationDeps,
+  inviteUrl: string,
+  options?: { label?: string; timeoutMs?: number },
+): Promise<Result<JoinResult, BrokerError>>
+```
+
+**`packages/cli/src/commands/conversation.ts`** — Add `conversation join`:
+
+```
+conversation join <invite-url> [--label <name>] [--config <path>] [--json] [--timeout <seconds>]
+```
+
+This is a daemon-bound command (needs running broker with network access).
+The join may take several seconds as it waits for the creator to add the
+broker.
+
+### Key Decision: Per-Conversation Identity
+
+Following the Convos pattern (ADR 002), the broker creates a **new identity
+for each conversation it joins**. This means:
+
+- Each joined conversation gets its own wallet address, DB, and SDK client
+- The creator sees a unique inbox ID for the broker in each group
+- Identity isolation prevents cross-conversation correlation
+
+This aligns with the broker's existing `per-group` identity mode and the
+`IdentityStore.create(groupId)` method.
+
+**Success gate:** `conversation join <convos-invite-url>` parses the invite,
+creates a broker identity, follows the join protocol, and the broker appears
+as a member in the Convos conversation. The user sees the broker in their
+Convos app.
+
+---
+
+## Step 3c: Convos-Compatible Invite Generation (Flow B — Broker Invites User)
+
+**Branch:** `v0/convos-invite`
+**Scope:** `packages/core/`, `packages/cli/`
+**Estimated size:** ~250 LOC
+
+### Problem
+
+When the broker creates a group and wants a Convos user to join, it needs
+to generate an invite URL in the same format that Convos understands:
+`popup.convos.org/v2?i=<base64url-protobuf>`.
+
+### Research Needed (Before Implementation)
+
+From `.reference/convos-node-sdk/`:
+
+- `src/conversations/create.ts` — how the invite tag is generated at group
+  creation time
+- How `appData.inviteTag` is set on the group
+- The exact binary encoding of the invite tag
+
+### Anticipated Changes
+
+**`packages/core/src/convos/invite-generator.ts`** — New file. Generate
+Convos-compatible invite URLs:
+
+```typescript
+export interface GenerateInviteInput {
+  readonly groupId: string;
+  readonly creatorInboxId: string;
+  // ... other fields TBD from research
+}
+
+export function generateConvosInviteUrl(
+  input: GenerateInviteInput,
+): Result<string, BrokerError>
+```
+
+**`packages/cli/src/invite/qr.ts`** — Terminal QR renderer (already planned):
+
+```typescript
+import QRCode from "qrcode";
+
+export async function renderQrToTerminal(data: string): Promise<string> {
+  return QRCode.toString(data, {
+    type: "terminal",
+    errorCorrectionLevel: "M",
+    margin: 1,
+  });
+}
+```
+
+**`packages/cli/src/commands/conversation.ts`** — Update `conversation invite`
+to generate Convos-compatible URLs and render as QR:
+
+```
+conversation invite <group-id> [--as <label>] [--config <path>] [--format link|qr|both] [--json]
+```
+
+Output: a `popup.convos.org/v2?i=...` URL that Convos can open, rendered
+as a scannable QR code in the terminal.
+
+**Success gate:** `conversation invite <group-id>` generates a valid
+Convos invite URL. Scanning the terminal QR code in Convos opens the
+join flow and the user successfully joins the broker's group.
+
+---
+
 ## Step 4: Dev Network Tracer Bullet
 
 **Branch:** `v0/dev-tracer-bullet`
@@ -1250,6 +1472,94 @@ reply is received by the broker's event stream.
 
 ---
 
+## Step 6: Convos Tracer Bullet
+
+**Branch:** `v0/convos-tracer`
+**Scope:** `.claude/skills/tracer-bullet/`, `packages/cli/`
+**Estimated size:** ~150 LOC (tracer story + skill update)
+**Depends on:** Steps 3b and 3c (Convos join + invite generation)
+
+### Problem
+
+The production tracer (Step 5) uses direct inbox IDs, which works for
+SDK-to-SDK testing but doesn't match how real Convos users interact. This
+tracer proves both Convos conversation flows end-to-end on production.
+
+### Two Sub-Stories
+
+#### Story A: "Join my chat" (user invites broker)
+
+```
+ 1. Create test environment (config with env: "production", temp dirs)
+ 2. identity init --env production --label convos-joiner --config {config} --json
+ 3. broker start --config {config} --json (background)
+ 4. Wait for daemon ready + core state "running"
+ 5. PAUSE: Operator shares a Convos invite link
+    → Use AskUserQuestion: "Paste a Convos invite URL (popup.convos.org/v2?i=...)"
+ 6. conversation join {invite_url} --label convos-joiner --config {config} --json
+    → Broker parses invite, creates per-conversation identity, follows join protocol
+    → Operator sees the broker appear as a new member in Convos
+ 7. session issue --config {config} --agent {joiner_inbox_id} --view @{view} --grant @{grant} --json
+    (view scoped to the joined group)
+ 8. Connect WebSocket with session token
+ 9. Send send_message "Hello from the broker!" to the joined group
+    → Operator sees the message in Convos
+10. PAUSE: Operator sends a reply
+    → Poll WS event stream until message from non-broker inbox arrives (120s timeout)
+11. Verify: broker received the external message
+12. broker stop --config {config} --json
+13. Verify: clean shutdown
+```
+
+#### Story B: "Join the agent's chat" (broker invites user)
+
+```
+ 1. Create test environment (config with env: "production", temp dirs)
+ 2. identity init --env production --label convos-host --config {config} --json
+ 3. broker start --config {config} --json (background)
+ 4. Wait for daemon ready + core state "running"
+ 5. conversation create --name "broker-hosted-{date}" --config {config} --json
+    → Broker creates an empty group (creator only)
+ 6. conversation invite {group_id} --format both --config {config}
+    → Generates Convos-compatible invite URL (popup.convos.org/v2?i=...)
+    → Renders QR code in terminal
+    → Prints: "Scan with Convos to join this conversation"
+ 7. PAUSE: Operator scans QR or opens invite link in Convos
+    → Poll conversation members until member count > 1 (120s timeout)
+ 8. Verify: operator appears as group member
+ 9. session issue --config {config} --agent {host_inbox_id} --view @{view} --grant @{grant} --json
+10. Connect WebSocket with session token
+11. Send send_message "Welcome! You joined the broker's chat." to the group
+    → Operator sees the message in Convos
+12. PAUSE: Operator sends a reply
+    → Poll until message from non-broker inbox arrives (120s timeout)
+13. Verify: broker received the external message
+14. broker stop --config {config} --json
+15. Verify: clean shutdown
+```
+
+### Tracer Bullet Skill Update
+
+Add to the story picker in `.claude/skills/tracer-bullet/SKILL.md`:
+
+| Option | Story | Needs |
+|--------|-------|-------|
+| **Convos: join** | Operator shares Convos invite → broker joins → exchange messages | Production + Convos app |
+| **Convos: host** | Broker creates group → QR code → operator joins from Convos → exchange messages | Production + Convos app |
+| **Convos: both** | Run join then host in sequence | Production + Convos app |
+
+Both stories are interactive (require operator with Convos). Timeouts are
+120 seconds per pause. Stories report "timed out waiting for operator"
+rather than failing if the operator doesn't participate.
+
+**Success gate:**
+- Story A: Broker joins a Convos-created conversation via invite URL and
+  exchanges messages with the operator.
+- Story B: Operator joins a broker-created conversation via QR code and
+  exchanges messages with the broker.
+
+---
+
 ## Key Design Decisions
 
 ### Registration happens during `identity init`, not lazily
@@ -1300,10 +1610,13 @@ will be available via MCP when the MCP transport is wired.
 | 1 | `core/src/identity-registration.ts`, `core/src/__tests__/identity-registration.test.ts` | `core/src/identity-store.ts`, `cli/src/commands/identity.ts` |
 | 2 | `cli/src/__tests__/network-startup.test.ts` | `cli/src/runtime.ts`, `cli/src/daemon/status.ts`, `cli/src/start.ts` |
 | 3 | `core/src/conversation-actions.ts`, `core/src/__tests__/conversation-actions.test.ts` | `core/src/xmtp-client-factory.ts`, `core/src/sdk/sdk-client.ts`, `cli/src/commands/conversation.ts`, `cli/src/runtime.ts` |
+| 3b | `core/src/convos/invite-parser.ts`, `core/src/convos/join.ts`, `core/src/__tests__/convos-join.test.ts` | `cli/src/commands/conversation.ts` |
+| 3c | `core/src/convos/invite-generator.ts`, `cli/src/invite/qr.ts`, `core/src/__tests__/convos-invite.test.ts` | `cli/src/commands/conversation.ts`, `cli/package.json` |
 | 4 | `cli/src/__tests__/dev-network.test.ts` | `.claude/skills/tracer-bullet/SKILL.md` |
-| 5 | `cli/src/invite/qr.ts` | `cli/src/commands/conversation.ts`, `.claude/skills/tracer-bullet/SKILL.md`, `cli/package.json` |
+| 5 | — | `cli/src/commands/conversation.ts`, `.claude/skills/tracer-bullet/SKILL.md` |
+| 6 | — | `.claude/skills/tracer-bullet/SKILL.md` |
 
-**Total:** ~1150 LOC across 5 steps.
+**Total:** ~1900 LOC across 8 steps (6 numbered, 3a/3b/3c as sub-steps).
 
 ## Gotchas
 

@@ -297,5 +297,10 @@ export function createProductionDeps(): BrokerRuntimeDeps {
         config: coreImplRef.config,
       });
     },
+
+    async listIdentities() {
+      if (coreImplRef === null) return [];
+      return coreImplRef.identityStore.list();
+    },
   };
 }

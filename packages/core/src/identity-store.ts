@@ -64,12 +64,17 @@ export class SqliteIdentityStore {
       )
     `);
 
-    // Safe migration: add label column if upgrading from older schema
+    // Safe migration: add label column if upgrading from older schema.
+    // SQLite ALTER TABLE cannot add a column with UNIQUE constraint directly,
+    // so we add the column first, then create a unique index separately.
     const cols = this.#db
       .prepare("PRAGMA table_info(identities)")
       .all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "label")) {
-      this.#db.run("ALTER TABLE identities ADD COLUMN label TEXT UNIQUE");
+      this.#db.run("ALTER TABLE identities ADD COLUMN label TEXT");
+      this.#db.run(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_label ON identities(label)",
+      );
     }
   }
 

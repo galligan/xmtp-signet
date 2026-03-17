@@ -321,6 +321,23 @@ describe("Phase 2B smoke tests", () => {
       "permission",
     );
 
+    // Out-of-scope group: session view only includes group-1
+    ws.send(
+      JSON.stringify({
+        type: "send_message",
+        requestId: "req-out-of-scope",
+        groupId: "group-not-in-view",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "should be denied" },
+      }),
+    );
+
+    const outOfScope = (await nextMessage(ws)) as Record<string, unknown>;
+    expect(outOfScope["ok"]).toBe(false);
+    expect((outOfScope["error"] as Record<string, unknown>)["category"]).toBe(
+      "permission",
+    );
+
     ws.send(
       JSON.stringify({
         type: "send_message",

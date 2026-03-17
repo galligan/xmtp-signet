@@ -18,8 +18,18 @@ If the user doesn't specify which tracer bullet to run, use `AskUserQuestion` to
 | **WebSocket harness** | (after admin flow) connect WS with session token → denied send → allowed send → disconnect | Session token |
 | **Full journey** | All of the above in sequence | Nothing |
 | **Dev network** | dual-identity init → broker start → create group → session issue → WS send → receive → stop | Network access |
+| **Production** | identity init (prod) → broker start → create group → invite QR → operator joins → exchange messages → stop | Network + external XMTP app |
 
-If the user says "all" or "full", run them in order. Each story is independent — earlier stories create state that later ones consume.
+If the user says "all" or "full", run the local stories (Admin flow → Empty-dir boot → WebSocket harness) in order. Dev network and Production are separate — they require network access and are opt-in.
+
+If the user picks **Dev network** or **Production**, also ask which XMTP environment to use:
+
+| Option | Environment | When to use |
+|--------|-------------|-------------|
+| **Dev** (Recommended) | `--env dev` | Testing and development. Creates ephemeral identities on devnet. |
+| **Production** | `--env production` | Real-world interop. Identities persist. Use with caution. |
+
+For the Production story, always use `--env production`. For Dev network, default to `--env dev` but allow the operator to override to production if they want to test real-world delivery without the interactive QR flow.
 
 ## Test environment
 
@@ -206,4 +216,29 @@ port = 0
 data_dir = "{test_dir}/data"
 runtime_dir = "{test_dir}/runtime"
 state_dir = "{test_dir}/state"
+```
+
+### Production
+
+```
+ 1. Create test environment (config with env: "production", temp dirs)
+ 2. identity init --env production --label broker-agent --config {config} --json
+ 3. broker start --config {config} --json (background)
+ 4. Wait for daemon ready + core state "running"
+ 5. PAUSE: Ask operator for their XMTP inbox ID (displayed in their app)
+    → Or the operator can provide an Ethereum address for lookup
+ 6. conversation create --name "broker-test-{date}" --members {operator_inbox_id} --as broker-agent --config {config} --json
+    → Creates group with both broker and operator as members
+ 7. conversation invite {group_id} --format both --config {config}
+    → Displays QR code and group info
+    → Operator sees the group appear in their XMTP app automatically
+ 8. session issue --config {config} --agent {broker_inbox_id} --view @{view} --grant @{grant} --json
+ 9. Connect WebSocket with session token
+10. Send send_message "Hello from the broker!" to the group
+    → Operator sees the message in their XMTP app
+11. PAUSE: Operator sends a reply from their XMTP app
+    → Poll broker status or WS event stream until message from non-broker inbox arrives (120s timeout)
+12. Verify: broker received the external message via event stream
+13. broker stop --config {config} --json
+14. Verify: clean shutdown
 ```
