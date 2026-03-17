@@ -41,6 +41,7 @@ export interface AdminAuthContext {
   readonly expiresAt: string;
 }
 
+/** Supported admin authentication methods. Currently only JWT. */
 export type AdminAuthMethod = "jwt";
 
 /** Options for signing an admin JWT. */
@@ -60,17 +61,31 @@ const ADMIN_META_KEY = "admin-key:meta";
 // AdminKeyManager
 // ---------------------------------------------------------------------------
 
+/** Manages Ed25519 admin key lifecycle: generation, rotation, JWT signing/verification. */
 export interface AdminKeyManager {
+  /** Generate and store a new admin key pair. Fails if one already exists. */
   create(): Promise<Result<AdminKeyRecord, InternalError>>;
+
+  /** Retrieve the current admin key metadata from the vault. */
   get(): Promise<Result<AdminKeyRecord, NotFoundError | InternalError>>;
+
+  /** Whether an admin key exists in the vault (synchronous, cached check). */
   exists(): boolean;
+
+  /** Replace the current admin key with a freshly generated pair. */
   rotate(): Promise<Result<AdminKeyRecord, InternalError | NotFoundError>>;
+
+  /** Sign a short-lived admin JWT using the stored private key. */
   signJwt(
     options?: AdminJwtOptions,
   ): Promise<Result<string, InternalError | NotFoundError | ValidationError>>;
+
+  /** Verify an admin JWT against the stored public key. */
   verifyJwt(
     token: string,
   ): Promise<Result<AdminJwtPayload, AuthError | ValidationError>>;
+
+  /** Export the admin public key as a hex string. */
   exportPublicKey(): Promise<Result<string, NotFoundError | InternalError>>;
 }
 

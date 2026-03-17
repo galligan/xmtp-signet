@@ -1,3 +1,9 @@
+/**
+ * MCP transport adapter. Exposes broker ActionSpecs as session-scoped
+ * MCP tools via the Model Context Protocol SDK.
+ * @module
+ */
+
 // Configuration
 export { McpServerConfigSchema, type McpServerConfig } from "./config.js";
 

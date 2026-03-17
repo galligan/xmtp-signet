@@ -4,6 +4,7 @@ import { ErrorCategory as ErrorCategorySchema } from "../errors/category.js";
 
 // -- ActionResultMeta --
 
+/** Response metadata present on every ActionResult envelope. */
 export type ActionResultMeta = {
   requestId: string;
   timestamp: string;
@@ -33,6 +34,7 @@ export const ActionResultMetaSchema: z.ZodType<ActionResultMeta> =
 
 // -- ActionError --
 
+/** Error detail in a failed ActionResult. Serializable subset of BrokerError. */
 export type ActionError = {
   _tag: string;
   category: ErrorCategory;
@@ -62,6 +64,7 @@ export const ActionErrorSchema: z.ZodType<ActionError> = _ActionErrorSchema;
 
 // -- Pagination --
 
+/** Pagination metadata for list operations. */
 export type Pagination = {
   count: number;
   hasMore: boolean;
@@ -120,6 +123,7 @@ export function ActionResultSchema<T extends z.ZodType>(
 
 // -- ActionErrorResultSchema --
 
+/** A failed ActionResult envelope with error detail and metadata. */
 export type ActionErrorResult = {
   ok: false;
   error: ActionError;

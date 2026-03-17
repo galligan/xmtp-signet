@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // -- Admin server config --
 
+/** Configuration for the admin Unix socket server. */
 export type AdminServerConfig = {
   socketPath?: string | undefined;
   authMode: "admin-key";
@@ -23,13 +24,17 @@ export const AdminServerConfigSchema: z.ZodType<
   AdminServerConfigInput
 > = z
   .object({
-    socketPath: z.string().optional(),
-    authMode: z.literal("admin-key").default("admin-key"),
+    socketPath: z.string().optional().describe("Unix socket path override"),
+    authMode: z
+      .literal("admin-key")
+      .default("admin-key")
+      .describe("Authentication mode for admin connections"),
   })
   .default({});
 
 // -- CLI config --
 
+/** Top-level CLI configuration. Parsed from TOML with env var overrides. */
 export type CliConfig = {
   broker: {
     env: "local" | "dev" | "production";
@@ -103,39 +108,76 @@ export const CliConfigSchema: z.ZodType<
 > = z.object({
   broker: z
     .object({
-      env: z.enum(["local", "dev", "production"]).default("dev"),
-      identityMode: z.enum(["per-group", "shared"]).default("per-group"),
-      dataDir: z.string().optional(),
+      env: z
+        .enum(["local", "dev", "production"])
+        .default("dev")
+        .describe("XMTP network environment"),
+      identityMode: z
+        .enum(["per-group", "shared"])
+        .default("per-group")
+        .describe("Identity isolation strategy"),
+      dataDir: z.string().optional().describe("Data directory override"),
     })
     .default({}),
   keys: z
     .object({
       rootKeyPolicy: z
         .enum(["biometric", "passcode", "open"])
-        .default("biometric"),
+        .default("biometric")
+        .describe("Protection level for the root key"),
       operationalKeyPolicy: z
         .enum(["biometric", "passcode", "open"])
-        .default("open"),
+        .default("open")
+        .describe("Protection level for operational keys"),
     })
     .default({}),
   ws: z
     .object({
-      port: z.number().int().positive().default(8393),
-      host: z.string().default("127.0.0.1"),
+      port: z
+        .number()
+        .int()
+        .positive()
+        .default(8393)
+        .describe("WebSocket server port"),
+      host: z
+        .string()
+        .default("127.0.0.1")
+        .describe("WebSocket server bind address"),
     })
     .default({}),
   admin: AdminServerConfigSchema,
   sessions: z
     .object({
-      defaultTtlSeconds: z.number().int().positive().default(3600),
-      maxConcurrentPerAgent: z.number().int().positive().default(3),
-      heartbeatIntervalSeconds: z.number().int().positive().default(30),
+      defaultTtlSeconds: z
+        .number()
+        .int()
+        .positive()
+        .default(3600)
+        .describe("Default session TTL in seconds"),
+      maxConcurrentPerAgent: z
+        .number()
+        .int()
+        .positive()
+        .default(3)
+        .describe("Maximum concurrent sessions per agent"),
+      heartbeatIntervalSeconds: z
+        .number()
+        .int()
+        .positive()
+        .default(30)
+        .describe("Heartbeat interval in seconds"),
     })
     .default({}),
   logging: z
     .object({
-      level: z.enum(["debug", "info", "warn", "error"]).default("info"),
-      auditLogPath: z.string().optional(),
+      level: z
+        .enum(["debug", "info", "warn", "error"])
+        .default("info")
+        .describe("Log level"),
+      auditLogPath: z
+        .string()
+        .optional()
+        .describe("Audit log file path override"),
     })
     .default({}),
 });

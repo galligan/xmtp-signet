@@ -20,11 +20,16 @@ import { JSON_RPC_ERRORS } from "./protocol.js";
  * Sends an auth frame first, then JSON-RPC 2.0 requests.
  */
 export interface AdminClient {
+  /** Connect to the admin socket and authenticate with a JWT. */
   connect(token: string): Promise<Result<void, AuthError | InternalError>>;
+
+  /** Send a JSON-RPC 2.0 request and return the typed result. */
   request<T>(
     method: string,
     params?: Record<string, unknown>,
   ): Promise<Result<T, BrokerError>>;
+
+  /** Close the underlying socket connection. */
   close(): Promise<void>;
 }
 

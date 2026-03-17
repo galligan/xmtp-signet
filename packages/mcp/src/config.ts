@@ -39,4 +39,5 @@ export const McpServerConfigSchema: z.ZodObject<{
     .describe("Timeout for handler execution"),
 });
 
+/** Parsed MCP server configuration. */
 export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;

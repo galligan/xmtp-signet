@@ -1,3 +1,10 @@
+/**
+ * CLI package for xmtp-broker. Provides the `xmtp-broker` command,
+ * daemon lifecycle, admin socket client/server, configuration loading,
+ * and direct-mode fallback.
+ * @module
+ */
+
 import { Command } from "commander";
 import { createBrokerCommands } from "./commands/broker.js";
 import { createIdentityCommands } from "./commands/identity.js";
