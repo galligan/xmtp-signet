@@ -59,6 +59,11 @@
     "packages/policy": {
       "name": "@xmtp-broker/policy",
       "version": "0.0.0",
+      "dependencies": {
+        "@xmtp-broker/contracts": "workspace:*",
+        "@xmtp-broker/schemas": "workspace:*",
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "bun-types": "catalog:",
         "typescript": "catalog:",
