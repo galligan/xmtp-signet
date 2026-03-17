@@ -25,7 +25,9 @@ import {
   createSessionService,
 } from "@xmtp/signet-sessions";
 import { createSealManager as createSealManagerImpl } from "@xmtp/signet-seals";
+import { createSealPublisher } from "@xmtp/signet-seals";
 import type { InputResolver } from "@xmtp/signet-seals";
+import { createSealStamper as createKeysSealStamper } from "@xmtp/signet-keys";
 import {
   createWsServer as createWsServerImpl,
   type WsServer,
@@ -183,51 +185,93 @@ export function createProductionDeps(): SignetRuntimeDeps {
       });
     },
 
-    createSealManager(_deps: unknown) {
-      // The runtime passes {} for deps. The real seal manager needs
-      // signer, publisher, and resolveInput. For the initial startup
-      // these are stubs -- seal operations happen later when sessions
-      // are created and groups are joined.
-      const stubSigner: import("@xmtp/signet-contracts").SealStamper = {
-        async sign(_seal) {
+    createSealManager(deps: unknown) {
+      const d = deps as {
+        core: SignetCore;
+        keyManager: KeyManager;
+        sessionManager: import("@xmtp/signet-contracts").SessionManager;
+      };
+
+      // Dynamic stamper: resolves the signing identity from the seal
+      // payload. The key manager stores operational keys under the internal
+      // identityId, not the XMTP inboxId, so we resolve via the identity store.
+      async function resolveIdentityId(
+        inboxId: string,
+      ): Promise<Result<string, SignetError>> {
+        if (!coreImplRef) {
           return Result.err(
-            InternalError.create("SealStamper not wired -- no sessions active"),
+            InternalError.create("Core not initialized -- cannot resolve identity"),
           );
+        }
+        const identity =
+          await coreImplRef.identityStore.getByInboxId(inboxId);
+        if (!identity) {
+          return Result.err(
+            InternalError.create(
+              `No identity found for inboxId: ${inboxId}`,
+            ),
+          );
+        }
+        return Result.ok(identity.id);
+      }
+
+      const signer: import("@xmtp/signet-contracts").SealStamper = {
+        async sign(seal) {
+          if (keyManagerRef === null) {
+            return Result.err(
+              InternalError.create(
+                "KeyManager not initialized -- cannot sign seal",
+              ),
+            );
+          }
+          const idResult = await resolveIdentityId(seal.agentInboxId);
+          if (Result.isError(idResult)) return idResult;
+          const stamper = createKeysSealStamper(
+            keyManagerRef,
+            idResult.value,
+          );
+          return stamper.sign(seal);
         },
-        async signRevocation(_revocation) {
-          return Result.err(
-            InternalError.create("SealStamper not wired -- no sessions active"),
+        async signRevocation(revocation) {
+          if (keyManagerRef === null) {
+            return Result.err(
+              InternalError.create(
+                "KeyManager not initialized -- cannot sign revocation",
+              ),
+            );
+          }
+          const idResult = await resolveIdentityId(revocation.agentInboxId);
+          if (Result.isError(idResult)) return idResult;
+          const stamper = createKeysSealStamper(
+            keyManagerRef,
+            idResult.value,
           );
+          return stamper.signRevocation(revocation);
         },
       };
 
-      const stubPublisher: import("@xmtp/signet-contracts").SealPublisher = {
-        async publish(_groupId, _signed) {
-          return Result.err(
-            InternalError.create(
-              "SealPublisher not wired -- no sessions active",
-            ),
-          );
-        },
-        async publishRevocation(_groupId, _signed) {
-          return Result.err(
-            InternalError.create(
-              "SealPublisher not wired -- no sessions active",
-            ),
-          );
-        },
-      };
+      // Real publisher backed by core.sendMessage
+      const publisher = createSealPublisher({
+        sendMessage: (groupId, contentType, content) =>
+          d.core.sendMessage(groupId, contentType, content),
+      });
 
-      const stubResolver: InputResolver = async (_sessionId, _groupId) => {
+      // InputResolver stub: translating session policy into SealInput
+      // requires aggregating fields from the session record, config,
+      // and key manager that don't have a mapping layer yet. This will
+      // be wired when the full seal issuance flow is exercised.
+      const resolveInput: InputResolver = async (_sessionId, _groupId) => {
         return Result.err(
-          InternalError.create("InputResolver not wired -- no sessions active"),
+          InternalError.create(
+            "InputResolver not yet wired -- session-to-seal-input mapping pending",
+          ),
         );
       };
 
       return createSealManagerImpl({
-        signer: stubSigner,
-        publisher: stubPublisher,
-        resolveInput: stubResolver,
+        signer,
+        publisher,
+        resolveInput,
       });
     },
 
