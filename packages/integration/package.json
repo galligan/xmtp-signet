@@ -1,0 +1,26 @@
+{
+  "name": "@xmtp-broker/integration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src/"
+  },
+  "dependencies": {
+    "@xmtp-broker/attestations": "workspace:*",
+    "@xmtp-broker/contracts": "workspace:*",
+    "@xmtp-broker/core": "workspace:*",
+    "@xmtp-broker/keys": "workspace:*",
+    "@xmtp-broker/policy": "workspace:*",
+    "@xmtp-broker/schemas": "workspace:*",
+    "@xmtp-broker/sessions": "workspace:*",
+    "@xmtp-broker/ws": "workspace:*",
+    "better-result": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "bun-types": "catalog:",
+    "typescript": "catalog:"
+  }
+}
