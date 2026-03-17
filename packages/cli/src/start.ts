@@ -37,6 +37,7 @@ import type { AdminServerConfig } from "./config/schema.js";
 import type { SignetRuntimeDeps } from "./runtime.js";
 import { createWsRequestHandler } from "./ws/request-handler.js";
 import { createLazyCoreUpgrade } from "./ws/core-upgrade.js";
+import { createEventProjector } from "./ws/event-projector.js";
 
 /** Map SignetCoreImpl states to the contract's CoreState. */
 function mapSignetState(state: SignetState): CoreState {
@@ -247,6 +248,13 @@ export function createProductionDeps(): SignetRuntimeDeps {
         sessionManager: d.sessionManager,
       });
 
+      const projector = createEventProjector({
+        getRevealState(sessionId: string) {
+          const result = d.sessionManager.getRevealState(sessionId);
+          return Result.isOk(result) ? result.value : null;
+        },
+      });
+
       const wsDeps: WsServerDeps = {
         core: d.core,
         sessionManager: d.sessionManager,
@@ -255,6 +263,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
           return d.sessionManager.lookupByToken(token);
         },
         requestHandler,
+        projectEvent: projector,
       };
 
       return createWsServerImpl(cfg, wsDeps);
