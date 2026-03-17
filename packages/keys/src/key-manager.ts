@@ -20,6 +20,7 @@ import {
   createSessionKeyManager,
   type SessionKeyManager,
 } from "./session-key.js";
+import { createAdminKeyManager, type AdminKeyManager } from "./admin-key.js";
 import { initializeRootKey } from "./root-key.js";
 import type { RootKeyHandle, OperationalKey, SessionKey } from "./types.js";
 
@@ -28,6 +29,9 @@ export interface KeyManager {
 
   readonly platform: PlatformCapability;
   readonly trustTier: TrustTier;
+
+  /** Access admin key operations. */
+  readonly admin: AdminKeyManager;
 
   createOperationalKey(
     identityId: string,
@@ -114,6 +118,7 @@ export async function createKeyManager(
 
   const opKeys: OperationalKeyManager = createOperationalKeyManager(vault);
   const sessionKeys: SessionKeyManager = createSessionKeyManager();
+  const adminKeys: AdminKeyManager = createAdminKeyManager(vault);
 
   let rootKeyHandle: RootKeyHandle | null = null;
 
@@ -124,6 +129,10 @@ export async function createKeyManager(
 
     get trustTier(): TrustTier {
       return trustTier;
+    },
+
+    get admin(): AdminKeyManager {
+      return adminKeys;
     },
 
     async initialize(): Promise<
