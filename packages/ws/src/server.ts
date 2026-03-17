@@ -9,6 +9,7 @@ import {
 import type {
   SignetCore,
   SessionManager,
+  SessionRecord,
   SealManager,
 } from "@xmtp/signet-contracts";
 import type { WsServerConfig } from "./config.js";
@@ -39,6 +40,11 @@ export interface WsServerDeps {
   readonly sealManager: SealManager;
   readonly tokenLookup: TokenLookup;
   readonly requestHandler: RequestHandler;
+  /** Optional event projector for view-mode filtering before broadcast. */
+  readonly projectEvent?: (
+    event: SignetEvent,
+    session: SessionRecord,
+  ) => SignetEvent | null;
 }
 
 export interface WsServer {
@@ -386,7 +392,19 @@ export function createWsServer(
     const connections = registry.getBySessionId(sessionId);
     for (const ws of connections) {
       if (ws.data.phase === "active") {
-        sendSequenced(ws, event);
+        const session = ws.data.sessionRecord;
+        if (!session) continue;
+
+        // Skip non-active sessions (will be closed on next request)
+        if (session.state !== "active") continue;
+
+        if (deps.projectEvent) {
+          const projected = deps.projectEvent(event, session);
+          if (projected === null) continue;
+          sendSequenced(ws, projected);
+        } else {
+          sendSequenced(ws, event);
+        }
       }
     }
   }
