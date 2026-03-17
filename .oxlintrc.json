@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "ignorePatterns": [
+    "node_modules/**",
+    "dist/**",
+    ".turbo/**",
+    ".reference/**",
+    "*.gen.ts"
+  ]
+}
