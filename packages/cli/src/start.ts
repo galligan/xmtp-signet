@@ -15,6 +15,7 @@ import {
   BrokerCoreImpl,
   BrokerCoreConfigSchema,
   createSdkClientFactory,
+  createConversationActions,
   type BrokerState,
   type SignerProviderFactory,
 } from "@xmtp-broker/core";
@@ -65,8 +66,9 @@ function mapBrokerState(state: BrokerState): CoreState {
  * to the concrete types each package expects.
  */
 export function createProductionDeps(): BrokerRuntimeDeps {
-  // Hold a reference so the WS factory can build a SignerProviderFactory
+  // Hold references so downstream factories can access shared instances
   let keyManagerRef: KeyManager | null = null;
+  let coreImplRef: BrokerCoreImpl | null = null;
 
   return {
     async createKeyManager(
@@ -126,6 +128,7 @@ export function createProductionDeps(): BrokerRuntimeDeps {
         signerProviderFactory,
         clientFactory,
       );
+      coreImplRef = impl;
 
       // Adapt BrokerCoreImpl (start/stop) to BrokerCore contract
       // (initialize/shutdown) with state name mapping
@@ -266,6 +269,33 @@ export function createProductionDeps(): BrokerRuntimeDeps {
       const cfg = config as AdminServerConfig;
       const d = deps as AdminServerDeps;
       return createAdminServerImpl(cfg, d);
+    },
+
+    createConversationActions() {
+      if (coreImplRef === null) {
+        throw new Error(
+          "BrokerCoreImpl not initialized before conversation actions",
+        );
+      }
+      if (keyManagerRef === null) {
+        throw new Error(
+          "KeyManager not initialized before conversation actions",
+        );
+      }
+      const km = keyManagerRef;
+      const signerProviderFactory: SignerProviderFactory = (
+        identityId: string,
+      ) => createSignerProvider(km, identityId);
+
+      return createConversationActions({
+        identityStore: coreImplRef.identityStore,
+        getManagedClient: (id) => coreImplRef!.getManagedClient(id),
+        getGroupInfo: (groupId: string) =>
+          coreImplRef!.context.getGroupInfo(groupId),
+        clientFactory: createSdkClientFactory(),
+        signerProviderFactory,
+        config: coreImplRef.config,
+      });
     },
   };
 }

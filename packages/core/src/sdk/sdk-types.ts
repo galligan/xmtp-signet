@@ -78,6 +78,10 @@ export interface SdkConversationsShape {
   getConversationById(id: string): Promise<SdkGroupShape | undefined>;
   list(options?: unknown): Promise<SdkGroupShape[]>;
   listGroups(options?: unknown): SdkGroupShape[];
+  createGroup(
+    inboxIds: string[],
+    options?: { name?: string },
+  ): Promise<SdkGroupShape>;
   sync(): Promise<void>;
   syncAll(consentStates?: unknown[]): Promise<{ numConversations: number }>;
   stream(options?: unknown): Promise<SdkAsyncStreamProxyShape<SdkGroupShape>>;

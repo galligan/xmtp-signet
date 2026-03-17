@@ -79,6 +79,7 @@ export { createGrantCommands } from "./commands/grant.js";
 export { createAttestationCommands } from "./commands/attestation.js";
 export { createMessageCommands } from "./commands/message.js";
 export { createConversationCommands } from "./commands/conversation.js";
+export type { ConversationCommandDeps } from "./commands/conversation.js";
 export { createAdminCommands } from "./commands/admin.js";
 
 export { exitCodeFromCategory, EXIT_SUCCESS } from "./output/exit-codes.js";

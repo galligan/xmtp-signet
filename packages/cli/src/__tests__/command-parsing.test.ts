@@ -188,16 +188,35 @@ describe("conversation commands", () => {
     expect(names).toContain("add-member");
   });
 
-  test("list has --limit option", () => {
+  test("list has --as, --config, and --json options", () => {
     const list = findSubcommand(cmd, "list");
     expect(list).toBeDefined();
-    expect(hasOption(list!, "--limit")).toBe(true);
+    expect(hasOption(list!, "--as")).toBe(true);
+    expect(hasOption(list!, "--config")).toBe(true);
+    expect(hasOption(list!, "--json")).toBe(true);
   });
 
-  test("create has --members option", () => {
+  test("create has --name, --members, --as, --config options", () => {
     const create = findSubcommand(cmd, "create");
     expect(create).toBeDefined();
+    expect(hasOption(create!, "--name")).toBe(true);
     expect(hasOption(create!, "--members")).toBe(true);
+    expect(hasOption(create!, "--as")).toBe(true);
+    expect(hasOption(create!, "--config")).toBe(true);
+  });
+
+  test("info has --config and --json options", () => {
+    const info = findSubcommand(cmd, "info");
+    expect(info).toBeDefined();
+    expect(hasOption(info!, "--config")).toBe(true);
+    expect(hasOption(info!, "--json")).toBe(true);
+  });
+
+  test("add-member has --config and --json options", () => {
+    const addMember = findSubcommand(cmd, "add-member");
+    expect(addMember).toBeDefined();
+    expect(hasOption(addMember!, "--config")).toBe(true);
+    expect(hasOption(addMember!, "--json")).toBe(true);
   });
 });
 

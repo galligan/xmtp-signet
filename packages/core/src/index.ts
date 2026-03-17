@@ -57,6 +57,10 @@ export type {
   RegisteredIdentity,
 } from "./identity-registration.js";
 
+// Conversation actions
+export { createConversationActions } from "./conversation-actions.js";
+export type { ConversationActionDeps } from "./conversation-actions.js";
+
 // SDK integration (production XmtpClientFactory implementation)
 export {
   createSdkClientFactory,
