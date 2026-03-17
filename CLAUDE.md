@@ -4,7 +4,7 @@ An agent broker for XMTP. The broker is the real XMTP client; agent harnesses co
 
 ## Status
 
-Active development. Phase 2 (specs 10–15) implemented across 13 stacked PRs. CLI daemon runs (`broker start`), identity init and admin JWT generation work. Session issuance and WS harness wiring in progress (Phase 2B).
+Active development. Phase 2C complete across 38 stacked PRs, all review feedback addressed. CLI daemon with real XMTP network connectivity (devnet), Convos invite protocol, conversation management (create, list, info, join, invite, add-member, members). Tracer bullet validated end-to-end on devnet with QR code invite flow. Ready for merge to main.
 
 ## Project Structure
 

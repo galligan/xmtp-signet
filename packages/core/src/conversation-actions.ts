@@ -365,11 +365,96 @@ export function createConversationActions(
     },
   };
 
-  return [
-    widenActionSpec(create),
-    widenActionSpec(list),
-    widenActionSpec(info),
-    widenActionSpec(join),
-    widenActionSpec(invite),
-  ];
+  const addMember: ActionSpec<
+    {
+      groupId: string;
+      inboxId: string;
+      identityLabel?: string | undefined;
+    },
+    { groupId: string; memberCount: number },
+    BrokerError
+  > = {
+    id: "conversation.add-member",
+    input: z.object({
+      groupId: z.string(),
+      inboxId: z.string(),
+      identityLabel: z.string().optional(),
+    }),
+    handler: async (input) => {
+      const resolved = await resolveIdentity(
+        deps.identityStore,
+        input.identityLabel,
+      );
+      if (Result.isError(resolved)) return resolved;
+
+      const managed = deps.getManagedClient(resolved.value.identityId);
+      if (!managed) {
+        return Result.err(
+          NotFoundError.create(
+            "managed-client",
+            resolved.value.identityId,
+          ) as BrokerError,
+        );
+      }
+
+      const addResult = await managed.client.addMembers(input.groupId, [
+        input.inboxId,
+      ]);
+      if (Result.isError(addResult)) return addResult;
+
+      // Fetch updated group info for member count
+      const groupResult = await deps.getGroupInfo(input.groupId);
+      if (Result.isError(groupResult)) return groupResult;
+
+      return Result.ok({
+        groupId: input.groupId,
+        memberCount: groupResult.value.memberInboxIds.length,
+      });
+    },
+    cli: {
+      command: "conversation:add-member",
+      rpcMethod: "conversation.add-member",
+    },
+    mcp: {
+      toolName: "broker/conversation/add-member",
+      description: "Add a member to a group conversation",
+      readOnly: false,
+    },
+  };
+
+  const members: ActionSpec<
+    { groupId: string },
+    {
+      groupId: string;
+      members: readonly string[];
+      memberCount: number;
+    },
+    BrokerError
+  > = {
+    id: "conversation.members",
+    input: z.object({
+      groupId: z.string(),
+    }),
+    handler: async (input) => {
+      const groupResult = await deps.getGroupInfo(input.groupId);
+      if (Result.isError(groupResult)) return groupResult;
+
+      return Result.ok({
+        groupId: input.groupId,
+        members: groupResult.value.memberInboxIds,
+        memberCount: groupResult.value.memberInboxIds.length,
+      });
+    },
+    cli: {
+      command: "conversation:members",
+      rpcMethod: "conversation.members",
+    },
+    mcp: {
+      toolName: "broker/conversation/members",
+      description: "List members of a group conversation",
+      readOnly: true,
+    },
+  };
+
+  return [create, list, info, join, invite, addMember, members];
 }

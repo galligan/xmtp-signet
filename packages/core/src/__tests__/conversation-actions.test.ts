@@ -291,6 +291,147 @@ describe("conversation actions", () => {
     });
   });
 
+  describe("conversation.add-member", () => {
+    test("adds a member to a group and returns updated member count", async () => {
+      const testGroup: XmtpGroupInfo = {
+        groupId: "g-add",
+        name: "Add Test",
+        description: "",
+        memberInboxIds: ["inbox-owner"],
+        createdAt: new Date().toISOString(),
+      };
+      const managed = await seedIdentity("adder");
+      // Replace client with one that has the group and tracks addMembers
+      const addedMembers: string[] = [];
+      const client = createMockClient({
+        inboxId: managed.inboxId,
+        groups: [testGroup],
+      });
+      // Override addMembers to track calls and simulate adding
+      const trackedClient: XmtpClient = {
+        ...client,
+        addMembers: async (_groupId, inboxIds) => {
+          addedMembers.push(...inboxIds);
+          return Result.ok();
+        },
+        getGroupInfo: async (groupId) => {
+          if (groupId === "g-add") {
+            return Result.ok({
+              ...testGroup,
+              memberInboxIds: [...testGroup.memberInboxIds, ...addedMembers],
+            });
+          }
+          return Result.err(
+            NotFoundError.create("group", groupId) as BrokerError,
+          );
+        },
+      };
+      managedClients.set(managed.identityId, {
+        ...managed,
+        client: trackedClient,
+      });
+      setupDeps(async (groupId) => trackedClient.getGroupInfo(groupId));
+
+      const actions = createConversationActions(deps);
+      const addMemberAction = actions.find(
+        (a) => a.id === "conversation.add-member",
+      );
+      expect(addMemberAction).toBeDefined();
+
+      const result = await addMemberAction!.handler(
+        { groupId: "g-add", inboxId: "inbox-new-member" },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        const val = result.value as { groupId: string; memberCount: number };
+        expect(val.groupId).toBe("g-add");
+        expect(val.memberCount).toBe(2); // original + new
+      }
+      expect(addedMembers).toEqual(["inbox-new-member"]);
+    });
+
+    test("returns NotFoundError for unknown identity label", async () => {
+      setupDeps();
+
+      const actions = createConversationActions(deps);
+      const addMemberAction = actions.find(
+        (a) => a.id === "conversation.add-member",
+      );
+      expect(addMemberAction).toBeDefined();
+
+      const result = await addMemberAction!.handler(
+        {
+          groupId: "g1",
+          inboxId: "inbox-1",
+          identityLabel: "nonexistent",
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("not_found");
+      }
+    });
+  });
+
+  describe("conversation.members", () => {
+    test("returns member list for a group", async () => {
+      const testGroup: XmtpGroupInfo = {
+        groupId: "g-members",
+        name: "Members Test",
+        description: "",
+        memberInboxIds: ["inbox-a", "inbox-b", "inbox-c"],
+        createdAt: new Date().toISOString(),
+      };
+      setupDeps(async () => Result.ok(testGroup));
+
+      const actions = createConversationActions(deps);
+      const membersAction = actions.find(
+        (a) => a.id === "conversation.members",
+      );
+      expect(membersAction).toBeDefined();
+
+      const result = await membersAction!.handler(
+        { groupId: "g-members" },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        const val = result.value as {
+          groupId: string;
+          members: readonly string[];
+          memberCount: number;
+        };
+        expect(val.groupId).toBe("g-members");
+        expect(val.members).toEqual(["inbox-a", "inbox-b", "inbox-c"]);
+        expect(val.memberCount).toBe(3);
+      }
+    });
+
+    test("returns NotFoundError for unknown group", async () => {
+      setupDeps(); // default returns NotFoundError
+
+      const actions = createConversationActions(deps);
+      const membersAction = actions.find(
+        (a) => a.id === "conversation.members",
+      );
+
+      const result = await membersAction!.handler(
+        { groupId: "nonexistent" },
+        stubCtx(),
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("not_found");
+      }
+    });
+  });
+
   describe("conversation.list with first identity fallback", () => {
     test("uses first identity when no label is provided", async () => {
       const testGroups: XmtpGroupInfo[] = [

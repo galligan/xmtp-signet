@@ -100,6 +100,7 @@ export async function createBrokerRuntime(
 ): Promise<Result<BrokerRuntime, BrokerError>> {
   const paths = resolvePaths(config);
   let currentState: DaemonState = "created";
+  let boundWsPort: number = config.ws.port;
 
   // -- Step 1: Create KeyManager --
   const keyManagerResult = await deps.createKeyManager({
@@ -259,7 +260,7 @@ export async function createBrokerRuntime(
         activeConnections: wsServer.connectionCount,
         xmtpEnv: config.broker.env,
         identityMode: config.broker.identityMode,
-        wsPort: config.ws.port,
+        wsPort: boundWsPort,
         version: "0.1.0",
         identityCount: identitySnapshot.length,
         networkState: core.state === "ready" ? "connected" : "disconnected",
@@ -321,6 +322,7 @@ export async function createBrokerRuntime(
           await core.shutdown();
           return wsResult;
         }
+        boundWsPort = wsResult.value.port;
 
         // 4. Start admin server
         const adminResult = await adminServer.start();

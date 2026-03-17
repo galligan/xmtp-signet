@@ -388,6 +388,50 @@ describe("createBrokerRuntime", () => {
     expect(runtime.paths.auditLog).toBe(join(tempDir, "audit.jsonl"));
   });
 
+  test("status() reports actual bound port, not config port", async () => {
+    const tracker = createCallTracker();
+    // Config with port 0 (dynamic allocation)
+    const config = CliConfigSchema.parse({
+      broker: { dataDir: join(tempDir, "data") },
+      admin: { socketPath: join(tempDir, "admin.sock") },
+      logging: { auditLogPath: join(tempDir, "audit.jsonl") },
+      ws: { port: 0 },
+    });
+    const deps = makeMockDeps(tracker);
+    // Mock WS server returns port 9999 as the actual bound port
+    deps.createWsServer = () => {
+      tracker.record("wsServer.create");
+      return {
+        state: "idle" as const,
+        connectionCount: 0,
+        start: async () => {
+          tracker.record("wsServer.start");
+          return Result.ok({ port: 9999 });
+        },
+        stop: async () => {
+          tracker.record("wsServer.stop");
+          return Result.ok(undefined);
+        },
+        broadcast: () => {},
+      };
+    };
+
+    const result = await createBrokerRuntime(config, deps);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) return;
+    const runtime = result.value;
+
+    // Before start, status should report config port (0)
+    const preStatus = await runtime.status();
+    expect(preStatus.wsPort).toBe(0);
+
+    await runtime.start();
+
+    // After start, status should report the actual bound port
+    const postStatus = await runtime.status();
+    expect(postStatus.wsPort).toBe(9999);
+  });
+
   test("PID file written on start and cleaned on shutdown", async () => {
     const tracker = createCallTracker();
     const config = makeConfig(tempDir);
