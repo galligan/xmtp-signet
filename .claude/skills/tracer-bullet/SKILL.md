@@ -19,6 +19,9 @@ If the user doesn't specify which tracer bullet to run, use `AskUserQuestion` to
 | **Full journey** | All of the above in sequence | Nothing |
 | **Dev network** | dual-identity init → broker start → create group → session issue → WS send → receive → stop | Network access |
 | **Production** | identity init (prod) → broker start → create group → invite QR → operator joins → exchange messages → stop | Network + external XMTP app |
+| **Convos: join** | Operator shares Convos invite → broker joins via invite protocol → exchange messages | Production + Convos app |
+| **Convos: host** | Broker creates group → generates Convos invite URL + QR → operator joins from Convos → exchange messages | Production + Convos app |
+| **Convos: both** | Run join then host in sequence | Production + Convos app |
 
 If the user says "all" or "full", run the local stories (Admin flow → Empty-dir boot → WebSocket harness) in order. Dev network and Production are separate — they require network access and are opt-in.
 
@@ -242,3 +245,62 @@ state_dir = "{test_dir}/state"
 13. broker stop --config {config} --json
 14. Verify: clean shutdown
 ```
+
+### Convos: Join (User Invites Broker)
+
+Interactive story requiring an operator with the Convos app. The operator shares a Convos invite link, and the broker joins the conversation via the Convos join protocol.
+
+```
+ 1. Create test environment (config with env: "production", temp dirs)
+ 2. identity init --env production --label convos-joiner --config {config} --json
+ 3. broker start --config {config} --json (background)
+ 4. Wait for daemon ready + core state "running"
+ 5. PAUSE: Ask operator for a Convos invite URL
+    → Use AskUserQuestion: "Paste a Convos invite URL (popup.convos.org/v2?i=...)"
+ 6. conversation join {invite_url} --label convos-joiner --config {config} --json --timeout 120
+    → Broker parses invite, creates per-conversation identity, follows join protocol
+    → Operator sees the broker appear as a new member in Convos
+ 7. session issue --config {config} --agent {joiner_inbox_id} --view @{view} --grant @{grant} --json
+    (view scoped to the joined group)
+ 8. Connect WebSocket with session token
+ 9. Send send_message "Hello from the broker!" to the joined group
+    → Operator sees the message in Convos
+10. PAUSE: Operator sends a reply
+    → Poll WS event stream until message from non-broker inbox arrives (120s timeout)
+11. Verify: broker received the external message
+12. broker stop --config {config} --json
+13. Verify: clean shutdown
+```
+
+### Convos: Host (Broker Invites User)
+
+Interactive story requiring an operator with the Convos app. The broker creates a group, generates a Convos-compatible invite URL with QR code, and the operator scans it to join.
+
+```
+ 1. Create test environment (config with env: "production", temp dirs)
+ 2. identity init --env production --label convos-host --config {config} --json
+ 3. broker start --config {config} --json (background)
+ 4. Wait for daemon ready + core state "running"
+ 5. conversation create --name "broker-hosted-{date}" --as convos-host --config {config} --json
+    → Broker creates an empty group (creator only)
+ 6. conversation invite {group_id} --as convos-host --format both --config {config}
+    → Generates Convos-compatible invite URL (popup.convos.org/v2?i=...)
+    → Renders QR code in terminal
+    → Prints: "Scan with Convos to join this conversation"
+ 7. PAUSE: Operator scans QR or opens invite link in Convos
+    → Poll conversation members until member count > 1 (120s timeout)
+ 8. Verify: operator appears as group member
+ 9. session issue --config {config} --agent {host_inbox_id} --view @{view} --grant @{grant} --json
+10. Connect WebSocket with session token
+11. Send send_message "Welcome! You joined the broker's chat." to the group
+    → Operator sees the message in Convos
+12. PAUSE: Operator sends a reply
+    → Poll until message from non-broker inbox arrives (120s timeout)
+13. Verify: broker received the external message
+14. broker stop --config {config} --json
+15. Verify: clean shutdown
+```
+
+### Convos: Both
+
+Run Convos: Join followed by Convos: Host in sequence. Each gets its own test directory. Report combines both stories.
