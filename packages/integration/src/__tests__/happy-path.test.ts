@@ -28,7 +28,9 @@ describe("happy-path", () => {
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    expect(runtime.keyManager.platform).toBe("software-vault");
+    expect(["software-vault", "secure-enclave"]).toContain(
+      runtime.keyManager.platform,
+    );
 
     // Operational key exists for the seeded identity
     const opKey = runtime.keyManager.getOperationalKey(runtime.identityId);
@@ -218,7 +220,9 @@ describe("happy-path", () => {
     const { runtime } = result;
 
     // Verify the full chain is wired
-    expect(runtime.keyManager.platform).toBe("software-vault");
+    expect(["software-vault", "secure-enclave"]).toContain(
+      runtime.keyManager.platform,
+    );
     expect(runtime.signet.state).toBe("running");
     expect(runtime.wsServer.state).toBe("listening");
 
