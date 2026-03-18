@@ -97,4 +97,32 @@ describe("toDecodedMessage", () => {
     const mapped = toDecodedMessage(msg);
     expect(mapped.content).toBeNull();
   });
+
+  test("extracts threadId from Reply content with reference", () => {
+    const msg = createMockDecodedMessage({
+      content: { reference: "root-msg-42", content: "reply text" },
+    });
+    const mapped = toDecodedMessage(msg);
+    expect(mapped.threadId).toBe("root-msg-42");
+  });
+
+  test("threadId is null for non-reply content", () => {
+    const msg = createMockDecodedMessage({
+      content: { text: "hello" },
+    });
+    const mapped = toDecodedMessage(msg);
+    expect(mapped.threadId).toBeNull();
+  });
+
+  test("threadId is null for null content", () => {
+    const msg = { ...createMockDecodedMessage(), content: null };
+    const mapped = toDecodedMessage(msg);
+    expect(mapped.threadId).toBeNull();
+  });
+
+  test("threadId is null for string content", () => {
+    const msg = createMockDecodedMessage({ content: "plain text" });
+    const mapped = toDecodedMessage(msg);
+    expect(mapped.threadId).toBeNull();
+  });
 });
