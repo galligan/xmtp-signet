@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createKeyManager, type KeyManager } from "../key-manager.js";
+import { detectPlatform } from "../platform.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -26,12 +27,17 @@ describe("KeyManager", () => {
   });
 
   describe("initialize", () => {
-    test("detects platform as software-vault for v0", () => {
-      expect(manager.platform).toBe("software-vault");
+    test("detects platform matching detectPlatform()", () => {
+      const expected = detectPlatform();
+      expect(manager.platform).toBe(expected);
     });
 
-    test("maps software-vault to unverified trust tier", () => {
-      expect(manager.trustTier).toBe("unverified");
+    test("trust tier matches platform", () => {
+      if (manager.platform === "secure-enclave") {
+        expect(manager.trustTier).toBe("source-verified");
+      } else {
+        expect(manager.trustTier).toBe("unverified");
+      }
     });
 
     test("creates a root key handle on initialization", async () => {
@@ -40,7 +46,7 @@ describe("KeyManager", () => {
       if (Result.isError(result)) throw new Error("init failed");
       expect(result.value.keyRef).toBeDefined();
       expect(result.value.publicKey).toBeDefined();
-      expect(result.value.platform).toBe("software-vault");
+      expect(result.value.platform).toBe(detectPlatform());
     });
 
     test("returns existing root key on re-initialization", async () => {
