@@ -25,6 +25,8 @@ export type MessageEvent = {
   visibility: MessageVisibility;
   sentAt: string;
   sealId: string | null;
+  /** Thread anchor ID — derived from Reply referenceId. Null for non-reply messages. */
+  threadId: string | null;
 };
 
 const _MessageEvent = z
@@ -41,6 +43,12 @@ const _MessageEvent = z
       .string()
       .nullable()
       .describe("Seal ID if sent by a signet-managed agent, null otherwise"),
+    threadId: z
+      .string()
+      .nullable()
+      .describe(
+        "Thread anchor ID — derived from Reply referenceId. Null for non-reply messages",
+      ),
   })
   .describe("A message projected to the agent according to its view");
 

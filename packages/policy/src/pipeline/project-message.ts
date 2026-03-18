@@ -61,6 +61,7 @@ export function projectMessage(
     visibility,
     sentAt: message.sentAt,
     sealId: message.sealId,
+    threadId: message.threadId,
   };
 
   return { action: "emit", event };

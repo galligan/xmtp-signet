@@ -94,6 +94,8 @@ export interface XmtpDecodedMessage {
   readonly contentType: string;
   readonly content: unknown;
   readonly sentAt: string;
+  /** Thread anchor ID — derived from Reply content type referenceId. Null for non-reply messages. */
+  readonly threadId: string | null;
 }
 
 /** A group event from the XMTP stream. */

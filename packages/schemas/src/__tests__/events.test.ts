@@ -33,6 +33,7 @@ describe("MessageEvent", () => {
     visibility: "visible",
     sentAt: "2024-01-01T00:00:00Z",
     sealId: null,
+    threadId: null,
   };
 
   it("accepts valid message event", () => {
@@ -194,6 +195,7 @@ describe("SignetEvent discriminated union", () => {
         visibility: "visible",
         sentAt: "2024-01-01T00:00:00Z",
         sealId: null,
+        threadId: null,
       },
       { type: "seal.stamped", seal: validSeal },
       {

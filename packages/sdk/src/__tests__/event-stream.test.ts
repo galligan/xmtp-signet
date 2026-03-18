@@ -14,6 +14,7 @@ function makeEvent(text: string): SignetEvent {
     visibility: "visible",
     sentAt: "2024-01-01T00:00:00Z",
     sealId: null,
+    threadId: null,
   };
 }
 

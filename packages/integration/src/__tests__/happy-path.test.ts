@@ -107,6 +107,7 @@ describe("happy-path", () => {
       visibility: "visible",
       sentAt: new Date().toISOString(),
       sealId: null,
+      threadId: null,
     });
 
     const frame = (await client.nextMessage()) as Record<string, unknown>;
