@@ -4,6 +4,8 @@ import { createWsServer, type WsServer, type WsServerDeps } from "../server.js";
 import { SequencedFrame } from "../frames.js";
 import {
   createMockDeps,
+  createMockSessionManager,
+  makeSessionRecord,
   nextMessage,
   waitForClose,
   waitForOpen,
@@ -584,5 +586,143 @@ describe("Graceful shutdown", () => {
     await startServer();
     await server.stop();
     expect(server.state).toBe("stopped");
+  });
+});
+
+describe("Overlapping invalidations", () => {
+  afterEach(async () => {
+    if (server && server.state === "listening") {
+      await server.stop();
+    }
+  });
+
+  test("overlapping invalidations use the latest session snapshot", async () => {
+    // The first invalidation resolves slowly with a "full" view.
+    // The second invalidation resolves quickly with a narrower view.
+    // After both complete, broadcasts should use the narrower view.
+    let lookupCallCount = 0;
+
+    const fullRecord = makeSessionRecord({
+      view: {
+        mode: "full",
+        threadScopes: [{ groupId: "g1", threadId: null }],
+        contentTypes: ["xmtp.org/text:1.0", "xmtp.org/reaction:1.0"],
+      },
+    });
+
+    const narrowRecord = makeSessionRecord({
+      view: {
+        mode: "full",
+        threadScopes: [{ groupId: "g1", threadId: null }],
+        contentTypes: ["xmtp.org/text:1.0"],
+      },
+    });
+
+    const sessionManager = createMockSessionManager("valid_token", fullRecord);
+
+    // Override lookup to return different records with different delays
+    sessionManager.lookup = async (_sessionId: string) => {
+      lookupCallCount++;
+      const callNumber = lookupCallCount;
+      if (callNumber === 1) {
+        // First call: slow, returns full view
+        await Bun.sleep(50);
+        return Result.ok(fullRecord);
+      }
+      // Second call: fast, returns narrow view
+      await Bun.sleep(10);
+      return Result.ok(narrowRecord);
+    };
+
+    // Track which contentTypes the projector sees
+    const projectedContentTypes: string[][] = [];
+
+    await startServer({}, "valid_token", {
+      sessionManager,
+      projectEvent: (event, session) => {
+        projectedContentTypes.push([...(session.view.contentTypes ?? [])]);
+        return event;
+      },
+    });
+
+    const ws = await connectAndAuth();
+    await nextMessage(ws); // consume auth response
+
+    // Fire two overlapping invalidations
+    const inv1 = server.invalidateSession("sess_test");
+    const inv2 = server.invalidateSession("sess_test");
+    await Promise.all([inv1, inv2]);
+
+    // Broadcast after both complete
+    server.broadcast("sess_test", {
+      type: "heartbeat",
+      sessionId: "sess_test",
+      timestamp: "2024-01-01T00:00:00Z",
+    });
+
+    const frame = (await nextMessage(ws)) as Record<string, unknown>;
+    expect(frame["seq"]).toBe(1);
+
+    // The projector should have seen the NARROW view (from the later invalidation)
+    expect(projectedContentTypes).toHaveLength(1);
+    expect(projectedContentTypes[0]).toEqual(["xmtp.org/text:1.0"]);
+
+    ws.close();
+  });
+
+  test("broadcasts during invalidation are queued and replayed", async () => {
+    let lookupResolveFn: (() => void) | null = null;
+    const record = makeSessionRecord();
+    const sessionManager = createMockSessionManager("valid_token", record);
+
+    // Override lookup to block until we release it
+    sessionManager.lookup = async (_sessionId: string) => {
+      await new Promise<void>((resolve) => {
+        lookupResolveFn = resolve;
+      });
+      return Result.ok(record);
+    };
+
+    await startServer({}, "valid_token", { sessionManager });
+
+    const ws = await connectAndAuth();
+    await nextMessage(ws); // consume auth response
+
+    // Start invalidation (lookup will block)
+    const invPromise = server.invalidateSession("sess_test");
+
+    // Wait a tick so the invalidation is in flight
+    await Bun.sleep(5);
+
+    // Broadcast while invalidation is pending — should be queued, not sent
+    server.broadcast("sess_test", {
+      type: "heartbeat",
+      sessionId: "sess_test",
+      timestamp: "2024-01-01T00:00:00Z",
+    });
+
+    // Negative assertion: no message should arrive while invalidation is in flight.
+    // If broadcast sent immediately (stale path), it would be on the socket already.
+    await Bun.sleep(20);
+    let prematureMessage: unknown = null;
+    ws.addEventListener("message", (ev) => {
+      prematureMessage = ev.data;
+    });
+    await Bun.sleep(10);
+    expect(prematureMessage).toBeNull();
+
+    // Release the lookup — queued events should drain now
+    expect(lookupResolveFn).not.toBeNull();
+    lookupResolveFn!();
+    await invPromise;
+
+    // The queued event should now be delivered after the invalidation completes
+    const frame = (await nextMessage(ws)) as Record<string, unknown>;
+    expect(frame["seq"]).toBe(1);
+    expect((frame["event"] as Record<string, unknown>)["type"]).toBe(
+      "heartbeat",
+    );
+
+    ws.close();
   });
 });
