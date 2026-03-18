@@ -418,6 +418,17 @@ export function createWsServer(
         deps.requestHandler,
       );
 
+      // Re-sync cached session after mutating requests so broadcasts
+      // immediately see updated policy instead of waiting for the next heartbeat.
+      if (request.type === "update_view" || request.type === "reveal_content") {
+        const refreshResult = await deps.sessionManager.lookup(
+          session.sessionId,
+        );
+        if (refreshResult.isOk()) {
+          ws.data.sessionRecord = refreshResult.value;
+        }
+      }
+
       const inflight = ws.data.inFlightRequests.get(requestId);
       if (!inflight) {
         return;
