@@ -1,0 +1,16 @@
+services:
+  signet:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - signet-data:/data
+    environment:
+      - XMTP_SIGNET_DATA_DIR=/data
+      - XMTP_SIGNET_ENV=dev
+      - XMTP_SIGNET_WS_PORT=8080
+      - XMTP_SIGNET_LOG_LEVEL=info
+    restart: unless-stopped
+
+volumes:
+  signet-data:
