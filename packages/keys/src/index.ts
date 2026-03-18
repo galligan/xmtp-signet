@@ -14,7 +14,26 @@ export type {
 export type { RootKeyHandle, OperationalKey, SessionKey } from "./types.js";
 
 // Platform detection
-export { detectPlatform, platformToTrustTier } from "./platform.js";
+export {
+  detectPlatform,
+  platformToTrustTier,
+  resetPlatformCache,
+} from "./platform.js";
+
+// Secure Enclave bridge
+export {
+  findSignerBinary,
+  seCreate,
+  seSign,
+  seInfo,
+  seDelete,
+} from "./se-bridge.js";
+export type {
+  SeCreateResponse,
+  SeSignResponse,
+  SeSystemInfoResponse,
+  SeKeyInfoResponse,
+} from "./se-protocol.js";
 
 // Key manager
 export { createKeyManager } from "./key-manager.js";

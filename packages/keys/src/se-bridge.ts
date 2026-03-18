@@ -29,10 +29,10 @@ const SUBPROCESS_TIMEOUT_MS = parseInt(
  * 3. signet-signer on $PATH
  */
 export function findSignerBinary(): string | null {
-  // 1. Explicit env override
+  // 1. Explicit env override — if set, use it exclusively (don't fall through)
   const envPath = process.env["SIGNET_SIGNER_PATH"];
-  if (envPath && existsSync(envPath)) {
-    return envPath;
+  if (envPath !== undefined) {
+    return existsSync(envPath) ? envPath : null;
   }
 
   // 2. Local dev build — walk up from this file to repo root
