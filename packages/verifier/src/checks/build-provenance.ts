@@ -5,6 +5,7 @@ import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
 import { findMatchingSubject, parseSigstoreBundle } from "./sigstore-bundle.js";
 
+/** Check ID for build provenance verification. */
 export const BUILD_PROVENANCE_CHECK_ID = "build_provenance" as const;
 
 import type { BuildProvenanceConfig } from "../config.js";

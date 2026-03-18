@@ -2,14 +2,17 @@ import { z } from "zod";
 import { ContentTypeId } from "./content-types.js";
 import { ViewMode } from "./view.js";
 
+/** Where the agent performs inference. */
 export const InferenceMode: z.ZodEnum<
   ["local", "external", "hybrid", "unknown"]
 > = z
   .enum(["local", "external", "hybrid", "unknown"])
   .describe("How the agent performs inference");
 
+/** Where the agent performs inference. */
 export type InferenceMode = z.infer<typeof InferenceMode>;
 
+/** Which content may leave the signet boundary. */
 export const ContentEgressScope: z.ZodEnum<
   ["full-messages", "summaries-only", "tool-calls-only", "none", "unknown"]
 > = z
@@ -22,22 +25,31 @@ export const ContentEgressScope: z.ZodEnum<
   ])
   .describe("What content leaves the signet boundary");
 
+/** Which content may leave the signet boundary. */
 export type ContentEgressScope = z.infer<typeof ContentEgressScope>;
 
+/** How long the provider retains content. */
+/** Zod schema for provider-side retention scope. */
 export const RetentionAtProvider: z.ZodEnum<
   ["none", "session", "persistent", "unknown"]
 > = z
   .enum(["none", "session", "persistent", "unknown"])
   .describe("How long the inference provider retains content");
 
+/** How long the provider retains content. */
 export type RetentionAtProvider = z.infer<typeof RetentionAtProvider>;
 
+/** Where the signet is hosted. */
+/** Zod schema for how the signet is hosted. */
 export const HostingMode: z.ZodEnum<["local", "self-hosted", "managed"]> = z
   .enum(["local", "self-hosted", "managed"])
   .describe("Where the signet runs");
 
+/** Where the signet is hosted. */
 export type HostingMode = z.infer<typeof HostingMode>;
 
+/** Highest trust tier the signet can demonstrate. */
+/** Zod schema for the highest trust tier demonstrated by a seal. */
 export const TrustTier: z.ZodEnum<
   ["unverified", "source-verified", "reproducibly-verified", "runtime-attested"]
 > = z
@@ -49,8 +61,10 @@ export const TrustTier: z.ZodEnum<
   ])
   .describe("Highest trust tier the signet can demonstrate");
 
+/** Highest trust tier the signet can demonstrate. */
 export type TrustTier = z.infer<typeof TrustTier>;
 
+/** Rules governing how a seal can be revoked. */
 export type RevocationRules = {
   maxTtlSeconds: number;
   requireHeartbeat: boolean;
@@ -58,6 +72,7 @@ export type RevocationRules = {
   adminCanRemove: boolean;
 };
 
+/** Zod schema for seal revocation rules. */
 export const RevocationRules: z.ZodType<RevocationRules> = z
   .object({
     maxTtlSeconds: z
@@ -77,6 +92,7 @@ export const RevocationRules: z.ZodType<RevocationRules> = z
   })
   .describe("Rules governing how this seal can be revoked");
 
+/** Group-visible capability seal for an agent. */
 export type Seal = {
   sealId: string;
   previousSealId: string | null;
@@ -105,6 +121,7 @@ export type Seal = {
   issuer: string;
 };
 
+/** Zod schema for a group-visible capability seal. */
 export const SealSchema: z.ZodType<Seal> = z
   .object({
     sealId: z.string().describe("Unique identifier for this seal"),

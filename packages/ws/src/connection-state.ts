@@ -3,6 +3,7 @@ import { CircularBuffer } from "./replay-buffer.js";
 import { BackpressureTracker } from "./backpressure.js";
 import type { SequencedFrame } from "./frames.js";
 
+/** Lifecycle phases for a websocket connection. */
 export type ConnectionPhase =
   | "authenticating"
   | "active"
@@ -55,6 +56,7 @@ export interface ConnectionData {
 
 let connectionCounter = 0;
 
+/** Create the initial per-connection state attached to `ws.data`. */
 export function createConnectionState(
   softLimit = 64,
   hardLimit = 256,
@@ -78,6 +80,7 @@ export function createConnectionState(
   };
 }
 
+/** Check whether a websocket connection can move between two phases. */
 export function canTransition(
   from: ConnectionPhase,
   to: ConnectionPhase,

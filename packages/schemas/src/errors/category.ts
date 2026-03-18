@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Cross-transport error categories used for exit/status/JSON-RPC mapping. */
 export const ErrorCategory: z.ZodEnum<
   [
     "validation",
@@ -24,8 +25,10 @@ export const ErrorCategory: z.ZodEnum<
   ])
   .describe("Error category for cross-transport mapping");
 
+/** Cross-transport error categories used for exit/status/JSON-RPC mapping. */
 export type ErrorCategory = z.infer<typeof ErrorCategory>;
 
+/** Transport-specific metadata for an error category. */
 export type ErrorCategoryMeta = {
   readonly exitCode: number;
   readonly statusCode: number;
@@ -33,6 +36,7 @@ export type ErrorCategoryMeta = {
   readonly retryable: boolean;
 };
 
+/** Zod schema for transport metadata attached to each error category. */
 export const ErrorCategoryMetaSchema: z.ZodType<ErrorCategoryMeta> = z
   .object({
     exitCode: z.number().int(),
@@ -95,6 +99,7 @@ export const ERROR_CATEGORY_META: Record<ErrorCategory, ErrorCategoryMeta> = {
   },
 };
 
+/** Look up metadata for a given error category. */
 export function errorCategoryMeta(category: ErrorCategory): ErrorCategoryMeta {
   return ERROR_CATEGORY_META[category];
 }

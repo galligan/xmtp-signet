@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TrustTier } from "@xmtp/signet-schemas";
 import type { TrustTier as TrustTierType } from "@xmtp/signet-schemas";
 
+/** Capabilities advertised by a verifier instance. */
 export type VerifierCapabilities = {
   supportedTiers: TrustTierType[];
   supportedChecks: string[];
@@ -24,9 +25,11 @@ const _VerifierCapabilities = z
   })
   .describe("Capabilities advertised by this verifier");
 
+/** Zod schema for verifier capabilities. */
 export const VerifierCapabilities: z.ZodType<VerifierCapabilities> =
   _VerifierCapabilities;
 
+/** Self-seal document published by a verifier. */
 export type VerifierSelfSeal = {
   verifierInboxId: string;
   capabilities: VerifierCapabilities;
@@ -35,6 +38,7 @@ export type VerifierSelfSeal = {
   signature: string;
 };
 
+/** Zod schema for a verifier self-seal. */
 export const VerifierSelfSealSchema: z.ZodType<VerifierSelfSeal> = z
   .object({
     verifierInboxId: z.string().describe("XMTP inbox ID of this verifier"),

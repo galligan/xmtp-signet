@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Validation failure for an invalid request or field value. */
 export class ValidationError extends Error implements SignetError {
   readonly _tag = "ValidationError" as const;
   readonly code = 1000;
@@ -29,6 +30,7 @@ export class ValidationError extends Error implements SignetError {
   }
 }
 
+/** Validation failure for a seal-specific invariant. */
 export class SealError extends Error implements SignetError {
   readonly _tag = "SealError" as const;
   readonly code = 1010;

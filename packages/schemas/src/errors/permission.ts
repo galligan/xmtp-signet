@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Raised when an operation is denied by policy or permissions. */
 export class PermissionError extends Error implements SignetError {
   readonly _tag = "PermissionError" as const;
   readonly code = 1200;
@@ -21,6 +22,7 @@ export class PermissionError extends Error implements SignetError {
   }
 }
 
+/** Raised when a grant does not allow the requested operation. */
 export class GrantDeniedError extends Error implements SignetError {
   readonly _tag = "GrantDeniedError" as const;
   readonly code = 1210;

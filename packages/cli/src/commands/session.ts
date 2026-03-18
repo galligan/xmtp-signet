@@ -19,6 +19,7 @@ import {
   type WithDaemonClient,
 } from "./daemon-client.js";
 
+/** Dependencies for session management CLI commands. */
 export interface SessionCommandDeps {
   readonly withDaemonClient: WithDaemonClient;
   readonly writeStdout: (message: string) => void;

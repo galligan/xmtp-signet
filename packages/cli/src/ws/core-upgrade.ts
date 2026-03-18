@@ -4,6 +4,9 @@ import type { SignetCore } from "@xmtp/signet-contracts";
 
 type UpgradeableCore = Pick<SignetCore, "state" | "initialize">;
 
+/**
+ * Create a lazy initializer that upgrades the core only when WS traffic needs it.
+ */
 export function createLazyCoreUpgrade(
   core: UpgradeableCore,
 ): () => Promise<Result<void, SignetError>> {

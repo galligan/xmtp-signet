@@ -19,6 +19,7 @@ type DirectModeConfigInput = {
   dataDir: string;
 };
 
+/** Schema for direct-mode runtime configuration. */
 export const DirectModeConfigSchema: z.ZodType<
   DirectModeConfig,
   z.ZodTypeDef,

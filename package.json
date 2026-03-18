@@ -9,12 +9,13 @@
   "scripts": {
     "bootstrap": "bash ./scripts/bootstrap.sh",
     "build": "turbo run build",
+    "docs:check": "bun ./scripts/check-doc-coverage.ts",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "format:check": "oxfmt --check packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md",
-    "format:fix": "oxfmt packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md",
-    "check": "turbo run lint typecheck test"
+    "lint": "turbo run lint && bun run docs:check",
+    "format:check": "oxfmt --check packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md AGENTS.md",
+    "format:fix": "oxfmt packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md AGENTS.md",
+    "check": "turbo run lint typecheck test && bun run docs:check"
   },
   "dependencies": {
     "@noble/ciphers": "^2.1.1"

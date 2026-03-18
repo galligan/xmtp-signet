@@ -9,6 +9,7 @@ import type {
 import { RevealScope, PermissionError } from "@xmtp/signet-schemas";
 import type { RevealStateSnapshot } from "@xmtp/signet-contracts";
 
+/** Dependencies for reveal action registration. */
 export interface RevealActionDeps {
   readonly sessionManager: SessionManager;
 }
@@ -37,6 +38,7 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
+/** Create CLI and MCP actions for content reveal workflows. */
 export function createRevealActions(
   deps: RevealActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {

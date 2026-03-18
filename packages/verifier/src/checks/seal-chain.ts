@@ -4,6 +4,7 @@ import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
 
+/** Check ID for seal chain verification. */
 export const SEAL_CHAIN_CHECK_ID = "seal_chain" as const;
 
 /**

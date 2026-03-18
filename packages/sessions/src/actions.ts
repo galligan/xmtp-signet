@@ -8,6 +8,7 @@ import type {
 } from "@xmtp/signet-schemas";
 import { SessionConfig, SessionRevocationReason } from "@xmtp/signet-schemas";
 
+/** Dependencies for session action registration. */
 export interface SessionActionDeps {
   readonly sessionManager: SessionManager;
 }
@@ -19,6 +20,7 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
+/** Create CLI and MCP actions for session lifecycle operations. */
 export function createSessionActions(
   deps: SessionActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {

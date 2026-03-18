@@ -8,11 +8,13 @@ import type { AdminDispatcher } from "../admin/dispatcher.js";
 // Types
 // ---------------------------------------------------------------------------
 
+/** Configuration for the HTTP API server. */
 export interface HttpServerConfig {
   readonly port: number;
   readonly host: string;
 }
 
+/** Dependencies required to serve HTTP admin and status routes. */
 export interface HttpServerDeps {
   readonly dispatcher: AdminDispatcher;
   readonly sessionManager: SessionManager;
@@ -22,6 +24,7 @@ export interface HttpServerDeps {
   readonly status: () => unknown | Promise<unknown>;
 }
 
+/** Minimal lifecycle surface for the HTTP API server. */
 export interface HttpServer {
   start(): Promise<Result<{ port: number }, SignetError>>;
   stop(): Promise<Result<void, SignetError>>;
@@ -87,6 +90,9 @@ function extractBearerToken(req: Request): string | null {
 // Implementation
 // ---------------------------------------------------------------------------
 
+/**
+ * Create the HTTP API server used for admin and health endpoints.
+ */
 export function createHttpServer(
   config: HttpServerConfig,
   deps: HttpServerDeps,

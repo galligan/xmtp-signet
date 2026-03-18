@@ -1,3 +1,4 @@
+/** Backpressure state derived from the current per-connection send depth. */
 export type BackpressureState = "ok" | "warning" | "exceeded";
 
 /**

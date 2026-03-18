@@ -73,6 +73,7 @@ function createTestPublisher(): SealPublisher & {
   };
 }
 
+/** Fully composed test runtime for integration tests. */
 export interface TestRuntime {
   readonly keyManager: KeyManager;
   readonly signet: SignetCoreImpl;
@@ -89,6 +90,7 @@ export interface TestRuntime {
   readonly groupId: string;
 }
 
+/** Options for constructing the test runtime. */
 export interface TestRuntimeOptions {
   readonly wsConfig?: Partial<WsServerConfig>;
   readonly sessionConfig?: Partial<SessionManagerConfig>;
@@ -97,6 +99,7 @@ export interface TestRuntimeOptions {
   readonly skipStart?: boolean;
 }
 
+/** Create a fully wired in-memory signet runtime for integration tests. */
 export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
   runtime: TestRuntime;
   streams: {

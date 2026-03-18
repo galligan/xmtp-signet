@@ -13,11 +13,13 @@ import { loadConfig } from "../config/loader.js";
 import { resolvePaths, type ResolvedPaths } from "../config/paths.js";
 import type { CliConfig } from "../config/schema.js";
 
+/** Resolved config and paths for a daemon-scoped CLI command. */
 export interface DaemonCommandContext {
   readonly config: CliConfig;
   readonly paths: ResolvedPaths;
 }
 
+/** Dependencies for commands that connect to the running daemon. */
 export interface DaemonCommandDeps {
   readonly loadConfig: typeof loadConfig;
   readonly resolvePaths: typeof resolvePaths;
@@ -27,10 +29,12 @@ export interface DaemonCommandDeps {
   readonly createAdminClient: (socketPath: string) => AdminClient;
 }
 
+/** Common option bag for commands that can target a config file. */
 export interface DaemonCommandOptions {
   readonly configPath?: string | undefined;
 }
 
+/** Helper for commands that need a transient authenticated admin client. */
 export type WithDaemonClient = <T>(
   options: DaemonCommandOptions,
   run: (
@@ -50,6 +54,7 @@ type RpcKeyManager = Pick<KeyManager, "initialize" | "admin"> & {
   close?: () => void;
 };
 
+/** Build a helper for daemon-backed commands that need an admin client. */
 export function createWithDaemonClient(
   deps: Partial<DaemonCommandDeps> = {},
 ): WithDaemonClient {
@@ -139,6 +144,7 @@ async function runWithKeyManager<T>(
   }
 }
 
+/** Parse inline JSON or `@file` input and validate it against a Zod schema. */
 export async function parseJsonInput<T>(
   value: string,
   field: string,

@@ -9,9 +9,10 @@ export const ContentTypeId: z.ZodString = z
   .regex(/^[a-z0-9.-]+\/[a-zA-Z0-9]+:\d+\.\d+$/)
   .describe("XMTP content type identifier (authority/type:version)");
 
+/** Standard XMTP content type identifier string. */
 export type ContentTypeId = z.infer<typeof ContentTypeId>;
 
-/** Standard XMTP content types accepted by default. */
+/** Baseline XMTP content types accepted without extra policy configuration. */
 export const BASELINE_CONTENT_TYPES: readonly [
   "xmtp.org/text:1.0",
   "xmtp.org/reaction:1.0",
@@ -26,18 +27,22 @@ export const BASELINE_CONTENT_TYPES: readonly [
   "xmtp.org/groupUpdated:1.0",
 ] as const;
 
+/** Union of the baseline XMTP content types. */
 export type BaselineContentType = (typeof BASELINE_CONTENT_TYPES)[number];
 
+/** Text payload carried by `xmtp.org/text:1.0`. */
 export type TextPayload = {
   text: string;
 };
 
+/** Zod schema for a plain text XMTP message payload. */
 export const TextPayload: z.ZodType<TextPayload> = z
   .object({
     text: z.string().min(1).describe("Message text content"),
   })
   .describe("Text message payload");
 
+/** Reaction payload carried by `xmtp.org/reaction:1.0`. */
 export type ReactionPayload = {
   reference: string;
   action: "added" | "removed";
@@ -45,6 +50,7 @@ export type ReactionPayload = {
   schema: "unicode" | "shortcode" | "custom";
 };
 
+/** Zod schema for an XMTP reaction payload. */
 export const ReactionPayload: z.ZodType<ReactionPayload> = z
   .object({
     reference: z.string().describe("Message ID being reacted to"),
@@ -58,6 +64,7 @@ export const ReactionPayload: z.ZodType<ReactionPayload> = z
   })
   .describe("Reaction payload");
 
+/** Reply payload carried by `xmtp.org/reply:1.0`. */
 export type ReplyPayload = {
   reference: string;
   content: {
@@ -66,6 +73,7 @@ export type ReplyPayload = {
   };
 };
 
+/** Zod schema for an XMTP reply payload. */
 export const ReplyPayload: z.ZodType<ReplyPayload> = z
   .object({
     reference: z.string().describe("Message ID being replied to"),
@@ -78,12 +86,15 @@ export const ReplyPayload: z.ZodType<ReplyPayload> = z
   })
   .describe("Reply payload");
 
+/** Empty payload carried by `xmtp.org/readReceipt:1.0`. */
 export type ReadReceiptPayload = Record<string, never>;
 
+/** Zod schema for an XMTP read-receipt payload. */
 export const ReadReceiptPayload: z.ZodType<ReadReceiptPayload> = z
   .object({})
   .describe("Read receipt payload (empty body)");
 
+/** Group membership and metadata update payload carried by `xmtp.org/groupUpdated:1.0`. */
 export type GroupUpdatedPayload = {
   initiatedByInboxId: string;
   addedInboxes: string[];
@@ -95,6 +106,7 @@ export type GroupUpdatedPayload = {
   }[];
 };
 
+/** Zod schema for XMTP group membership and metadata update payloads. */
 export const GroupUpdatedPayload: z.ZodType<GroupUpdatedPayload> = z
   .object({
     initiatedByInboxId: z

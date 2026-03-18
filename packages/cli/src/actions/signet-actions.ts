@@ -4,6 +4,7 @@ import type { ActionSpec } from "@xmtp/signet-contracts";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { DaemonStatus } from "../daemon/status.js";
 
+/** Dependencies for the daemon-level `signet:*` CLI actions. */
 export interface SignetActionDeps {
   readonly status: () => Promise<DaemonStatus>;
   readonly shutdown: () => Promise<Result<void, SignetError>>;
@@ -15,6 +16,7 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
+/** Create CLI actions for daemon status and shutdown. */
 export function createSignetActions(
   deps: SignetActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {

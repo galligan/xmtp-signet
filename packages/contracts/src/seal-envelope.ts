@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { SealSchema, RevocationSeal } from "@xmtp/signet-schemas";
 
-/** Provenance info attached to outbound messages. */
+/** Provenance metadata attached to outbound message seals. */
 export interface MessageProvenanceMetadata {
   readonly sealId: string;
   readonly sessionKeyFingerprint: string;
@@ -34,12 +34,14 @@ const sealEnvelopeShape: SealEnvelopeShape = {
     .describe("Reference to the key that produced the signature"),
 };
 
-/** Signed seal ready for group publication. */
+/** Zod schema for a signed seal ready for group publication. */
 export const SealEnvelope: z.ZodObject<SealEnvelopeShape> = z
   .object(sealEnvelopeShape)
   .describe("Signed seal ready for group publication");
 
+/** Schema alias for a signed seal ready for publication. */
 export const SealEnvelopeSchema: z.ZodObject<SealEnvelopeShape> = SealEnvelope;
+/** Parsed signed seal envelope. */
 export type SealEnvelope = z.infer<typeof SealEnvelopeSchema>;
 
 type SignedRevocationEnvelopeShape = {
@@ -62,10 +64,11 @@ const signedRevocationEnvelopeShape: SignedRevocationEnvelopeShape = {
     .describe("Reference to the key that produced the signature"),
 };
 
-/** Signed revocation ready for group publication. */
+/** Zod schema for a signed revocation ready for group publication. */
 export const SignedRevocationEnvelope: z.ZodObject<SignedRevocationEnvelopeShape> =
   z
     .object(signedRevocationEnvelopeShape)
     .describe("Signed revocation ready for group publication");
 
+/** Parsed signed revocation envelope. */
 export type SignedRevocationEnvelope = z.infer<typeof SignedRevocationEnvelope>;

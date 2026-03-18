@@ -7,14 +7,17 @@ import { ViewConfig } from "./view.js";
 import { GrantConfig } from "./grant.js";
 import { RevocationSeal } from "./revocation.js";
 
+/** Projection modes the signet may use when surfacing a message. */
 export const MessageVisibility: z.ZodEnum<
   ["visible", "historical", "hidden", "revealed", "redacted"]
 > = z
   .enum(["visible", "historical", "hidden", "revealed", "redacted"])
   .describe("How the message is being projected to the agent");
 
+/** Projection mode assigned to a surfaced message event. */
 export type MessageVisibility = z.infer<typeof MessageVisibility>;
 
+/** Event emitted when a message is surfaced to the harness. */
 export type MessageEvent = {
   type: "message.visible";
   messageId: string;
@@ -52,8 +55,10 @@ const _MessageEvent = z
   })
   .describe("A message projected to the agent according to its view");
 
+/** Zod schema for `message.visible` events. */
 export const MessageEvent: z.ZodType<MessageEvent> = _MessageEvent;
 
+/** Event emitted when a seal or revocation is stamped. */
 export type SealStampedEvent = {
   type: "seal.stamped";
   seal: Seal;
@@ -66,8 +71,10 @@ const _SealStampedEvent = z
   })
   .describe("Seal was stamped or updated");
 
+/** Zod schema for `seal.stamped` events. */
 export const SealStampedEvent: z.ZodType<SealStampedEvent> = _SealStampedEvent;
 
+/** Event emitted when a new session is established. */
 export type SessionStartedEvent = {
   type: "session.started";
   session: z.infer<typeof SessionToken>;
@@ -84,9 +91,11 @@ const _SessionStartedEvent = z
   })
   .describe("Session successfully established");
 
+/** Zod schema for `session.started` events. */
 export const SessionStartedEvent: z.ZodType<SessionStartedEvent> =
   _SessionStartedEvent;
 
+/** Event emitted when a session is no longer usable. */
 export type SessionExpiredEvent = {
   type: "session.expired";
   sessionId: string;
@@ -101,9 +110,11 @@ const _SessionExpiredEvent = z
   })
   .describe("Session has expired");
 
+/** Zod schema for `session.expired` events. */
 export const SessionExpiredEvent: z.ZodType<SessionExpiredEvent> =
   _SessionExpiredEvent;
 
+/** Event emitted when a session must be reauthorized after a material change. */
 export type SessionReauthRequiredEvent = {
   type: "session.reauthorization_required";
   sessionId: string;
@@ -120,9 +131,11 @@ const _SessionReauthRequiredEvent = z
   })
   .describe("Session must be reauthorized due to material policy change");
 
+/** Zod schema for `session.reauthorization_required` events. */
 export const SessionReauthRequiredEvent: z.ZodType<SessionReauthRequiredEvent> =
   _SessionReauthRequiredEvent;
 
+/** Liveness event emitted by the signet over active sockets. */
 export type HeartbeatEvent = {
   type: "heartbeat";
   sessionId: string;
@@ -137,8 +150,10 @@ const _HeartbeatEvent = z
   })
   .describe("Liveness signal from the signet");
 
+/** Zod schema for `heartbeat` events. */
 export const HeartbeatEvent: z.ZodType<HeartbeatEvent> = _HeartbeatEvent;
 
+/** Event emitted when previously hidden message content becomes available. */
 export type RevealEvent = {
   type: "message.revealed";
   messageId: string;
@@ -159,8 +174,10 @@ const _RevealEvent = z
   })
   .describe("Previously hidden content revealed to the agent");
 
+/** Zod schema for `message.revealed` events. */
 export const RevealEvent: z.ZodType<RevealEvent> = _RevealEvent;
 
+/** Event emitted when the session view changes in place. */
 export type ViewUpdatedEvent = {
   type: "view.updated";
   view: z.infer<typeof ViewConfig>;
@@ -173,8 +190,10 @@ const _ViewUpdatedEvent = z
   })
   .describe("View configuration changed within the current session");
 
+/** Zod schema for `view.updated` events. */
 export const ViewUpdatedEvent: z.ZodType<ViewUpdatedEvent> = _ViewUpdatedEvent;
 
+/** Event emitted when the session grant changes in place. */
 export type GrantUpdatedEvent = {
   type: "grant.updated";
   grant: z.infer<typeof GrantConfig>;
@@ -187,9 +206,11 @@ const _GrantUpdatedEvent = z
   })
   .describe("Grant configuration changed within the current session");
 
+/** Zod schema for `grant.updated` events. */
 export const GrantUpdatedEvent: z.ZodType<GrantUpdatedEvent> =
   _GrantUpdatedEvent;
 
+/** Event emitted when an agent is revoked by a revocation seal. */
 export type AgentRevokedEvent = {
   type: "agent.revoked";
   revocation: z.infer<typeof RevocationSeal>;
@@ -202,9 +223,11 @@ const _AgentRevokedEvent = z
   })
   .describe("Agent has been revoked from the group");
 
+/** Zod schema for `agent.revoked` events. */
 export const AgentRevokedEvent: z.ZodType<AgentRevokedEvent> =
   _AgentRevokedEvent;
 
+/** Event emitted when owner confirmation is required before an action runs. */
 export type ActionConfirmationEvent = {
   type: "action.confirmation_required";
   actionId: string;
@@ -223,9 +246,11 @@ const _ActionConfirmationEvent = z
   })
   .describe("An action requires owner confirmation before execution");
 
+/** Zod schema for `action.confirmation_required` events. */
 export const ActionConfirmationEvent: z.ZodType<ActionConfirmationEvent> =
   _ActionConfirmationEvent;
 
+/** Event emitted when a recovering client has caught up with replay state. */
 export type SignetRecoveryEvent = {
   type: "signet.recovery.complete";
   caughtUpThrough: string;
@@ -243,9 +268,11 @@ const _SignetRecoveryEvent = z
   })
   .describe("Signet has recovered and resynced");
 
+/** Zod schema for `signet.recovery.complete` events. */
 export const SignetRecoveryEvent: z.ZodType<SignetRecoveryEvent> =
   _SignetRecoveryEvent;
 
+/** Union of all events the signet can emit to a harness session. */
 export type SignetEvent =
   | MessageEvent
   | SealStampedEvent

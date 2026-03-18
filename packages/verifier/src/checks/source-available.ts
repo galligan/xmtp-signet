@@ -4,8 +4,10 @@ import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
 
+/** Check ID for source availability verification. */
 export const SOURCE_AVAILABLE_CHECK_ID = "source_available" as const;
 
+/** Configuration for the source availability check. */
 export interface SourceAvailableConfig {
   /** Injectable fetch for testing. Defaults to global fetch. */
   readonly fetcher?: typeof fetch;

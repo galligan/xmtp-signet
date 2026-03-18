@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Permissions for sending, replying, and reacting in a conversation. */
 export type MessagingGrant = {
   send: boolean;
   reply: boolean;
@@ -7,6 +8,7 @@ export type MessagingGrant = {
   draftOnly: boolean;
 };
 
+/** Zod schema for messaging permissions. */
 export const MessagingGrant: z.ZodType<MessagingGrant> = z
   .object({
     send: z.boolean().describe("Can send messages"),
@@ -18,6 +20,7 @@ export const MessagingGrant: z.ZodType<MessagingGrant> = z
   })
   .describe("Messaging action permissions");
 
+/** Permissions for group membership and metadata management. */
 export type GroupManagementGrant = {
   addMembers: boolean;
   removeMembers: boolean;
@@ -25,6 +28,7 @@ export type GroupManagementGrant = {
   inviteUsers: boolean;
 };
 
+/** Zod schema for group management permissions. */
 export const GroupManagementGrant: z.ZodType<GroupManagementGrant> = z
   .object({
     addMembers: z.boolean().describe("Can add members to the group"),
@@ -34,12 +38,14 @@ export const GroupManagementGrant: z.ZodType<GroupManagementGrant> = z
   })
   .describe("Group management permissions");
 
+/** Permission scope for a single tool invocation surface. */
 export type ToolScope = {
   toolId: string;
   allowed: boolean;
   parameters: Record<string, unknown> | null;
 };
 
+/** Zod schema for a single tool permission scope. */
 export const ToolScope: z.ZodType<ToolScope> = z
   .object({
     toolId: z.string().describe("Identifier for the tool"),
@@ -51,16 +57,19 @@ export const ToolScope: z.ZodType<ToolScope> = z
   })
   .describe("Permission scope for a single tool");
 
+/** Tool-level grant made up of one or more scoped tool permissions. */
 export type ToolGrant = {
   scopes: ToolScope[];
 };
 
+/** Zod schema for tool capability permissions. */
 export const ToolGrant: z.ZodType<ToolGrant> = z
   .object({
     scopes: z.array(ToolScope).describe("Per-tool permission scopes"),
   })
   .describe("Tool capability permissions");
 
+/** Permissions governing what content may leave the signet boundary. */
 export type EgressGrant = {
   storeExcerpts: boolean;
   useForMemory: boolean;
@@ -69,6 +78,7 @@ export type EgressGrant = {
   summarize: boolean;
 };
 
+/** Zod schema for content egress permissions. */
 export const EgressGrant: z.ZodType<EgressGrant> = z
   .object({
     storeExcerpts: z.boolean().describe("Can store message excerpts"),
@@ -83,6 +93,7 @@ export const EgressGrant: z.ZodType<EgressGrant> = z
   })
   .describe("Retention and egress permissions");
 
+/** Complete grant configuration for an agent session. */
 export type GrantConfig = {
   messaging: MessagingGrant;
   groupManagement: GroupManagementGrant;
@@ -90,6 +101,7 @@ export type GrantConfig = {
   egress: EgressGrant;
 };
 
+/** Zod schema for a complete grant configuration. */
 export const GrantConfig: z.ZodType<GrantConfig> = z
   .object({
     messaging: MessagingGrant.describe("Messaging action permissions"),

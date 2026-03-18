@@ -1,15 +1,19 @@
 import { z } from "zod";
 
+/** XMTP network environment that the core should connect to. */
 export const XmtpEnvSchema: z.ZodEnum<["local", "dev", "production"]> = z
   .enum(["local", "dev", "production"])
   .describe("XMTP network environment");
 
+/** XMTP network environment label. */
 export type XmtpEnv = z.infer<typeof XmtpEnvSchema>;
 
+/** Whether each group gets its own identity or shares one. */
 export const IdentityModeSchema: z.ZodEnum<["per-group", "shared"]> = z
   .enum(["per-group", "shared"])
   .describe("Whether each group gets a unique identity or shares one");
 
+/** Identity isolation strategy used by the core. */
 export type IdentityMode = z.infer<typeof IdentityModeSchema>;
 
 /** Parsed signet core configuration (all defaults applied). */
@@ -32,6 +36,7 @@ type SignetCoreConfigInput = {
   appVersion?: string | undefined;
 };
 
+/** Zod schema for parsed signet core configuration. */
 export const SignetCoreConfigSchema: z.ZodType<
   SignetCoreConfig,
   z.ZodTypeDef,

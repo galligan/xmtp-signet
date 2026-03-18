@@ -1,13 +1,16 @@
 import { z } from "zod";
 
+/** Granularity of a reveal operation. */
 export const RevealScope: z.ZodEnum<
   ["message", "thread", "time-window", "content-type", "sender"]
 > = z
   .enum(["message", "thread", "time-window", "content-type", "sender"])
   .describe("Granularity of a reveal operation");
 
+/** Granularity of a reveal operation. */
 export type RevealScope = z.infer<typeof RevealScope>;
 
+/** Request to reveal previously hidden content within a group. */
 export type RevealRequest = {
   revealId: string;
   groupId: string;
@@ -17,6 +20,7 @@ export type RevealRequest = {
   expiresAt: string | null;
 };
 
+/** Zod schema for a reveal request. */
 export const RevealRequest: z.ZodType<RevealRequest> = z
   .object({
     revealId: z.string().describe("Unique reveal request identifier"),
@@ -36,6 +40,7 @@ export const RevealRequest: z.ZodType<RevealRequest> = z
   })
   .describe("Request to reveal content to an agent");
 
+/** Reveal grant that makes previously hidden content visible. */
 export type RevealGrant = {
   revealId: string;
   grantedAt: string;
@@ -43,6 +48,7 @@ export type RevealGrant = {
   expiresAt: string | null;
 };
 
+/** Zod schema for a granted reveal. */
 export const RevealGrant: z.ZodType<RevealGrant> = z
   .object({
     revealId: z.string().describe("Matches the RevealRequest.revealId"),
@@ -56,10 +62,12 @@ export const RevealGrant: z.ZodType<RevealGrant> = z
   })
   .describe("Granted reveal making content visible to the agent");
 
+/** Aggregate reveal state tracked for a session. */
 export type RevealState = {
   activeReveals: RevealGrant[];
 };
 
+/** Zod schema for aggregate reveal state tracked in a session. */
 export const RevealState: z.ZodType<RevealState> = z
   .object({
     activeReveals: z

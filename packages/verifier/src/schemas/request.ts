@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SealSchema, TrustTier } from "@xmtp/signet-schemas";
 import type { Seal, TrustTier as TrustTierType } from "@xmtp/signet-schemas";
 
+/** Verification request sent to the verifier. */
 export type VerificationRequest = {
   requestId: string;
   agentInboxId: string;
@@ -16,6 +17,7 @@ export type VerificationRequest = {
   challengeNonce: string;
 };
 
+/** Zod schema for a verifier request. */
 export const VerificationRequestSchema: z.ZodType<VerificationRequest> = z
   .object({
     requestId: z.string().describe("Unique request identifier for correlation"),

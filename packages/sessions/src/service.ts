@@ -13,6 +13,7 @@ import type {
   InternalSessionRecord,
 } from "./session-manager.js";
 
+/** Dependencies required by the session service. */
 export interface SessionServiceDeps {
   readonly manager: InternalSessionManager;
   readonly keyManager: {
@@ -51,6 +52,7 @@ function toIssuedSession(record: InternalSessionRecord): IssuedSession {
   };
 }
 
+/** Create the public session service implementation. */
 export function createSessionService(deps: SessionServiceDeps): SessionManager {
   return {
     async issue(config: SessionConfig) {

@@ -7,19 +7,14 @@ import {
 import { RevocationSeal } from "@xmtp/signet-schemas";
 import type { RevocationSeal as RevocationSealType } from "@xmtp/signet-schemas";
 
-/**
- * Custom XMTP content type for seals.
- * Follows the authority/type:version convention.
- */
+/** Custom XMTP content type identifier for seal payloads. */
 export const SEAL_CONTENT_TYPE_ID = "xmtp.org/agentSeal:1.0" as const;
 
-/**
- * Custom XMTP content type for revocations.
- * Follows the authority/type:version convention.
- */
+/** Custom XMTP content type identifier for revocation payloads. */
 export const REVOCATION_CONTENT_TYPE_ID =
   "xmtp.org/agentRevocation:1.0" as const;
 
+/** XMTP seal payload with its content type discriminator attached. */
 export type SealMessage = z.infer<typeof SealEnvelopeSchema> & {
   contentType: typeof SEAL_CONTENT_TYPE_ID;
 };
@@ -29,6 +24,7 @@ const _SealMessage = SealEnvelopeSchema.extend({
   contentType: z.literal(SEAL_CONTENT_TYPE_ID),
 }).describe("Seal message with content type discriminator");
 
+/** Zod schema for a seal payload with its content type discriminator. */
 export const SealMessage: z.ZodType<SealMessage> = _SealMessage;
 
 /**
@@ -42,6 +38,7 @@ const SignedRevocationEnvelopeLocal = z.object({
   signerKeyRef: z.string(),
 });
 
+/** XMTP revocation payload with its content type discriminator attached. */
 export type RevocationMessage = {
   revocation: RevocationSealType;
   signature: string;
@@ -55,6 +52,7 @@ const _RevocationMessage = SignedRevocationEnvelopeLocal.extend({
   contentType: z.literal(REVOCATION_CONTENT_TYPE_ID),
 }).describe("Revocation message with content type discriminator");
 
+/** Zod schema for a revocation payload with its content type discriminator. */
 export const RevocationMessage: z.ZodType<RevocationMessage> =
   _RevocationMessage;
 

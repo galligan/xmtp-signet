@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Raised when an operation exceeds its configured deadline. */
 export class TimeoutError extends Error implements SignetError {
   readonly _tag = "TimeoutError" as const;
   readonly code = 1500;

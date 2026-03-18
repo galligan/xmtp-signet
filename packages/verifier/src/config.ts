@@ -6,7 +6,7 @@ export type BuildProvenanceConfig = {
   expectedIdentityPattern?: string | undefined;
 };
 
-/** Parsed verifier configuration (all defaults applied). */
+/** Parsed verifier configuration with defaults applied. */
 export type VerifierConfig = {
   verifierInboxId: string;
   sourceRepoUrl: string;
@@ -40,10 +40,13 @@ const BuildProvenanceConfigSchema = z
     expectedIdentityPattern: z
       .string()
       .optional()
-      .describe("Prefix match for expected workflow identity (e.g. https://github.com/org/repo/)"),
+      .describe(
+        "Prefix match for expected workflow identity (e.g. https://github.com/org/repo/)",
+      ),
   })
   .describe("Build provenance verification settings");
 
+/** Zod schema for verifier configuration. */
 export const VerifierConfigSchema: z.ZodType<
   VerifierConfig,
   z.ZodTypeDef,
@@ -70,5 +73,7 @@ export const VerifierConfigSchema: z.ZodType<
   ),
 });
 
+/** Default statement lifetime in seconds. */
 export const DEFAULT_STATEMENT_TTL_SECONDS = 86400;
+/** Default per-requester rate limit per hour. */
 export const DEFAULT_MAX_REQUESTS_PER_HOUR = 10;
