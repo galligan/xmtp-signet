@@ -35,6 +35,20 @@ for tool in turbo oxlint oxfmt; do
   fi
 done
 
+# Build signet-signer (macOS only, optional)
+if [[ "$(uname)" == "Darwin" ]]; then
+  echo "==> Checking Swift toolchain"
+  if command -v swift >/dev/null 2>&1; then
+    echo "  Swift $(swift --version 2>&1 | head -1)"
+    echo "==> Building signet-signer"
+    (cd signet-signer && swift build -c release --quiet)
+    echo "  Built: signet-signer/.build/release/signet-signer"
+  else
+    echo "  Swift not found — Secure Enclave support unavailable"
+    echo "  Install Xcode Command Line Tools: xcode-select --install"
+  fi
+fi
+
 echo "==> Bootstrap complete"
 echo "Next steps:"
 echo "  bun run format:check"
