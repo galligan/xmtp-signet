@@ -36,6 +36,12 @@ import {
 } from "@xmtp/signet-ws";
 import { createAdminServer as createAdminServerImpl } from "./admin/server.js";
 import type { AdminServer, AdminServerDeps } from "./admin/server.js";
+import {
+  createHttpServer as createHttpServerImpl,
+  type HttpServer,
+  type HttpServerConfig as HttpServerImplConfig,
+  type HttpServerDeps,
+} from "./http/server.js";
 import type { AdminServerConfig } from "./config/schema.js";
 import type { SignetRuntimeDeps } from "./runtime.js";
 import { createWsRequestHandler } from "./ws/request-handler.js";
@@ -341,6 +347,12 @@ export function createProductionDeps(): SignetRuntimeDeps {
       const cfg = config as AdminServerConfig;
       const d = deps as AdminServerDeps;
       return createAdminServerImpl(cfg, d);
+    },
+
+    createHttpServer(config: unknown, deps: unknown): HttpServer {
+      const cfg = config as HttpServerImplConfig;
+      const d = deps as HttpServerDeps;
+      return createHttpServerImpl(cfg, d);
     },
 
     createConversationActions() {

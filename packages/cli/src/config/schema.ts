@@ -32,6 +32,40 @@ export const AdminServerConfigSchema: z.ZodType<
   })
   .default({});
 
+// -- HTTP server config --
+
+/** Configuration for the HTTP API server. */
+export type HttpServerConfig = {
+  enabled: boolean;
+  port: number;
+  host: string;
+};
+
+type HttpServerConfigInput =
+  | {
+      enabled?: boolean | undefined;
+      port?: number | undefined;
+      host?: string | undefined;
+    }
+  | undefined;
+
+export const HttpServerConfigSchema: z.ZodType<
+  HttpServerConfig,
+  z.ZodTypeDef,
+  HttpServerConfigInput
+> = z
+  .object({
+    enabled: z.boolean().default(false).describe("Enable the HTTP API server"),
+    port: z
+      .number()
+      .int()
+      .nonnegative()
+      .default(8081)
+      .describe("HTTP server port"),
+    host: z.string().default("127.0.0.1").describe("HTTP server bind address"),
+  })
+  .default({});
+
 // -- CLI config --
 
 type SignetConfig = {
@@ -59,6 +93,7 @@ export type CliConfig = {
     port: number;
     host: string;
   };
+  http: HttpServerConfig;
   admin: AdminServerConfig;
   sessions: {
     defaultTtlSeconds: number;
@@ -85,6 +120,7 @@ type CliConfigInput = {
         host?: string | undefined;
       }
     | undefined;
+  http?: HttpServerConfigInput;
   admin?: AdminServerConfigInput;
   sessions?:
     | {
@@ -148,6 +184,7 @@ const CliConfigBaseSchema = z
           .describe("WebSocket server bind address"),
       })
       .default({}),
+    http: HttpServerConfigSchema,
     admin: AdminServerConfigSchema,
     sessions: z
       .object({

@@ -17,6 +17,7 @@ import {
 } from "@xmtp/signet-sessions";
 import type { InternalSessionManager } from "@xmtp/signet-sessions";
 import type { AdminServer } from "./admin/server.js";
+import type { HttpServer } from "./http/server.js";
 import type { CliConfig } from "./config/schema.js";
 import type { ResolvedPaths } from "./config/paths.js";
 import { resolvePaths } from "./config/paths.js";
@@ -39,6 +40,7 @@ export interface SignetRuntime {
   readonly keyManager: KeyManager;
   readonly wsServer: WsServer;
   readonly adminServer: AdminServer;
+  readonly httpServer: HttpServer | null;
   readonly auditLog: AuditLog;
   readonly config: CliConfig;
   readonly paths: ResolvedPaths;
@@ -80,6 +82,8 @@ export interface SignetRuntimeDeps {
   createWsServer: (config: unknown, deps: unknown) => WsServer;
 
   createAdminServer: (config: unknown, deps: unknown) => AdminServer;
+
+  createHttpServer?: (config: unknown, deps: unknown) => HttpServer;
 
   /** Optional factory for conversation action specs, wired in production by start.ts. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,6 +239,8 @@ export async function createSignetRuntime(
     }
   }
 
+  const dispatcher = createAdminDispatcher(registry);
+
   const adminServer = deps.createAdminServer(
     {
       socketPath: paths.adminSocket,
@@ -242,11 +248,34 @@ export async function createSignetRuntime(
     },
     {
       keyManager,
-      dispatcher: createAdminDispatcher(registry),
+      dispatcher,
       signetId: "signet",
       signerProvider: adminSignerStub,
     },
   );
+
+  // -- Optional HTTP server (disabled by default) --
+  let httpServer: HttpServer | null = null;
+  if (config.http.enabled && deps.createHttpServer) {
+    httpServer = deps.createHttpServer(
+      { port: config.http.port, host: config.http.host },
+      {
+        dispatcher,
+        sessionManager,
+        verifyAdminJwt: async (token: string) => {
+          const result = await keyManager.admin.verifyJwt(token);
+          if (Result.isError(result)) return result;
+          return Result.ok(undefined);
+        },
+        status: async () => {
+          if (runtimeRef === undefined) {
+            return { state: "starting" };
+          }
+          return runtimeRef.status();
+        },
+      },
+    );
+  }
 
   // -- Build runtime object --
   const runtime: SignetRuntime = {
@@ -256,6 +285,7 @@ export async function createSignetRuntime(
     keyManager,
     wsServer,
     adminServer,
+    httpServer,
     auditLog,
     config,
     paths,
@@ -358,10 +388,23 @@ export async function createSignetRuntime(
           return adminResult;
         }
 
+        // 4b. Start HTTP server (if enabled)
+        if (httpServer !== null) {
+          const httpResult = await httpServer.start();
+          if (Result.isError(httpResult)) {
+            currentState = "error";
+            await adminServer.stop();
+            await wsServer.stop();
+            await core.shutdown();
+            return httpResult;
+          }
+        }
+
         // 5. Write PID file
         const pidResult = await pidFile.write(process.pid);
         if (Result.isError(pidResult)) {
           currentState = "error";
+          if (httpServer !== null) await httpServer.stop();
           await adminServer.stop();
           await wsServer.stop();
           await core.shutdown();
@@ -381,6 +424,7 @@ export async function createSignetRuntime(
           // Audit log failure after servers started — roll back
           currentState = "error";
           await pidFile.cleanup();
+          if (httpServer !== null) await httpServer.stop();
           await adminServer.stop();
           await wsServer.stop();
           await core.shutdown();
@@ -419,6 +463,14 @@ export async function createSignetRuntime(
         const errors: string[] = [];
 
         // Reverse order of startup
+
+        // 0. Stop HTTP server (if running)
+        if (httpServer !== null) {
+          const httpStopResult = await httpServer.stop();
+          if (Result.isError(httpStopResult)) {
+            errors.push(`http: ${httpStopResult.error.message}`);
+          }
+        }
 
         // 1. Stop admin server
         const adminStopResult = await adminServer.stop();
