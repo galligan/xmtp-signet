@@ -164,7 +164,7 @@ export function createWsServer(
     const deadThresholdMs =
       config.missedHeartbeatsBeforeDead * config.heartbeatIntervalMs;
 
-    ws.data.heartbeatTimer = setInterval(() => {
+    ws.data.heartbeatTimer = setInterval(async () => {
       if (ws.data.phase !== "active") return;
 
       // Dead-connection detection: close if no inbound activity
@@ -177,9 +177,34 @@ export function createWsServer(
         return;
       }
 
+      // Refresh session state so idle sockets pick up revocations/narrowing.
+      // This ensures broadcasts also see current permissions.
+      const currentSessionId =
+        ws.data.sessionRecord?.sessionId ?? sessionRecord.sessionId;
+      const lookupResult = await deps.sessionManager.lookup(currentSessionId);
+      if (!lookupResult.isOk()) {
+        ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+        stopHeartbeat(ws);
+        return;
+      }
+      const fresh = lookupResult.value;
+      ws.data.sessionRecord = fresh;
+
+      if (fresh.state !== "active") {
+        const closeCode =
+          fresh.state === "revoked"
+            ? WS_CLOSE_CODES.SESSION_REVOKED
+            : fresh.state === "expired"
+              ? WS_CLOSE_CODES.SESSION_EXPIRED
+              : WS_CLOSE_CODES.POLICY_CHANGE;
+        ws.close(closeCode, `Session is ${fresh.state}`);
+        stopHeartbeat(ws);
+        return;
+      }
+
       sendSequenced(ws, {
         type: "heartbeat",
-        sessionId: sessionRecord.sessionId,
+        sessionId: currentSessionId,
         timestamp: new Date().toISOString(),
       });
     }, config.heartbeatIntervalMs);
