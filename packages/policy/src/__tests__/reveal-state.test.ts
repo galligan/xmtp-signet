@@ -43,6 +43,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
   });
@@ -61,6 +62,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -83,6 +85,7 @@ describe("RevealStateStore", () => {
         "thread-1",
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
 
@@ -93,6 +96,7 @@ describe("RevealStateStore", () => {
         "thread-1",
         "sender-2",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
 
@@ -104,6 +108,7 @@ describe("RevealStateStore", () => {
         "thread-2",
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -126,6 +131,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
 
@@ -136,6 +142,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-2",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -158,6 +165,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
 
@@ -168,6 +176,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/reaction:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -188,6 +197,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
 
@@ -203,6 +213,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -221,6 +232,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
   });
@@ -255,6 +267,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
 
@@ -265,6 +278,7 @@ describe("RevealStateStore", () => {
         "thread-1",
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
 
@@ -276,6 +290,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -312,6 +327,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(false);
   });
@@ -331,6 +347,7 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
       ),
     ).toBe(true);
   });
@@ -349,6 +366,60 @@ describe("RevealStateStore", () => {
         null,
         "sender-1",
         "xmtp.org/text:1.0" as ContentTypeId,
+        "2024-01-01T00:00:00Z",
+      ),
+    ).toBe(false);
+  });
+
+  test("time-window scope reveals messages within the window", () => {
+    const store = createRevealStateStore();
+    store.grant(
+      {
+        revealId: "r1",
+        grantedAt: "2024-01-01T00:00:00Z",
+        grantedBy: "owner",
+        expiresAt: null,
+      },
+      {
+        revealId: "r1",
+        groupId: "g1",
+        scope: "time-window",
+        targetId: "2024-01-01T10:00:00Z|2024-01-01T12:00:00Z",
+        requestedBy: "owner",
+        expiresAt: null,
+      },
+    );
+    // Inside window
+    expect(
+      store.isRevealed(
+        "m1",
+        "g1",
+        null,
+        "s1",
+        "xmtp.org/text:1.0",
+        "2024-01-01T11:00:00Z",
+      ),
+    ).toBe(true);
+    // Before window
+    expect(
+      store.isRevealed(
+        "m2",
+        "g1",
+        null,
+        "s1",
+        "xmtp.org/text:1.0",
+        "2024-01-01T09:00:00Z",
+      ),
+    ).toBe(false);
+    // After window
+    expect(
+      store.isRevealed(
+        "m3",
+        "g1",
+        null,
+        "s1",
+        "xmtp.org/text:1.0",
+        "2024-01-01T13:00:00Z",
       ),
     ).toBe(false);
   });

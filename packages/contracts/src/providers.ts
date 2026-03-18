@@ -73,6 +73,7 @@ export interface RevealStateStore {
     threadId: string | null,
     senderInboxId: string,
     contentType: ContentTypeId,
+    sentAt: string,
   ): boolean;
 
   /** Remove expired reveals. Returns count of removed grants. */

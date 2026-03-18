@@ -54,6 +54,7 @@ export function createEventProjector(
             threadId,
             event.senderInboxId,
             event.contentType,
+            event.sentAt,
           )
         : false;
 

@@ -36,6 +36,7 @@ export interface RevealStateStore {
     threadId: string | null,
     senderInboxId: string,
     contentType: ContentTypeId,
+    sentAt: string,
   ): boolean;
 
   /** Remove expired reveals. Returns count of removed grants. */
@@ -65,6 +66,7 @@ export function createRevealStateStore(): RevealStateStore {
       threadId: string | null,
       senderInboxId: string,
       contentType: ContentTypeId,
+      sentAt: string,
     ): boolean {
       const now = Date.now();
 
@@ -91,9 +93,20 @@ export function createRevealStateStore(): RevealStateStore {
             return entry.request.targetId === senderInboxId;
           case "content-type":
             return entry.request.targetId === contentType;
-          case "time-window":
-            // time-window not implemented in v0
-            return false;
+          case "time-window": {
+            // targetId is "startISO|endISO" — check if sentAt falls within
+            const pipeIdx = entry.request.targetId.indexOf("|");
+            if (pipeIdx < 0) return false;
+            const windowStart = new Date(
+              entry.request.targetId.slice(0, pipeIdx),
+            ).getTime();
+            const windowEnd = new Date(
+              entry.request.targetId.slice(pipeIdx + 1),
+            ).getTime();
+            if (isNaN(windowStart) || isNaN(windowEnd)) return false;
+            const sentAtMs = new Date(sentAt).getTime();
+            return sentAtMs >= windowStart && sentAtMs <= windowEnd;
+          }
         }
       });
     },
