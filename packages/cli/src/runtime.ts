@@ -138,7 +138,11 @@ export async function createSignetRuntime(
     keyManager,
   );
 
-  const sealManager = deps.createSealManager({});
+  const sealManager = deps.createSealManager({
+    core,
+    keyManager,
+    sessionManager,
+  });
 
   const wsServer = deps.createWsServer(
     { port: config.ws.port, host: config.ws.host },
