@@ -81,6 +81,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
   let keyManagerRef: KeyManager | null = null;
   let coreImplRef: SignetCoreImpl | null = null;
   let internalSessionManagerRef: InternalSessionManager | null = null;
+  // Late-bound WS server ref for session invalidation callbacks
+  let globalWsServerRef: WsServer | null = null;
 
   return {
     async createKeyManager(
@@ -183,10 +185,18 @@ export function createProductionDeps(): SignetRuntimeDeps {
         defaultTtlSeconds: number;
         maxConcurrentPerAgent: number;
       };
-      const internal = createSessionManagerImpl({
-        defaultTtlSeconds: cfg.defaultTtlSeconds,
-        maxConcurrentPerAgent: cfg.maxConcurrentPerAgent,
-      });
+      const internal = createSessionManagerImpl(
+        {
+          defaultTtlSeconds: cfg.defaultTtlSeconds,
+          maxConcurrentPerAgent: cfg.maxConcurrentPerAgent,
+        },
+        {
+          onSessionMutated(sessionId: string) {
+            // Push-invalidate cached session on live WS connections
+            void globalWsServerRef?.invalidateSession(sessionId);
+          },
+        },
+      );
       internalSessionManagerRef = internal;
 
       return createSessionService({

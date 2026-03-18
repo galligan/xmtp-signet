@@ -120,11 +120,18 @@ export interface InternalSessionManager {
   sweepExpired(): readonly InternalSessionRecord[];
 }
 
+export interface SessionManagerOptions {
+  /** Called when a session's policy/state is mutated (for cache invalidation). */
+  readonly onSessionMutated?: (sessionId: string) => void;
+}
+
 /** Create a new session manager with the given configuration. */
 export function createSessionManager(
   overrides?: Partial<SessionManagerConfig>,
+  options?: SessionManagerOptions,
 ): InternalSessionManager {
   const config = { ...DEFAULT_CONFIG, ...overrides };
+  const onMutated = options?.onSessionMutated;
 
   // In-memory stores
   const byId = new Map<string, InternalSessionRecord>();
@@ -183,6 +190,7 @@ export function createSessionManager(
           : existing.revocationReason,
     };
     byId.set(sessionId, updated);
+    onMutated?.(sessionId);
     return Result.ok(updated);
   }
 
