@@ -8,6 +8,8 @@ import type {
   SignetError,
   HarnessRequest,
   SendMessageRequest,
+  RevealContentRequest,
+  RevealGrant,
 } from "@xmtp/signet-schemas";
 import type { SessionManager, SessionRecord } from "@xmtp/signet-contracts";
 import { validateSendMessage } from "@xmtp/signet-policy";
@@ -20,7 +22,10 @@ export interface HarnessRequestHandlerDeps {
     contentType: string,
     content: unknown,
   ) => Promise<Result<{ messageId: string }, SignetError>>;
-  readonly sessionManager: Pick<SessionManager, "heartbeat">;
+  readonly sessionManager: Pick<
+    SessionManager,
+    "heartbeat" | "lookup" | "getRevealState"
+  >;
 }
 
 export function createWsRequestHandler(
@@ -96,6 +101,68 @@ export function createWsRequestHandler(
     return Result.ok(null);
   }
 
+  async function handleRevealContent(
+    request: RevealContentRequest,
+    session: SessionRecord,
+  ): Promise<Result<RevealGrant, SignetError>> {
+    const { reveal } = request;
+
+    // Validate groupId against session's threadScopes
+    const matchingScopes = session.view.threadScopes.filter(
+      (scope) => scope.groupId === reveal.groupId,
+    );
+    if (matchingScopes.length === 0) {
+      return Result.err(
+        PermissionError.create(
+          "Reveal group is not within the session's thread scopes",
+          { sessionId: session.sessionId, groupId: reveal.groupId },
+        ),
+      );
+    }
+
+    // For thread-scoped reveals, verify the target thread is allowed
+    if (reveal.scope === "thread" && reveal.targetId) {
+      const threadAllowed = matchingScopes.some(
+        (scope) =>
+          scope.threadId === null || scope.threadId === reveal.targetId,
+      );
+      if (!threadAllowed) {
+        return Result.err(
+          PermissionError.create(
+            "Thread is not within the session's thread scopes",
+            {
+              sessionId: session.sessionId,
+              groupId: reveal.groupId,
+              threadId: reveal.targetId,
+            },
+          ),
+        );
+      }
+    }
+
+    const storeResult = deps.sessionManager.getRevealState(session.sessionId);
+    if (Result.isError(storeResult)) {
+      return storeResult;
+    }
+
+    const store = storeResult.value;
+    const grant: RevealGrant = {
+      revealId: reveal.revealId,
+      grantedAt: new Date().toISOString(),
+      grantedBy: reveal.requestedBy,
+      expiresAt: reveal.expiresAt,
+    };
+
+    store.grant(grant, reveal);
+
+    // TODO: Replay affected historical messages through the projection pipeline
+    // and emit message.revealed events. Currently the grant is stored but
+    // already-hidden content is not re-delivered — future messages will use the
+    // reveal state, but historical content requires a replay mechanism.
+
+    return Result.ok(grant);
+  }
+
   return async (
     request: HarnessRequest,
     session: SessionRecord,
@@ -105,10 +172,12 @@ export function createWsRequestHandler(
         return handleSendMessage(request, session);
       case "heartbeat":
         return handleHeartbeat(request, session);
+      case "reveal_content":
+        return handleRevealContent(request, session);
       default:
         return Result.err(
           InternalError.create(
-            `Harness request type '${request.type}' is not supported in Phase 2B`,
+            `Harness request type '${request.type}' is not supported`,
           ),
         );
     }

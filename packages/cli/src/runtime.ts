@@ -10,7 +10,10 @@ import type {
 import { createActionRegistry } from "@xmtp/signet-contracts";
 import type { KeyManager } from "@xmtp/signet-keys";
 import type { WsServer } from "@xmtp/signet-ws";
-import { createSessionActions } from "@xmtp/signet-sessions";
+import {
+  createSessionActions,
+  createRevealActions,
+} from "@xmtp/signet-sessions";
 import type { AdminServer } from "./admin/server.js";
 import type { CliConfig } from "./config/schema.js";
 import type { ResolvedPaths } from "./config/paths.js";
@@ -184,6 +187,10 @@ export async function createSignetRuntime(
   let runtimeRef: SignetRuntime | undefined;
 
   for (const spec of createSessionActions({ sessionManager })) {
+    registry.register(spec);
+  }
+
+  for (const spec of createRevealActions({ sessionManager })) {
     registry.register(spec);
   }
 

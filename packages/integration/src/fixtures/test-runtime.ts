@@ -402,6 +402,9 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
           }
           return Result.ok(result.value.state === "active");
         },
+        getRevealState(sessionId) {
+          return sessionManager.getRevealState(sessionId);
+        },
       },
       sealManager,
       tokenLookup,

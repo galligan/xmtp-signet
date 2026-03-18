@@ -127,6 +127,10 @@ export function createSessionService(deps: SessionServiceDeps): SessionManager {
       return Result.ok(undefined);
     },
 
+    getRevealState(sessionId: string) {
+      return deps.manager.getRevealState(sessionId);
+    },
+
     async isActive(sessionId: string) {
       deps.manager.sweepExpired();
       const result = deps.manager.getSessionById(sessionId);

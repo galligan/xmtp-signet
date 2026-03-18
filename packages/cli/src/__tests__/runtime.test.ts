@@ -162,6 +162,7 @@ function makeMockDeps(tracker: {
         revoke: async () => Result.ok(undefined),
         heartbeat: async () => Result.ok(undefined),
         isActive: async () => Result.ok(false),
+        getRevealState: () => Result.err(InternalError.create("not found")),
       };
     },
     createSealManager: () => {

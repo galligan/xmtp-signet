@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@xmtp/signet-contracts": "workspace:*",
+    "@xmtp/signet-policy": "workspace:*",
     "@xmtp/signet-schemas": "workspace:*",
     "better-result": "catalog:",
     "zod": "catalog:"

@@ -10,6 +10,7 @@ import type {
 import type { SealEnvelope } from "./seal-envelope.js";
 import type { CoreState, GroupInfo } from "./core-types.js";
 import type { SessionRecord } from "./session-types.js";
+import type { RevealStateStore } from "./providers.js";
 
 /** Top-level signet lifecycle: initialize, shutdown, state transitions. */
 export interface SignetCore {
@@ -40,6 +41,8 @@ export interface SessionManager {
   ): Promise<Result<void, SignetError>>;
   heartbeat(sessionId: string): Promise<Result<void, SignetError>>;
   isActive(sessionId: string): Promise<Result<boolean, SignetError>>;
+  /** Get the per-session reveal state store, lazily creating it if needed. */
+  getRevealState(sessionId: string): Result<RevealStateStore, SignetError>;
 }
 
 /** Seal lifecycle: issue, refresh, revoke, query. */

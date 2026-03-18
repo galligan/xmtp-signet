@@ -20,7 +20,11 @@ import {
   InternalError,
   ValidationError,
 } from "@xmtp/signet-schemas";
-import type { MaterialityCheck } from "@xmtp/signet-contracts";
+import type {
+  MaterialityCheck,
+  RevealStateStore,
+} from "@xmtp/signet-contracts";
+import { createRevealStateStore } from "@xmtp/signet-policy";
 import { generateToken, generateSessionId } from "./token.js";
 import { computePolicyHash } from "./policy-hash.js";
 import { checkMateriality as checkMaterialityImpl } from "./materiality.js";
@@ -108,6 +112,7 @@ export interface InternalSessionManager {
     newView: ViewConfig,
     newGrant: GrantConfig,
   ): Result<MaterialityCheck, NotFoundError>;
+  getRevealState(sessionId: string): Result<RevealStateStore, NotFoundError>;
   sweepExpired(): readonly InternalSessionRecord[];
 }
 
@@ -121,6 +126,7 @@ export function createSessionManager(
   const byId = new Map<string, InternalSessionRecord>();
   const byToken = new Map<string, string>(); // token -> sessionId
   const byAgent = new Map<string, Set<string>>(); // agentInboxId -> sessionIds
+  const revealStates = new Map<string, RevealStateStore>(); // sessionId -> store
 
   function now(): string {
     return new Date().toISOString();
@@ -189,10 +195,18 @@ export function createSessionManager(
     return active;
   }
 
+  function cleanupRevealState(sessionId: string): void {
+    const store = revealStates.get(sessionId);
+    if (store) {
+      store.restore({ activeReveals: [] });
+    }
+  }
+
   function revokeRecord(
     sessionId: string,
     reason: SessionRevocationReason,
   ): Result<InternalSessionRecord, InternalError> {
+    cleanupRevealState(sessionId);
     return mutateRecord(sessionId, {
       state: "revoked",
       revokedAt: now(),
@@ -404,6 +418,19 @@ export function createSessionManager(
       return revoked;
     },
 
+    getRevealState(sessionId) {
+      const record = byId.get(sessionId);
+      if (!record) {
+        return Result.err(NotFoundError.create("session", sessionId));
+      }
+      let store = revealStates.get(sessionId);
+      if (!store) {
+        store = createRevealStateStore();
+        revealStates.set(sessionId, store);
+      }
+      return Result.ok(store);
+    },
+
     checkMateriality(sessionId, newView, newGrant) {
       const record = byId.get(sessionId);
       if (!record) {
@@ -427,6 +454,7 @@ export function createSessionManager(
         // TTL expiry: transition to "expired" (distinct from revocation)
         const expiresAt = new Date(record.expiresAt).getTime();
         if (currentTime >= expiresAt) {
+          cleanupRevealState(record.sessionId);
           const expireResult = mutateRecord(record.sessionId, {
             state: "expired",
           });

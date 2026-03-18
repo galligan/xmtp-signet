@@ -84,6 +84,11 @@ const server = createMcpServer(
           InternalError.create("SessionManager not configured"),
         );
       },
+      getRevealState() {
+        return Result.err(
+          InternalError.create("SessionManager not configured"),
+        );
+      },
     },
   },
 );

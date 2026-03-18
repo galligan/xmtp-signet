@@ -116,6 +116,9 @@ export function createMockSessionManager(
       const s = sessions.get(sessionId);
       return Result.ok(s?.state === "active");
     },
+    getRevealState() {
+      return Result.err(NotFoundError.create("session", "mock"));
+    },
   };
 }
 

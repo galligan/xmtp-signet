@@ -114,6 +114,9 @@ export function createMockSessionManager(
       const s = sessions.get(sessionId);
       return Result.ok(s?.state === "active");
     },
+    getRevealState() {
+      return Result.err(NotFoundError.create("session", "mock"));
+    },
     // Non-standard: token lookup for the WS layer
     _validToken: validToken,
     _record: record,

@@ -221,6 +221,9 @@ describe("contract-verification", () => {
       async isActive(_sessionId) {
         return Result.ok(true);
       },
+      getRevealState(_sessionId) {
+        return Result.err(InternalError.create("stub"));
+      },
     };
 
     // SealManager contract

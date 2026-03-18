@@ -55,4 +55,6 @@ export type {
   SealStamper,
   SealPublisher,
   RevealStateStore,
+  RevealStateEntry,
+  RevealStateSnapshot,
 } from "./providers.js";

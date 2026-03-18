@@ -2,8 +2,9 @@ import type { Result } from "better-result";
 import type {
   Seal,
   SignetError,
+  ContentTypeId,
   RevealGrant,
-  RevealState,
+  RevealRequest,
   RevocationSeal,
 } from "@xmtp/signet-schemas";
 import type {
@@ -45,13 +46,41 @@ export interface SealPublisher {
   ): Promise<Result<void, SignetError>>;
 }
 
-/** Persists and queries reveal grant state. */
+/** Serializable reveal entry that preserves request context for restore. */
+export interface RevealStateEntry {
+  readonly grant: RevealGrant;
+  readonly request: RevealRequest;
+}
+
+/** Snapshot format for the reveal state store. */
+export interface RevealStateSnapshot {
+  readonly activeReveals: readonly RevealStateEntry[];
+}
+
+/**
+ * In-memory reveal state store scoped to an agent session.
+ * The policy engine owns the matching logic; the session manager
+ * owns the lifecycle (create, cleanup on revoke/expire).
+ */
 export interface RevealStateStore {
-  grant(revealGrant: RevealGrant): Promise<Result<void, SignetError>>;
-  revoke(revealId: string): Promise<Result<void, SignetError>>;
-  activeReveals(sessionId: string): Promise<Result<RevealState, SignetError>>;
+  /** Add a reveal grant with its originating request. */
+  grant(reveal: RevealGrant, request: RevealRequest): void;
+
+  /** Check if a specific message is revealed by any active grant. */
   isRevealed(
-    sessionId: string,
     messageId: string,
-  ): Promise<Result<boolean, SignetError>>;
+    groupId: string,
+    threadId: string | null,
+    senderInboxId: string,
+    contentType: ContentTypeId,
+  ): boolean;
+
+  /** Remove expired reveals. Returns count of removed grants. */
+  expireStale(now: Date): number;
+
+  /** Snapshot the current state for serialization. */
+  snapshot(): RevealStateSnapshot;
+
+  /** Restore from a serialized snapshot. */
+  restore(state: RevealStateSnapshot): void;
 }
