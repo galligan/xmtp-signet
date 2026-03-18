@@ -15,11 +15,13 @@ description: >
 
 # Using xmtp-signet
 
-> [!CAUTION]
-> Early development. The signet architecture is implemented and tested, but
-> there is no runnable binary yet. This skill describes the model and how
-> things will work — use it to plan harness integration and understand the
-> permission system. The concepts are stable even as the API surface evolves.
+> [!NOTE]
+> Phase 1 and Phase 2 feature-complete. The signet daemon (`xmtp-signet` /
+> `xs` command) is fully functional with real XMTP network connectivity
+> (devnet), WebSocket transport with session resumption, HTTP API, admin
+> socket, and session permission editing. Build provenance verification
+> implemented. The system is in active development — expect API refinements
+> as usage patterns emerge.
 
 The signet is the primary way to connect agents to XMTP. Instead of giving
 your agent raw access to the XMTP SDK, wallet keys, and encrypted database,
@@ -107,21 +109,18 @@ re-authentication under the updated policy.
 
 ## Connecting to the signet
 
-> This section describes the target architecture. The wire protocol and
-> harness SDK are under development.
-
-Your agent connects to the signet over a transport — WebSocket (primary) or
-MCP (for LLM-driven harnesses), with HTTP following. A harness client SDK
-(`@xmtp/signet-handler`) provides typed events, Result-based requests, and
-automatic reconnection.
+Your agent connects to the signet over a transport — WebSocket (primary),
+MCP (for LLM-driven harnesses), or HTTP (for non-streaming admin and status
+operations). A harness client SDK (`@xmtp/signet-sdk`) provides typed events,
+Result-based requests, and automatic reconnection.
 
 ### Connection lifecycle
 
 ```
-1. 1. Connect    → Open WebSocket to signet
+1. Connect      → Open WebSocket to signet
 2. Authenticate → Send session token as first frame
-3. Active     → Receive events, send requests
-4. Reconnect  → Resume with sequence number for catch-up
+3. Active       → Receive events, send requests
+4. Reconnect    → Resume with sequence number for catch-up
 ```
 
 The signet manages the connection state machine (connecting → authenticating →
@@ -223,9 +222,9 @@ The signet's verifier service runs these independently:
 1. **Source available** — agent source code is publicly accessible
 2. **Build provenance** — binary was built from the claimed source
 3. **Release signing** — release artifacts are cryptographically signed
-4. **Attestation signature** — attestation was signed by a valid key
-5. **Attestation chain** — attestation correctly references its predecessor
-6. **Schema compliance** — attestation conforms to the expected schema
+4. **Seal signature** — seal was signed by a valid key
+5. **Seal chain** — seal correctly references its predecessor
+6. **Schema compliance** — seal conforms to the expected schema
 
 Each check produces a verdict (pass/fail/skip) with evidence. The combined
 result determines the trust tier.

@@ -17,7 +17,7 @@ attestation, which creates a verifiable record.
 
 ## Verification service
 
-The verifier runs 6 independent checks against an agent's attestation. Each
+The verifier runs 6 independent checks against an agent's seal. Each
 check produces a verdict:
 
 | Verdict | Meaning |
@@ -42,23 +42,23 @@ source commit.
 Verifies that release artifacts are cryptographically signed. Checks for valid
 signatures from a known release key.
 
-### Check 4: Attestation signature
+### Check 4: Seal signature
 
-Verifies that the attestation itself was signed by a valid key in the agent's
+Verifies that the seal itself was signed by a valid key in the agent's
 key hierarchy. Checks the signature against the operational key and validates
 the key chain back to the root.
 
-### Check 5: Attestation chain
+### Check 5: Seal chain
 
-Verifies that the attestation correctly references its predecessor. Each
-attestation includes the hash of the previous attestation, forming a chain.
-A broken chain indicates tampering or a gap in the record.
+Verifies that the seal correctly references its predecessor. Each seal
+includes the hash of the previous seal, forming a chain. A broken chain
+indicates tampering or a gap in the record.
 
 ### Check 6: Schema compliance
 
-Verifies that the attestation conforms to the expected schema. Checks field
-presence, types, and value constraints. A non-compliant attestation may
-indicate a buggy or outdated signet.
+Verifies that the seal conforms to the expected schema. Checks field
+presence, types, and value constraints. A non-compliant seal may indicate
+a buggy or outdated signet.
 
 ## Trust tiers
 
@@ -67,10 +67,9 @@ The combined check results map to a trust tier:
 | Tier | Required checks | What it means |
 |------|----------------|---------------|
 | `unverified` | None | No verification performed or all checks skipped |
-| `self-attested` | Attestation signature + chain + schema | Agent's own attestation is valid and consistent |
-| `source-verified` | Self-attested + source available | Source code is inspectable |
-| `build-verified` | Source-verified + build provenance | Binary provably built from source |
-| `fully-verified` | All 6 checks pass | Complete verification chain |
+| `source-verified` | Seal signature + chain + schema + source available | Source code is publicly accessible and inspectable |
+| `reproducibly-verified` | Source-verified + build provenance | Binary provably built from source |
+| `runtime-attested` | All 6 checks pass | Complete verification chain |
 
 Trust tiers are **descriptive, not prescriptive**. They tell group participants
 what has been verified — they don't automatically grant or restrict anything.

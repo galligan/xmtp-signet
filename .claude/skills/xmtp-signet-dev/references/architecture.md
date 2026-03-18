@@ -7,13 +7,13 @@ Dependencies flow downward only. No package may import from a higher tier.
 ```
 ┌─────────────────────────────────────────────────┐
 │                    Client                        │
-│                    handler                       │
+│                      sdk                         │
 ├─────────────────────────────────────────────────┤
 │                   Transport                      │
-│               ws · mcp · cli                     │
+│           ws · mcp · cli · http                  │
 ├─────────────────────────────────────────────────┤
 │                    Runtime                       │
-│  core · keys · sessions · attestations · policy  │
+│    core · keys · sessions · seals · policy       │
 │                   verifier                       │
 ├─────────────────────────────────────────────────┤
 │                   Foundation                     │
@@ -33,16 +33,18 @@ system, `HandlerContext`, and `ActionResult` envelope.
 responsibility. `core` is the only package that touches the XMTP SDK (now wired
 via `createSdkClientFactory`). `policy` handles all filtering and grant
 enforcement. `keys` manages the cryptographic hierarchy plus admin keys and JWT.
-`sessions` tracks ephemeral authorization state. `attestations` manages the
+`sessions` tracks ephemeral authorization state. `seals` manages the
 lifecycle of group-visible permission declarations. `verifier` provides the
 6-check trust verification service.
 
-**Transport** — Protocol adapters. `ws` is the WebSocket transport (Bun.serve).
-`mcp` converts ActionSpecs to MCP tools with session-scoped auth. `cli` is the
+**Transport** — Protocol adapters. `ws` is the WebSocket transport (Bun.serve)
+with session resumption, frame sequencing, and backpressure tracking. `mcp`
+converts ActionSpecs to MCP tools with session-scoped auth. `cli` is the
 composition root with 8 command groups, daemon lifecycle, admin Unix socket
-(JSON-RPC 2.0), and direct mode fallback.
+(JSON-RPC 2.0), and direct mode fallback. `http` handles non-streaming
+admin/session/health routes via `Bun.serve()`.
 
-**Client** — `handler` is the harness-facing SDK. WebSocket client with typed
+**Client** — `sdk` (`@xmtp/signet-sdk`) is the harness-facing SDK. WebSocket client with typed
 events, Result-based requests, automatic reconnection, exponential backoff.
 
 **Test** — `integration` is test-only. 7 suites validating cross-package

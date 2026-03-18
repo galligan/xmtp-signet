@@ -95,9 +95,9 @@ Session lifecycle and token management.
 
 **Dependencies:** `@xmtp/signet-contracts`, `@xmtp/signet-schemas`
 
-### @xmtp/signet-attestations
+### @xmtp/signet-seals
 
-Attestation lifecycle — build, sign, encode, publish.
+Seal lifecycle — build, sign, encode, publish, delta computation.
 
 **Exports:**
 - ID: `generateAttestationId`
@@ -193,7 +193,7 @@ Composition root. CLI entry point, daemon lifecycle, admin socket, config loadin
 
 ## Client Tier
 
-### @xmtp/signet-handler
+### @xmtp/signet-sdk
 
 Harness-facing client SDK. WebSocket wrapper with typed events and Result-based requests.
 

@@ -19,15 +19,19 @@ description: >
 
 ## Where does my code go?
 
-Start here. The signet is 9 packages organized into three tiers. Dependencies
-flow downward only — never import from a higher tier.
+Start here. The signet is 13 packages organized into four tiers plus a test
+package. Dependencies flow downward only — never import from a higher tier.
 
 ```
-Transport    ws
+Client       sdk
              ↓
-Runtime      core · keys · sessions · attestations · policy · verifier
+Transport    ws · mcp · cli · http
+             ↓
+Runtime      core · keys · sessions · seals · policy · verifier
              ↓
 Foundation   schemas · contracts
+
+Test         integration (test-only, cross-package)
 ```
 
 ### By intent
@@ -45,20 +49,26 @@ in the relevant runtime package
 content projector)
 
 **"I'm adding or changing a transport"**
-→ `ws` as the reference implementation. Transports are thin adapters: parse
-protocol input → call handler → format protocol output. They never contain
-domain logic.
+→ `ws` as the reference implementation. `mcp` converts ActionSpecs to MCP
+tools. `cli` is the composition root with daemon lifecycle and admin socket.
+`http` handles non-streaming admin/session/health routes. Transports are thin
+adapters: parse protocol input → call handler → format protocol output. They
+never contain domain logic.
 
 **"I'm working on key management or signing"**
 → `keys` (three-tier hierarchy: root → operational → session). See
 `references/key-hierarchy.md` for the full model.
 
-**"I'm working on attestations or verification"**
-→ `attestations` (lifecycle, building, signing, publishing) or `verifier`
-(the 6-check trust verification service)
+**"I'm working on seals or verification"**
+→ `seals` (lifecycle, building, signing, publishing, delta computation) or
+`verifier` (the 6-check trust verification service)
 
 **"I'm working on session lifecycle"**
 → `sessions` (token generation, policy hashing, materiality detection)
+
+**"I'm building a harness client"**
+→ `sdk` — the harness-facing client SDK with typed events, Result-based
+requests, and automatic reconnection
 
 **"I'm working on the XMTP client itself"**
 → `core` — the only package that touches `@xmtp/node-sdk` directly
@@ -76,7 +86,8 @@ type Handler<TInput, TOutput, TError extends SignetError> = (
 ) => Promise<Result<TOutput, TError>>;
 ```
 
-Note: `HandlerContext` is the planned canonical type. The current implementation uses `CoreContext` from `@xmtp/signet-contracts`.
+`HandlerContext` is defined in `@xmtp/signet-contracts` with `requestId`,
+`signal`, and optional `adminAuth`/`sessionId`.
 
 **Rules:**
 - Handlers receive pre-validated input (Zod parsing happens at the transport
@@ -228,12 +239,21 @@ stage, not by modifying existing ones.
 
 ## Adding a new transport
 
-Use `ws` as the template. A transport adapter:
+Use `ws` as the template. Existing transports:
+
+- **ws** — WebSocket (primary harness transport) with session resumption,
+  frame sequencing, backpressure tracking, and graceful shutdown
+- **mcp** — Converts `ActionSpec` to MCP tools with session-scoped auth
+- **cli** — Composition root with 8 command groups, daemon lifecycle, admin
+  Unix socket (JSON-RPC 2.0), HTTP server, and direct mode fallback
+- **http** — Non-streaming admin/session/health routes via `Bun.serve()`
+
+A transport adapter:
 
 1. Accepts protocol connections (WebSocket, HTTP, CLI stdin)
 2. Parses incoming frames/requests with Zod schemas at the boundary
 3. Validates session tokens via the auth handler
-4. Routes requests through the handler contract
+4. Routes requests through the handler contract (or the `ActionRegistry`)
 5. Formats Result values into protocol-specific responses
 6. Broadcasts events from the signet to connected harnesses
 
@@ -253,6 +273,7 @@ about grants or views inside a transport adapter, that logic belongs in
 | Skipping the test | Write it first. Red → Green → Refactor |
 | Catching exceptions in handler code | Let the transport boundary handle unexpected throws |
 | Adding a dependency without checking | Check blessed deps in CLAUDE.md first |
+| Using "attestations" instead of "seals" | The package is `seals`; attestations are the signed data inside a seal |
 
 ## File size guardrails
 
