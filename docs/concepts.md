@@ -162,7 +162,7 @@ A **reveal** is an explicit authorization to expose previously hidden content to
 | `thread`       | All messages in a thread (by `threadId`)               |
 | `sender`       | All messages from a specific sender                    |
 | `content-type` | All messages of a specific content type                |
-| `time-window`  | All messages within a time range                       |
+| `time-window`  | All messages within a time range *(defined in schema, not yet implemented)* |
 
 ### Lifecycle
 

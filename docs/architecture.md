@@ -9,7 +9,7 @@ Dependencies flow downward only across tiers. No package may import from a highe
 ```
 ┌─────────────────────────────────────────────────┐
 │                    Client                        │
-│                    handler                       │
+│                      sdk                         │
 ├─────────────────────────────────────────────────┤
 │                   Transport                      │
 │           ws · mcp · cli · http                   │
@@ -246,7 +246,7 @@ The CLI is the composition root that wires everything together:
 
 The HTTP transport provides a `Bun.serve()` adapter for non-streaming admin and status operations:
 
-- **Routes** — `GET /v1/health` (unauthenticated status), `POST /v1/admin/:method` (admin-authenticated dispatcher), `POST /v1/session/:method` (session dispatch for `session.issue`, `session.revoke`, `session.list`)
+- **Routes** — `GET /v1/health` (unauthenticated status), `POST /v1/admin/:method` (admin-authenticated dispatcher). Session routes (`POST /v1/session/:method`) are defined but not yet implemented
 - **Auth** — Bearer token extraction with admin JWT verification for admin routes
 - **Error mapping** — error taxonomy categories map to HTTP status codes (400, 401, 403, 404, 408, 499, 500)
 - **Status provider** — async status callback injected via `HttpServerDeps` for health endpoint

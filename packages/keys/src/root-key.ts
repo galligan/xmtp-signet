@@ -23,6 +23,32 @@ const RootKeyHandleSchema = z.object({
   createdAt: z.string(),
 });
 
+/** Convert a DER-encoded P-256 ECDSA signature to raw 64-byte (r || s). */
+function derToRaw(der: Uint8Array): Uint8Array {
+  let offset = 2; // skip SEQUENCE tag + length
+  // Read r
+  if (der[offset] !== 0x02) return der; // not DER, return as-is
+  offset++;
+  const rLen = der[offset]!;
+  offset++;
+  let r = der.slice(offset, offset + rLen);
+  offset += rLen;
+  // Read s
+  if (der[offset] !== 0x02) return der;
+  offset++;
+  const sLen = der[offset]!;
+  offset++;
+  let s = der.slice(offset, offset + sLen);
+  // Strip leading zeros
+  while (r.length > 32 && r[0] === 0) r = r.slice(1);
+  while (s.length > 32 && s[0] === 0) s = s.slice(1);
+  // Pad to 32 bytes
+  const raw = new Uint8Array(64);
+  raw.set(r, 32 - r.length);
+  raw.set(s, 64 - s.length);
+  return raw;
+}
+
 const ROOT_KEY_REF = "root-key-ref";
 const ROOT_KEY_PRIVATE = "root-key:private";
 
@@ -57,6 +83,9 @@ export async function initializeRootKey(
         );
       }
       const stored: RootKeyHandle = parsed.data;
+      // The stored handle's platform is authoritative — if we detect
+      // secure-enclave but the root was created as software-vault,
+      // we must continue using the software path for this root key.
       return Result.ok(stored);
     } catch (e) {
       return Result.err(

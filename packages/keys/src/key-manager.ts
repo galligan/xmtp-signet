@@ -117,8 +117,8 @@ export async function createKeyManager(
   }
   const config = parsed.data;
 
-  const detectedPlatform = detectPlatform();
-  const trustTier = platformToTrustTier(detectedPlatform);
+  let activePlatform = detectPlatform();
+  let activeTrustTier = platformToTrustTier(activePlatform);
 
   const vaultResult = await createVault(config.dataDir);
   if (Result.isError(vaultResult)) return vaultResult;
@@ -132,11 +132,11 @@ export async function createKeyManager(
 
   const manager: KeyManager = {
     get platform(): PlatformCapability {
-      return detectedPlatform;
+      return activePlatform;
     },
 
     get trustTier(): TrustTier {
-      return trustTier;
+      return activeTrustTier;
     },
 
     get admin(): AdminKeyManager {
@@ -152,10 +152,15 @@ export async function createKeyManager(
       const result = await initializeRootKey(
         vault,
         config.rootKeyPolicy,
-        detectedPlatform,
+        activePlatform,
       );
       if (Result.isError(result)) return result;
       rootKeyHandle = result.value;
+      // Use the stored handle's platform as authoritative — a persisted
+      // software-vault root on a machine that now detects SE must not
+      // advertise secure-enclave trust tier.
+      activePlatform = rootKeyHandle.platform;
+      activeTrustTier = platformToTrustTier(activePlatform);
       return Result.ok(rootKeyHandle);
     },
 

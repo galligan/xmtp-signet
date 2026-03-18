@@ -117,12 +117,17 @@ let total = 0;
 let documented = 0;
 
 for (const sourceFile of program.getSourceFiles()) {
-  const relativePath = relative(ROOT_DIR, sourceFile.fileName);
+  // Normalize to forward slashes for Windows compatibility
+  const relativePath = relative(ROOT_DIR, sourceFile.fileName).replace(
+    /\\/g,
+    "/",
+  );
+  const normalizedFileName = sourceFile.fileName.replace(/\\/g, "/");
 
   if (
-    (!sourceFile.fileName.includes("/packages/") &&
-      !sourceFile.fileName.startsWith("packages/")) ||
-    sourceFile.fileName.includes("/node_modules/") ||
+    (!normalizedFileName.includes("/packages/") &&
+      !normalizedFileName.startsWith("packages/")) ||
+    normalizedFileName.includes("/node_modules/") ||
     relativePath.includes("/src/__tests__/")
   ) {
     continue;
