@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+/** Verdict for a single verifier check. */
 export const CheckVerdict: z.ZodEnum<["pass", "fail", "skip"]> = z
   .enum(["pass", "fail", "skip"])
   .describe("Outcome of a single verification check");
 
+/** Type alias for a single verifier check verdict. */
 export type CheckVerdict = z.infer<typeof CheckVerdict>;
 
+/** Result payload for one verification check. */
 export type VerificationCheck = {
   checkId: string;
   verdict: CheckVerdict;
@@ -25,5 +28,6 @@ const _VerificationCheck = z
   })
   .describe("Result of a single verification check");
 
+/** Zod schema for a single verification check result. */
 export const VerificationCheck: z.ZodType<VerificationCheck> =
   _VerificationCheck;

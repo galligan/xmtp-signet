@@ -4,6 +4,7 @@ import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
 
+/** Check ID for seal signature verification. */
 export const SEAL_SIGNATURE_CHECK_ID = "seal_signature" as const;
 
 /**

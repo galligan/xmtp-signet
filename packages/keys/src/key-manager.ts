@@ -24,10 +24,14 @@ import { createAdminKeyManager, type AdminKeyManager } from "./admin-key.js";
 import { initializeRootKey } from "./root-key.js";
 import type { RootKeyHandle, OperationalKey, SessionKey } from "./types.js";
 
+/** High-level key manager facade for all key tiers and vault access. */
 export interface KeyManager {
+  /** Initialize the root key material and any dependent key tiers. */
   initialize(): Promise<Result<RootKeyHandle, InternalError | AuthError>>;
 
+  /** Detected platform capability for key storage and signing. */
   readonly platform: PlatformCapability;
+  /** Trust tier inferred from the detected platform. */
   readonly trustTier: TrustTier;
 
   /** Access admin key operations. */
@@ -96,6 +100,10 @@ export interface KeyManager {
   close(): void;
 }
 
+/**
+ * Create a key manager backed by the configured vault and detected
+ * platform capability.
+ */
 export async function createKeyManager(
   rawConfig: Partial<KeyManagerConfig> & { dataDir: string },
 ): Promise<Result<KeyManager, InternalError>> {

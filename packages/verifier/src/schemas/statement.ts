@@ -3,14 +3,17 @@ import { TrustTier } from "@xmtp/signet-schemas";
 import type { TrustTier as TrustTierType } from "@xmtp/signet-schemas";
 import { VerificationCheck } from "./check.js";
 
+/** Overall outcome emitted by the verifier. */
 export const VerificationVerdict: z.ZodEnum<
   ["verified", "partial", "rejected"]
 > = z
   .enum(["verified", "partial", "rejected"])
   .describe("Overall verification outcome");
 
+/** Type union for verifier outcomes. */
 export type VerificationVerdict = z.infer<typeof VerificationVerdict>;
 
+/** Signed statement produced by the verifier for a request. */
 export type VerificationStatement = {
   statementId: string;
   requestId: string;
@@ -27,6 +30,7 @@ export type VerificationStatement = {
   signatureAlgorithm: "Ed25519";
 };
 
+/** Zod schema for a verifier statement. */
 export const VerificationStatementSchema: z.ZodType<VerificationStatement> = z
   .object({
     statementId: z.string().describe("Unique statement identifier"),

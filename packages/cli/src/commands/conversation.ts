@@ -7,6 +7,7 @@ import {
   type WithDaemonClient,
 } from "./daemon-client.js";
 
+/** Dependencies for conversation management CLI commands. */
 export interface ConversationCommandDeps {
   readonly withDaemonClient: WithDaemonClient;
   readonly writeStdout: (message: string) => void;

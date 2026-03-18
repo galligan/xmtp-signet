@@ -11,6 +11,9 @@ import {
 
 export type { DaemonCommandContext, DaemonCommandDeps };
 
+/**
+ * Parse a JSON CLI flag value with the shared daemon-command validation path.
+ */
 export function parseJsonInput<T>(
   input: string,
   schema: z.ZodType<T>,
@@ -19,6 +22,10 @@ export function parseJsonInput<T>(
   return parseJsonInputImpl(input, field, schema);
 }
 
+/**
+ * Resolve daemon connection context from command options, then run an RPC body
+ * with an authenticated admin client.
+ */
 export async function withDaemonClient<T>(
   options: { config?: string | undefined },
   deps: Partial<DaemonCommandDeps>,

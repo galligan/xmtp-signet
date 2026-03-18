@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Raised when an operation is cancelled by the user or signal. */
 export class CancelledError extends Error implements SignetError {
   readonly _tag = "CancelledError" as const;
   readonly code = 1600;

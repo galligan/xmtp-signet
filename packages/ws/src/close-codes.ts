@@ -24,4 +24,5 @@ export const WS_CLOSE_CODES = {
   PROTOCOL_ERROR: 4009,
 } as const;
 
+/** Union of all WebSocket close codes used by the signet server. */
 export type WsCloseCode = (typeof WS_CLOSE_CODES)[keyof typeof WS_CLOSE_CODES];

@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Raised when a requested resource cannot be found. */
 export class NotFoundError extends Error implements SignetError {
   readonly _tag = "NotFoundError" as const;
   readonly code = 1100;

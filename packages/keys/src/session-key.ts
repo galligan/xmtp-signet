@@ -18,20 +18,30 @@ interface SessionKeyEntry {
   readonly privateKey: CryptoKey;
 }
 
+/** In-memory manager for issuing, signing with, and revoking session keys. */
 export interface SessionKeyManager {
+  /** Issue a new session key with the provided TTL. */
   issue(
     sessionId: string,
     ttlSeconds: number,
   ): Promise<Result<SessionKey, InternalError>>;
 
+  /** Sign bytes with an active session key. */
   sign(
     keyId: string,
     data: Uint8Array,
   ): Promise<Result<Uint8Array, InternalError | NotFoundError>>;
 
+  /** Revoke a session key immediately. */
   revoke(keyId: string): Result<void, NotFoundError>;
 }
 
+/**
+ * Create an in-memory session key manager.
+ *
+ * Session keys are intentionally ephemeral and live only for the
+ * lifetime of the process.
+ */
 export function createSessionKeyManager(): SessionKeyManager {
   const entries = new Map<string, SessionKeyEntry>();
 

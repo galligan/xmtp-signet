@@ -12,22 +12,29 @@ import {
   toHex,
 } from "./crypto-keys.js";
 
+/** Manager for operational keys backed by the vault. */
 export interface OperationalKeyManager {
+  /** Create a new operational key for an identity and optional group. */
   create(
     identityId: string,
     groupId: string | null,
   ): Promise<Result<OperationalKey, InternalError>>;
 
+  /** Look up an operational key by identity. */
   get(identityId: string): Result<OperationalKey, NotFoundError>;
 
+  /** Look up an operational key by group membership. */
   getByGroupId(groupId: string): Result<OperationalKey, NotFoundError>;
 
+  /** Rotate an existing operational key in place. */
   rotate(
     identityId: string,
   ): Promise<Result<OperationalKey, InternalError | NotFoundError>>;
 
+  /** Return all currently known operational keys. */
   list(): readonly OperationalKey[];
 
+  /** Sign bytes using the operational key for an identity. */
   sign(
     identityId: string,
     data: Uint8Array,
@@ -37,6 +44,9 @@ export interface OperationalKeyManager {
 /** Vault key prefix for operational key material. */
 const OP_KEY_PREFIX = "op-key:";
 
+/**
+ * Create an operational key manager backed by the provided vault.
+ */
 export function createOperationalKeyManager(
   vault: Vault,
 ): OperationalKeyManager {

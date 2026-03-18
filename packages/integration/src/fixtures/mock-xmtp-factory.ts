@@ -17,11 +17,13 @@ import {
   type MockXmtpClientOptions,
 } from "./mock-xmtp-client.js";
 
+/** Mock XMTP client factory used by integration tests. */
 export interface MockXmtpClientFactory extends XmtpClientFactory {
   /** Access created clients by identity ID. */
   readonly clients: ReadonlyMap<string, MockXmtpClient>;
 }
 
+/** Fan-out emitters for all clients created by the factory. */
 export interface MockFactoryStreams {
   /** Emit a message on all active client streams. */
   readonly emitMessage: (msg: XmtpDecodedMessage) => void;
@@ -29,6 +31,7 @@ export interface MockFactoryStreams {
   readonly emitGroupEvent: (event: XmtpGroupEvent) => void;
 }
 
+/** Create a factory that returns controllable mock XMTP clients. */
 export function createMockXmtpClientFactory(
   defaultOptions?: MockXmtpClientOptions,
 ): {

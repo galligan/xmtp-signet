@@ -120,6 +120,7 @@ export interface InternalSessionManager {
   sweepExpired(): readonly InternalSessionRecord[];
 }
 
+/** Hooks for session-manager side effects. */
 export interface SessionManagerOptions {
   /** Called when a session's policy/state is mutated (for cache invalidation). */
   readonly onSessionMutated?: (sessionId: string) => void;

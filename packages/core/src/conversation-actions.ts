@@ -14,14 +14,21 @@ import { joinConversation } from "./convos/join.js";
 import { generateConvosInviteUrl } from "./convos/invite-generator.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
 
+/** Dependencies used to build conversation-related action specs. */
 export interface ConversationActionDeps {
+  /** Identity store used to resolve conversation creators and viewers. */
   readonly identityStore: SqliteIdentityStore;
+  /** Lookup for the managed client tied to a signet identity. */
   readonly getManagedClient: (identityId: string) => ManagedClient | undefined;
+  /** Fetch group metadata from XMTP for the provided group id. */
   readonly getGroupInfo: (
     groupId: string,
   ) => Promise<Result<XmtpGroupInfo, SignetError>>;
+  /** Optional XMTP client factory for conversation wiring. */
   readonly clientFactory?: XmtpClientFactory;
+  /** Optional signer provider factory for identity-bound actions. */
   readonly signerProviderFactory?: SignerProviderFactory;
+  /** Optional core config snapshot used by invite/join helpers. */
   readonly config?: Pick<SignetCoreConfig, "dataDir" | "env" | "appVersion">;
 }
 

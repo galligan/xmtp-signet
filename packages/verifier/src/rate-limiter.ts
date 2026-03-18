@@ -3,6 +3,7 @@
  * Tracks request timestamps per requester and rejects when the
  * count within the window exceeds the configured maximum.
  */
+/** Public rate limiter API used by the verifier service. */
 export interface RateLimiter {
   /** Returns true if the request is allowed, false if rate-limited. */
   check(requesterId: string): boolean;
@@ -10,6 +11,7 @@ export interface RateLimiter {
   reset(): void;
 }
 
+/** Configuration for the in-memory rate limiter. */
 export interface RateLimiterConfig {
   readonly maxRequests: number;
   readonly windowMs: number;
@@ -17,6 +19,7 @@ export interface RateLimiterConfig {
   readonly now?: () => number;
 }
 
+/** Create an in-memory sliding window rate limiter. */
 export function createRateLimiter(config: RateLimiterConfig): RateLimiter {
   const timestamps = new Map<string, number[]>();
   const getNow = config.now ?? Date.now;

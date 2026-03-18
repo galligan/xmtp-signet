@@ -17,6 +17,7 @@ import type {
 import { AuthError, ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
 import type { InternalSessionManager } from "./session-manager.js";
 
+/** Dependencies for session update actions. */
 export interface UpdateActionDeps {
   readonly sessionManager: SessionManager;
   readonly internalManager: InternalSessionManager;
@@ -35,6 +36,7 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
+/** Create CLI and MCP actions for in-place session updates. */
 export function createUpdateActions(
   deps: UpdateActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {

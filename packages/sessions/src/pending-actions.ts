@@ -5,6 +5,7 @@
  * operation. The owner confirms or denies via `confirm_action` requests.
  */
 
+/** A queued action awaiting explicit owner approval. */
 export interface PendingAction {
   readonly actionId: string;
   readonly sessionId: string;
@@ -14,6 +15,7 @@ export interface PendingAction {
   readonly expiresAt: string;
 }
 
+/** Store interface for pending actions. */
 export interface PendingActionStore {
   /** Add a pending action to the store. */
   add(action: PendingAction): void;
@@ -34,6 +36,7 @@ export interface PendingActionStore {
   listBySession(sessionId: string): readonly PendingAction[];
 }
 
+/** Create an in-memory store for pending actions. */
 export function createPendingActionStore(): PendingActionStore {
   const actions = new Map<string, PendingAction>();
 

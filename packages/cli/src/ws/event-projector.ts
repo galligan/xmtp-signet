@@ -10,6 +10,7 @@ import type { SessionRecord, RevealStateStore } from "@xmtp/signet-contracts";
 import { projectMessage } from "@xmtp/signet-policy";
 import type { RawMessage, ProjectionResult } from "@xmtp/signet-policy";
 
+/** Dependencies used to rehydrate reveal state during WS projection. */
 export interface EventProjectorDeps {
   readonly getRevealState: (sessionId: string) => RevealStateStore | null;
 }

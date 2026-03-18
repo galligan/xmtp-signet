@@ -34,6 +34,7 @@ type WsServerConfigInput = {
   rateLimitMaxMessages?: number | null | undefined;
 };
 
+/** Zod schema that parses WebSocket server configuration and applies defaults. */
 export const WsServerConfigSchema: z.ZodType<
   WsServerConfig,
   z.ZodTypeDef,

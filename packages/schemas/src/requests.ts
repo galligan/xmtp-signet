@@ -3,6 +3,7 @@ import { ContentTypeId } from "./content-types.js";
 import { ViewConfig } from "./view.js";
 import { RevealRequest } from "./reveal.js";
 
+/** Request to send a message to a group. */
 export type SendMessageRequest = {
   type: "send_message";
   requestId: string;
@@ -23,9 +24,11 @@ const _SendMessageRequest = z
   })
   .describe("Send a message to a group");
 
+/** Request to send a message to a group. */
 export const SendMessageRequest: z.ZodType<SendMessageRequest> =
   _SendMessageRequest;
 
+/** Request to add or remove a reaction on a message. */
 export type SendReactionRequest = {
   type: "send_reaction";
   requestId: string;
@@ -46,9 +49,11 @@ const _SendReactionRequest = z
   })
   .describe("React to a message");
 
+/** Request to add or remove a reaction on a message. */
 export const SendReactionRequest: z.ZodType<SendReactionRequest> =
   _SendReactionRequest;
 
+/** Request to send a reply in a thread. */
 export type SendReplyRequest = {
   type: "send_reply";
   requestId: string;
@@ -69,8 +74,10 @@ const _SendReplyRequest = z
   })
   .describe("Reply to a message in a thread");
 
+/** Request to send a reply in a thread. */
 export const SendReplyRequest: z.ZodType<SendReplyRequest> = _SendReplyRequest;
 
+/** Request to update the current session view. */
 export type UpdateViewRequest = {
   type: "update_view";
   requestId: string;
@@ -85,9 +92,11 @@ const _UpdateViewRequest = z
   })
   .describe("Request a view update (signet may reject if material escalation)");
 
+/** Request to update the current session view. */
 export const UpdateViewRequest: z.ZodType<UpdateViewRequest> =
   _UpdateViewRequest;
 
+/** Request to reveal previously hidden content. */
 export type RevealContentRequest = {
   type: "reveal_content";
   requestId: string;
@@ -102,9 +111,11 @@ const _RevealContentRequest = z
   })
   .describe("Request content be revealed to the agent");
 
+/** Request to reveal previously hidden content. */
 export const RevealContentRequest: z.ZodType<RevealContentRequest> =
   _RevealContentRequest;
 
+/** Request to confirm or deny a pending action. */
 export type ConfirmActionRequest = {
   type: "confirm_action";
   requestId: string;
@@ -121,9 +132,11 @@ const _ConfirmActionRequest = z
   })
   .describe("Confirm or deny a pending action");
 
+/** Request to confirm or deny a pending action. */
 export const ConfirmActionRequest: z.ZodType<ConfirmActionRequest> =
   _ConfirmActionRequest;
 
+/** Heartbeat request used to keep a session alive. */
 export type HeartbeatRequest = {
   type: "heartbeat";
   requestId: string;
@@ -138,8 +151,10 @@ const _HeartbeatRequest = z
   })
   .describe("Heartbeat from the harness to keep the session alive");
 
+/** Heartbeat request used to keep a session alive. */
 export const HeartbeatRequest: z.ZodType<HeartbeatRequest> = _HeartbeatRequest;
 
+/** Union of all harness-to-signet requests. */
 export type HarnessRequest =
   | SendMessageRequest
   | SendReactionRequest

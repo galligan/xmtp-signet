@@ -4,6 +4,7 @@ import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
 
+/** Check ID for release signing verification. */
 export const RELEASE_SIGNING_CHECK_ID = "release_signing" as const;
 
 /**

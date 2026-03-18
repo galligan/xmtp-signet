@@ -40,6 +40,7 @@ const ALL_CHECK_IDS = [
   "schema_compliance",
 ] as const;
 
+/** Options used to construct the verifier service. */
 export interface VerifierServiceOptions {
   readonly config: VerifierConfig;
   /** Injectable signing function. Signs canonical bytes, returns base64. */
@@ -54,6 +55,7 @@ export interface VerifierServiceOptions {
   readonly rateLimiter?: RateLimiter;
 }
 
+/** Runtime API exposed by the verifier package. */
 export interface VerifierService {
   handleRequest(
     request: VerificationRequest,
@@ -67,6 +69,7 @@ export interface VerifierService {
   selfSeal(): VerifierSelfSeal;
 }
 
+/** Create the verifier service with the configured checks and signer. */
 export function createVerifierService(
   options: VerifierServiceOptions,
 ): VerifierService {

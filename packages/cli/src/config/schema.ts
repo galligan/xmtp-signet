@@ -49,6 +49,7 @@ type HttpServerConfigInput =
     }
   | undefined;
 
+/** Schema for the optional HTTP API server configuration block. */
 export const HttpServerConfigSchema: z.ZodType<
   HttpServerConfig,
   z.ZodTypeDef,

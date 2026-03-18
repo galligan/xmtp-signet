@@ -16,6 +16,7 @@ import {
   type WithDaemonClient,
 } from "./daemon-client.js";
 
+/** Dependencies for top-level lifecycle CLI commands. */
 export interface SignetLifecycleCommandDeps {
   readonly loadConfig: typeof loadConfig;
   readonly resolvePaths: typeof resolvePaths;

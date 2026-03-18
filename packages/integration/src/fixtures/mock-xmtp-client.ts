@@ -16,11 +16,13 @@ import type {
   GroupStream,
 } from "@xmtp/signet-core";
 
+/** Options for constructing a mock XMTP client. */
 export interface MockXmtpClientOptions {
   readonly inboxId?: string;
   readonly groups?: readonly XmtpGroupInfo[];
 }
 
+/** In-memory XMTP client used by integration tests. */
 export interface MockXmtpClient extends XmtpClient {
   /** Messages sent via sendMessage(). */
   readonly sentMessages: ReadonlyArray<{
@@ -96,11 +98,13 @@ function createControllableStream<T>(): {
   };
 }
 
+/** Stream emitters exposed by the mock client. */
 export interface MockStreams {
   readonly emitMessage: (msg: XmtpDecodedMessage) => void;
   readonly emitGroupEvent: (event: XmtpGroupEvent) => void;
 }
 
+/** Create a controllable in-memory XMTP client. */
 export function createMockXmtpClient(options?: MockXmtpClientOptions): {
   client: MockXmtpClient;
   streams: MockStreams;

@@ -91,6 +91,12 @@ async function decrypt(key: CryptoKey, data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(plaintext);
 }
 
+/**
+ * Create an encrypted vault backed by bun:sqlite.
+ *
+ * The vault stores encrypted blobs and keeps the encryption key in a
+ * sibling `vault.key` file for file-backed data directories.
+ */
 export async function createVault(
   dataDir: string,
 ): Promise<Result<Vault, InternalError>> {

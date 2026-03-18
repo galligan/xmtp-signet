@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ViewConfig } from "./view.js";
 import { GrantConfig } from "./grant.js";
 
+/** Configuration used to issue a new session. */
 export type SessionConfig = {
   agentInboxId: string;
   view: ViewConfig;
@@ -10,6 +11,7 @@ export type SessionConfig = {
   heartbeatInterval?: number | undefined;
 };
 
+/** Zod schema for session issuance input. */
 export const SessionConfig: z.ZodType<SessionConfig> = z
   .object({
     agentInboxId: z.string().describe("Agent this session is for"),
@@ -30,6 +32,7 @@ export const SessionConfig: z.ZodType<SessionConfig> = z
   })
   .describe("Configuration for issuing a new session");
 
+/** Opaque session token returned to the harness. */
 export type SessionToken = {
   sessionId: string;
   agentInboxId: string;
@@ -38,6 +41,7 @@ export type SessionToken = {
   expiresAt: string;
 };
 
+/** Zod schema for the opaque session token returned to the harness. */
 export const SessionToken: z.ZodType<SessionToken> = z
   .object({
     sessionId: z.string().describe("Unique session identifier"),
@@ -50,11 +54,13 @@ export const SessionToken: z.ZodType<SessionToken> = z
   })
   .describe("Opaque session token issued to the harness");
 
+/** Session credentials plus the encoded token string. */
 export type IssuedSession = {
   token: string;
   session: SessionToken;
 };
 
+/** Zod schema for session credentials returned by issuance. */
 export const IssuedSession: z.ZodType<IssuedSession> = z
   .object({
     token: z.string().min(1).describe("Session bearer token"),
@@ -62,10 +68,12 @@ export const IssuedSession: z.ZodType<IssuedSession> = z
   })
   .describe("Issued session credentials returned by session.issue");
 
+/** Lifecycle state for an issued session. */
 export const SessionState: z.ZodEnum<
   ["active", "expired", "revoked", "reauthorization-required"]
 > = z
   .enum(["active", "expired", "revoked", "reauthorization-required"])
   .describe("Current lifecycle state of a session");
 
+/** Lifecycle state for an issued session. */
 export type SessionState = z.infer<typeof SessionState>;

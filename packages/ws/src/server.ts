@@ -32,8 +32,10 @@ import { routeRequest, type RequestHandler } from "./request-router.js";
 import { sequenceEvent } from "./event-broadcaster.js";
 import { WS_CLOSE_CODES } from "./close-codes.js";
 
+/** Lifecycle states for the websocket server. */
 export type WsServerState = "idle" | "listening" | "draining" | "stopped";
 
+/** Dependencies required to run the websocket transport. */
 export interface WsServerDeps {
   readonly core: SignetCore;
   readonly sessionManager: SessionManager;
@@ -47,6 +49,7 @@ export interface WsServerDeps {
   ) => SignetEvent | null;
 }
 
+/** Public lifecycle and broadcast surface for the websocket transport. */
 export interface WsServer {
   start(): Promise<Result<{ port: number }, SignetError>>;
   stop(): Promise<Result<void, SignetError>>;
@@ -62,6 +65,9 @@ export interface WsServer {
   invalidateSession(sessionId: string): Promise<void>;
 }
 
+/**
+ * Create the websocket server that fronts the signet harness transport.
+ */
 export function createWsServer(
   rawConfig: Partial<WsServerConfig>,
   deps: WsServerDeps,

@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Raised when authentication or authorization fails. */
 export class AuthError extends Error implements SignetError {
   readonly _tag = "AuthError" as const;
   readonly code = 1300;
@@ -18,6 +19,7 @@ export class AuthError extends Error implements SignetError {
   }
 }
 
+/** Raised when a session has expired and can no longer be used. */
 export class SessionExpiredError extends Error implements SignetError {
   readonly _tag = "SessionExpiredError" as const;
   readonly code = 1310;

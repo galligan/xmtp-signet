@@ -2,6 +2,7 @@
  * WebSocket test client with typed helpers for integration tests.
  */
 
+/** Convenience wrapper around a WebSocket connection in tests. */
 export interface TestWsClient {
   readonly ws: WebSocket;
   /** Wait for the next JSON message. */

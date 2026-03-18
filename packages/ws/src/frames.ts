@@ -7,13 +7,14 @@ import {
 } from "@xmtp/signet-schemas";
 import type { SignetEvent as SignetEventType } from "@xmtp/signet-schemas";
 
+/** Inbound authentication frame sent by the harness. */
 export type AuthFrame = {
   type: "auth";
   token: string;
   lastSeenSeq: number | null;
 };
 
-/** Auth frame sent by harness as first message. */
+/** Zod schema for the inbound authentication frame. */
 const _AuthFrame = z
   .object({
     type: z.literal("auth"),
@@ -27,8 +28,10 @@ const _AuthFrame = z
   })
   .describe("Authentication frame from harness");
 
+/** Zod schema for the inbound authentication frame. */
 export const AuthFrame: z.ZodType<AuthFrame> = _AuthFrame;
 
+/** Authenticated confirmation frame returned by the signet. */
 export type AuthenticatedFrame = {
   type: "authenticated";
   connectionId: string;
@@ -38,7 +41,7 @@ export type AuthenticatedFrame = {
   resumedFromSeq: number | null;
 };
 
-/** Authenticated confirmation from signet. */
+/** Zod schema for the authenticated confirmation frame. */
 export const AuthenticatedFrame: z.ZodType<AuthenticatedFrame> = z
   .object({
     type: z.literal("authenticated"),
@@ -55,13 +58,14 @@ export const AuthenticatedFrame: z.ZodType<AuthenticatedFrame> = z
   })
   .describe("Authentication success response from signet");
 
+/** Error frame emitted before the socket closes on auth failure. */
 export type AuthErrorFrame = {
   type: "auth_error";
   code: number;
   message: string;
 };
 
-/** Auth error from signet, sent before close. */
+/** Zod schema for the auth error frame. */
 export const AuthErrorFrame: z.ZodType<AuthErrorFrame> = z
   .object({
     type: z.literal("auth_error"),
@@ -70,13 +74,14 @@ export const AuthErrorFrame: z.ZodType<AuthErrorFrame> = z
   })
   .describe("Authentication failure response from signet");
 
+/** Backpressure warning emitted when the send buffer approaches its limit. */
 export type BackpressureFrame = {
   type: "backpressure";
   buffered: number;
   limit: number;
 };
 
-/** Backpressure warning from signet. */
+/** Zod schema for the backpressure warning frame. */
 export const BackpressureFrame: z.ZodType<BackpressureFrame> = z
   .object({
     type: z.literal("backpressure"),
@@ -85,12 +90,13 @@ export const BackpressureFrame: z.ZodType<BackpressureFrame> = z
   })
   .describe("Backpressure warning from signet");
 
+/** Sequenced event envelope used for replay and recovery. */
 export type SequencedFrame = {
   seq: number;
   event: SignetEventType;
 };
 
-/** Sequenced event envelope for replay support. */
+/** Zod schema for the sequenced event envelope. */
 export const SequencedFrame: z.ZodType<SequencedFrame> = z
   .object({
     seq: z
@@ -105,12 +111,12 @@ export const SequencedFrame: z.ZodType<SequencedFrame> = z
   .describe("Sequenced event envelope for replay support");
 
 /**
- * Discriminated union of all inbound frame types from harness.
- * The auth frame is the only non-request frame; requests use HarnessRequest
- * from schemas.
+ * Discriminated union of all inbound frame types from the harness.
+ * The auth frame is the only non-request frame; requests use HarnessRequest.
  */
 export const InboundFrame: z.ZodType<AuthFrame> = z.discriminatedUnion("type", [
   _AuthFrame,
 ]);
 
+/** Type union for all inbound harness frames. */
 export type InboundFrame = z.infer<typeof InboundFrame>;

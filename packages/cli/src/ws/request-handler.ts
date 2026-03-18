@@ -24,6 +24,7 @@ import type { PendingActionStore } from "@xmtp/signet-sessions";
 /** Default expiry for pending actions: 5 minutes. */
 const PENDING_ACTION_TTL_MS = 5 * 60 * 1000;
 
+/** Dependencies required to route harness requests through the WS transport. */
 export interface HarnessRequestHandlerDeps {
   readonly ensureCoreReady: () => Promise<Result<void, SignetError>>;
   readonly sendMessage: (
@@ -40,6 +41,12 @@ export interface HarnessRequestHandlerDeps {
   readonly broadcast?: (sessionId: string, event: SignetEvent) => void;
 }
 
+/**
+ * Create the WS harness request handler.
+ *
+ * The handler stays transport-only: it validates request shape,
+ * delegates to session/core services, and returns typed results.
+ */
 export function createWsRequestHandler(
   deps: HarnessRequestHandlerDeps,
 ): RequestHandler {
@@ -398,5 +405,6 @@ export function createWsRequestHandler(
   };
 }
 
+/** Alias for the WS harness request handler used by older call sites. */
 export const createHarnessRequestHandler: typeof createWsRequestHandler =
   createWsRequestHandler;

@@ -4,6 +4,7 @@ import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
 
+/** Check ID for schema compliance verification. */
 export const SCHEMA_COMPLIANCE_CHECK_ID = "schema_compliance" as const;
 
 /**

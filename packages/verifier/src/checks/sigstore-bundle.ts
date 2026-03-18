@@ -31,6 +31,7 @@ const SigstoreBundleSchema = z.object({
 
 // -- Types (explicit for isolatedDeclarations) --
 
+/** Structural representation of a Sigstore bundle. */
 export type SigstoreBundle = {
   mediaType: string;
   verificationMaterial: {
@@ -44,6 +45,7 @@ export type SigstoreBundle = {
   };
 };
 
+/** Minimal in-toto statement shape accepted by the verifier. */
 export type InTotoStatement = {
   _type: "https://in-toto.io/Statement/v1";
   subject: Array<{ name: string; digest: { sha256: string } }>;
@@ -71,6 +73,7 @@ const InTotoStatementSchema = z.object({
 
 // -- Parsed bundle result --
 
+/** Parsed bundle data returned by `parseSigstoreBundle()`. */
 export type ParsedBundle = {
   bundle: SigstoreBundle;
   statement: InTotoStatement;

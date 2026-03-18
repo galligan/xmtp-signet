@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { KeyPolicy } from "./config.js";
 import { KeyPolicySchema } from "./config.js";
 
-/** Response from `signet-signer create`. */
+/** Shape of the `signet-signer create` response. */
 export const SeCreateResponseSchema: z.ZodObject<{
   keyRef: z.ZodString;
   publicKey: z.ZodString;
@@ -15,13 +15,14 @@ export const SeCreateResponseSchema: z.ZodObject<{
   policy: KeyPolicySchema,
 });
 
+/** Parsed `signet-signer create` response payload. */
 export type SeCreateResponse = {
   keyRef: string;
   publicKey: string;
   policy: KeyPolicy;
 };
 
-/** Response from `signet-signer sign`. */
+/** Shape of the `signet-signer sign` response. */
 export const SeSignResponseSchema: z.ZodObject<{
   signature: z.ZodString;
 }> = z.object({
@@ -30,11 +31,12 @@ export const SeSignResponseSchema: z.ZodObject<{
     .describe("Hex-encoded DER signature with low-S normalization"),
 });
 
+/** Parsed `signet-signer sign` response payload. */
 export type SeSignResponse = {
   signature: string;
 };
 
-/** Response from `signet-signer info --system`. */
+/** Shape of the `signet-signer info --system` response. */
 export const SeSystemInfoResponseSchema: z.ZodObject<{
   available: z.ZodBoolean;
   chip: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -45,19 +47,21 @@ export const SeSystemInfoResponseSchema: z.ZodObject<{
   macOS: z.string().nullable().optional(),
 });
 
+/** Parsed `signet-signer info --system` response payload. */
 export type SeSystemInfoResponse = {
   available: boolean;
   chip?: string | null | undefined;
   macOS?: string | null | undefined;
 };
 
-/** Response from `signet-signer info --key-ref`. */
+/** Shape of the `signet-signer info --key-ref` response. */
 export const SeKeyInfoResponseSchema: z.ZodObject<{
   exists: z.ZodBoolean;
 }> = z.object({
   exists: z.boolean(),
 });
 
+/** Parsed `signet-signer info --key-ref` response payload. */
 export type SeKeyInfoResponse = {
   exists: boolean;
 };

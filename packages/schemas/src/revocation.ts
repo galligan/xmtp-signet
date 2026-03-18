@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Reason an agent was revoked from a group. */
 export const AgentRevocationReason: z.ZodEnum<
   [
     "owner-initiated",
@@ -18,8 +19,10 @@ export const AgentRevocationReason: z.ZodEnum<
   ])
   .describe("Why the agent was revoked from a group");
 
+/** Reason an agent was revoked from a group. */
 export type AgentRevocationReason = z.infer<typeof AgentRevocationReason>;
 
+/** Reason a session was revoked. */
 export const SessionRevocationReason: z.ZodEnum<
   [
     "owner-initiated",
@@ -38,8 +41,10 @@ export const SessionRevocationReason: z.ZodEnum<
   ])
   .describe("Why a session was revoked");
 
+/** Reason a session was revoked. */
 export type SessionRevocationReason = z.infer<typeof SessionRevocationReason>;
 
+/** Seal that records revocation of an agent's group membership. */
 export type RevocationSeal = {
   sealId: string;
   previousSealId: string;
@@ -50,6 +55,7 @@ export type RevocationSeal = {
   issuer: string;
 };
 
+/** Zod schema for a revocation seal. */
 export const RevocationSeal: z.ZodType<RevocationSeal> = z
   .object({
     sealId: z.string().describe("ID of this revocation seal"),

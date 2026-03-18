@@ -19,6 +19,7 @@ export interface SignetError extends Error {
   readonly context: Record<string, unknown> | null;
 }
 
+/** Union of all signet error implementations. */
 export type AnySignetError =
   | ValidationError
   | NotFoundError

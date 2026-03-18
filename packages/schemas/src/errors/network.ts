@@ -1,5 +1,6 @@
 import type { SignetError } from "./base.js";
 
+/** Raised when a network call to a downstream endpoint fails. */
 export class NetworkError extends Error implements SignetError {
   readonly _tag = "NetworkError" as const;
   readonly code = 1700;
