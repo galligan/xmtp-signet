@@ -5,17 +5,18 @@
 - [Bun](https://bun.sh) 1.2.9+
 - Node.js 20+ (for some tooling)
 - macOS, Linux, or WSL
+- Xcode Command Line Tools (macOS, optional — required for Secure Enclave support)
 
 ## Setup
 
 ```bash
 git clone https://github.com/xmtp/xmtp-signet.git
 cd xmtp-signet
-bun install
-bunx lefthook install
+bun run bootstrap
 ```
 
-This installs workspace dependencies and sets up git hooks via Lefthook.
+This installs workspace dependencies, git hooks via Lefthook, and local CLI
+tools.
 
 ## Project structure
 
@@ -33,8 +34,11 @@ xmtp-signet/
 │   ├── ws/               # WebSocket transport (Bun.serve)
 │   ├── mcp/              # MCP transport (Model Context Protocol)
 │   ├── cli/              # CLI entry point, daemon, admin socket
-│   ├── handler/          # Harness client SDK (WebSocket)
+│   ├── sdk/              # Harness client SDK (WebSocket)
 │   └── integration/      # Cross-package integration tests
+├── signet-signer/        # Swift CLI for Secure Enclave (macOS)
+├── scripts/
+│   └── check-doc-coverage.ts
 ├── docs/                 # Documentation
 └── .agents/              # Planning docs and working notes
 ```
@@ -52,6 +56,23 @@ packages/<name>/
 └── tsconfig.json
 ```
 
+## Swift signer
+
+The `signet-signer` directory contains a Swift CLI for Secure Enclave key
+operations (macOS only). The bootstrap script automatically builds it on macOS
+when Swift is available.
+
+```bash
+# Build the Secure Enclave signer (macOS only, built automatically by bootstrap)
+cd signet-signer && swift build -c release
+
+# Run Swift tests
+cd signet-signer && swift test
+
+# Verify SE availability
+signet-signer/.build/release/signet-signer info --system
+```
+
 ## Commands
 
 ### Build and test
@@ -59,7 +80,7 @@ packages/<name>/
 ```bash
 bun run build              # Build all packages (Turbo)
 bun run test               # Test all packages
-bun run check              # Lint + typecheck + test (full verification)
+bun run check              # Lint + typecheck + test + docs:check
 ```
 
 ### Single package
@@ -77,7 +98,8 @@ bun run lint                # Lint this package
 ```bash
 bun run format:check       # Check formatting (oxfmt)
 bun run format:fix         # Fix formatting
-bun run lint               # Run linter (oxlint)
+bun run lint               # Run oxlint + exported API doc coverage
+bun run docs:check         # Check exported API doc coverage only
 bun run typecheck          # Type-check all packages (tsc --noEmit)
 ```
 
@@ -224,7 +246,8 @@ docs(readme): update package table
 Lefthook runs on every commit:
 
 - **Pre-commit**: format and lint staged files
-- **Pre-push**: full verification (`bun run check`)
+- **Pre-push**: full verification (`bun run check`), including exported API
+  doc coverage
 
 If a hook fails, fix the issue before committing. Don't skip hooks.
 
@@ -255,5 +278,6 @@ Check the blessed dependencies list before adding anything new:
 | TOML parsing      | `smol-toml`                 |
 | MCP SDK           | `@modelcontextprotocol/sdk` |
 | Schema→JSON       | `zod-to-json-schema`        |
+| P-256 curves      | `@noble/curves` (dev)       |
 
 Prefer Bun-native APIs (`Bun.hash()`, `Bun.Glob`, `bun:sqlite`, `Bun.serve()`) over npm packages. If a concern isn't covered by the blessed list or Bun, discuss before pulling in a new dependency.

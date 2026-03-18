@@ -38,12 +38,28 @@ Content types not in the allowlist are held at the signet and never forwarded. T
 | Mode          | What the agent sees                            |
 | ------------- | ---------------------------------------------- |
 | `full`        | All messages in scope                          |
-| `thread-only` | Messages within specific threads               |
+| `thread-only` | Messages within specific threads (uses `threadId` derived from Reply content type's `referenceId`) |
 | `redacted`    | Messages with sensitive content removed        |
 | `reveal-only` | Only messages explicitly revealed to the agent |
 | `summary-only` | Signet-generated summaries (defined in schema, reserved — not implemented in v0) |
 
 A view mode is a convenience label. The underlying view object (including content type allowlist) and grant remain explicit and authoritative.
+
+### Threading
+
+XMTP groups are conversation containers. "Threads" are sub-group conversations anchored by a root message — XMTP does not have native threads; threading is a content-level concept built on the Reply content type.
+
+A message's `threadId` is the `referenceId` from the Reply content type, pointing to the root message that anchors the thread. Non-reply messages have `threadId: null`.
+
+Thread scope is expressed in the view configuration as `ThreadScope`:
+
+```
+{ groupId: string; threadId: string | null }
+```
+
+When `threadId` is `null`, the scope covers the entire group. When set, the session only sees messages within that thread.
+
+Thread-scoped sessions restrict the agent's visible messages to their allowed threads. Combined with `thread-only` view mode, this enables agents that participate in specific sub-conversations without visibility into the broader group.
 
 ## Grant
 
@@ -134,6 +150,26 @@ Sessions are:
 
 When policy changes are material enough to require reauthorization, the session detects this and requires the harness to re-authenticate with the updated policy.
 
+## Reveals
+
+A **reveal** is an explicit authorization to expose previously hidden content to an agent. When a view mode hides content (`redacted`, `reveal-only`), reveals provide a controlled mechanism to selectively disclose specific messages or threads.
+
+### Reveal scopes
+
+| Scope          | What it reveals                                        |
+| -------------- | ------------------------------------------------------ |
+| `message`      | A single message by ID                                 |
+| `thread`       | All messages in a thread (by `threadId`)               |
+| `sender`       | All messages from a specific sender                    |
+| `content-type` | All messages of a specific content type                |
+| `time-window`  | All messages within a time range                       |
+
+### Lifecycle
+
+Reveals are session-scoped — stored in a per-session `RevealStateStore`. Granting a reveal records the authorization; the projection pipeline checks reveal state when processing messages in `reveal-only` or `redacted` mode.
+
+**Known gap:** Granting a reveal stores the authorization but does NOT replay already-hidden historical messages. The agent begins seeing newly matching messages from the point of the reveal forward. Historical replay is future work.
+
 ## Identity model
 
 Each agent has its own XMTP inbox. The signet holds the signer for that inbox and operates its MLS state, but the group sees the agent as a distinct participant.
@@ -197,6 +233,8 @@ The signet enforces this by:
 3. Validating all harness requests against the active grant
 4. Publishing seals so other participants can inspect the agent's permissions
 
+On macOS, root key private material is hardware-bound in the Secure Enclave and never enters the TypeScript process. This ensures that even a compromised signet process cannot exfiltrate the root key.
+
 This is an application-layer boundary. The signet, as a full MLS group member, can decrypt all group messages. The security model is between the signet and the harness, not between the signet and the MLS group.
 
 ## Trust model
@@ -208,7 +246,7 @@ The verification service provides 6 discrete checks that move agents along a tru
 | Check              | What it verifies                                 |
 | ------------------ | ------------------------------------------------ |
 | Source available   | Agent source code is publicly accessible         |
-| Build provenance   | Binary was built from the claimed source         |
+| Build provenance   | Binary was built from the claimed source (currently structural validation only — returns `skip`; full cryptographic verification via `sigstore-js` is planned) |
 | Release signing    | Release artifacts are cryptographically signed   |
 | Seal signature     | Seal was signed by a valid key                   |
 | Seal chain         | Seal references its predecessor correctly        |

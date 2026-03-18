@@ -191,7 +191,19 @@ export function createSessionManager(
           : existing.revocationReason,
     };
     byId.set(sessionId, updated);
-    onMutated?.(sessionId);
+
+    // Only fire onMutated for policy-relevant changes, not routine
+    // updates like heartbeat timestamps that don't affect authorization.
+    const policyChanged =
+      updates.view !== undefined ||
+      updates.grant !== undefined ||
+      updates.state !== undefined ||
+      updates.revokedAt !== undefined ||
+      updates.policyHash !== undefined;
+    if (policyChanged) {
+      onMutated?.(sessionId);
+    }
+
     return Result.ok(updated);
   }
 

@@ -4,11 +4,12 @@ An agent signet for XMTP. The signet is the real XMTP client; agent harnesses co
 
 ## Status
 
-Active development. Phase 2C complete across 38 stacked PRs, all review feedback addressed. CLI daemon with real XMTP network connectivity (devnet), Convos invite protocol, conversation management (create, list, info, join, invite, add-member, members). Tracer bullet validated end-to-end on devnet with QR code invite flow. Ready for merge to main.
+Active development. Phase 1 and Phase 2 feature-complete across 54 stacked PRs. All review feedback addressed. Secure Enclave key binding implemented (macOS). CLI daemon with real XMTP network connectivity (devnet), Convos invite protocol, conversation management, session permission editing, action confirmations, HTTP API, and build provenance verification. Pending merge to main.
 
 ## Project Structure
 
 - `packages/` — Versioned libraries (source in `src/`, tests in `src/__tests__/`)
+- `signet-signer/` — Swift CLI for macOS Secure Enclave P-256 key operations
 - `.agents/docs/` — Planning documents and PRD
 - `.agents/plans/` — Specs, execution plans, and design decisions
 - `.agents/notes/` — Working notes and research (not permanent docs)
@@ -29,10 +30,12 @@ bun run build
 
 # Test
 bun run test                    # all packages
+bun run check                   # lint + typecheck + test + docs:check
 cd packages/<pkg> && bun test   # single package
 
 # Lint / Format
-bun run lint                    # oxlint
+bun run lint                    # oxlint + exported API doc coverage
+bun run docs:check              # exported API doc coverage only
 bun run format:check            # oxfmt check
 bun run format:fix              # oxfmt fix
 bun run typecheck               # tsc --noEmit
@@ -137,16 +140,16 @@ Handlers receive pre-validated input and a context object. They return `Result`,
 
 - XMTP client management (raw plane)
 - Policy engine (view filtering, grant enforcement)
-- Session management
+- Session management (with push-based WS invalidation via `onSessionMutated`)
 - Seal lifecycle
-- Key management
+- Key management (SE bridge on macOS, software vault elsewhere)
 
 **Transport** — Protocol adapters:
 
-- WebSocket (primary, Phase 1)
-- MCP (Phase 2)
-- CLI (Phase 2)
-- HTTP (Phase 3)
+- WebSocket (primary harness transport)
+- MCP (Model Context Protocol for LLM harnesses)
+- CLI (composition root, daemon, admin socket)
+- HTTP (non-streaming admin/session/health API)
 
 ### Error Taxonomy
 
@@ -182,6 +185,8 @@ oxfmt: 80-char width, 2-space indent, double quotes, trailing commas (ES5), semi
 ### Linting
 
 oxlint with `correctness` and `suspicious` categories at error level.
+Exported API doc coverage is enforced by `bun run docs:check` and is included in
+`bun run lint`.
 
 ## Testing
 
@@ -195,7 +200,7 @@ oxlint with `correctness` and `suspicious` categories at error level.
 - Conventional commits: `feat(scope):`, `fix(scope):`, `test(scope):`
 - Stacked PRs via Graphite (`gt` over `git`)
 - Pre-commit: format + lint on staged files (Lefthook)
-- Pre-push: full verification
+- Pre-push: full verification via `bun run check` (including doc coverage)
 
 ## Reference Material
 

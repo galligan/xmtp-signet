@@ -76,9 +76,10 @@ git clone https://github.com/xmtp/xmtp-signet.git
 cd xmtp-signet
 bun run bootstrap
 
-# Build and test
+# Build and verify
 bun run build
 bun run test
+bun run check
 ```
 
 ### Run the signet
@@ -144,6 +145,7 @@ This project uses:
 
 - **Bun** as the runtime and package manager
 - **TypeScript** in strict mode with maximum safety
+- **Exported API doc coverage** enforced by `bun run docs:check`
 - **TDD** — write the test before the code
 - **Result types** — functions that can fail return `Result<T, E>`, not exceptions
 - **Conventional commits** — `feat(scope):`, `fix(scope):`, `test(scope):`

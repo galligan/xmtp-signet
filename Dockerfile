@@ -28,9 +28,33 @@ FROM oven/bun:1-slim AS runtime
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/packages/*/dist ./packages/
-COPY --from=build /app/packages/*/package.json ./packages/
 COPY --from=build /app/package.json ./
+
+# Copy each package's dist + package.json preserving directory structure
+COPY --from=build /app/packages/schemas/dist packages/schemas/dist
+COPY --from=build /app/packages/schemas/package.json packages/schemas/
+COPY --from=build /app/packages/contracts/dist packages/contracts/dist
+COPY --from=build /app/packages/contracts/package.json packages/contracts/
+COPY --from=build /app/packages/policy/dist packages/policy/dist
+COPY --from=build /app/packages/policy/package.json packages/policy/
+COPY --from=build /app/packages/keys/dist packages/keys/dist
+COPY --from=build /app/packages/keys/package.json packages/keys/
+COPY --from=build /app/packages/sessions/dist packages/sessions/dist
+COPY --from=build /app/packages/sessions/package.json packages/sessions/
+COPY --from=build /app/packages/seals/dist packages/seals/dist
+COPY --from=build /app/packages/seals/package.json packages/seals/
+COPY --from=build /app/packages/core/dist packages/core/dist
+COPY --from=build /app/packages/core/package.json packages/core/
+COPY --from=build /app/packages/ws/dist packages/ws/dist
+COPY --from=build /app/packages/ws/package.json packages/ws/
+COPY --from=build /app/packages/cli/dist packages/cli/dist
+COPY --from=build /app/packages/cli/package.json packages/cli/
+COPY --from=build /app/packages/mcp/dist packages/mcp/dist
+COPY --from=build /app/packages/mcp/package.json packages/mcp/
+COPY --from=build /app/packages/sdk/dist packages/sdk/dist
+COPY --from=build /app/packages/sdk/package.json packages/sdk/
+COPY --from=build /app/packages/verifier/dist packages/verifier/dist
+COPY --from=build /app/packages/verifier/package.json packages/verifier/
 
 ENV XMTP_SIGNET_DATA_DIR=/data
 ENV XMTP_SIGNET_ENV=dev

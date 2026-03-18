@@ -192,7 +192,10 @@ export function createProductionDeps(): SignetRuntimeDeps {
         },
         {
           onSessionMutated(sessionId: string) {
-            // Push-invalidate cached session on live WS connections
+            // Push-invalidate cached session on live WS connections.
+            // invalidateSession() synchronously suppresses broadcasts for
+            // this session (via pendingInvalidations set) before starting
+            // the async lookup, so no events leak under stale policy.
             void globalWsServerRef?.invalidateSession(sessionId);
           },
         },

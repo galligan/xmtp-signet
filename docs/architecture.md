@@ -12,7 +12,7 @@ Dependencies flow downward only across tiers. No package may import from a highe
 │                    handler                       │
 ├─────────────────────────────────────────────────┤
 │                   Transport                      │
-│               ws · mcp · cli                     │
+│           ws · mcp · cli · http                   │
 ├─────────────────────────────────────────────────┤
 │                    Runtime                       │
 │    core · keys · sessions · seals · policy       │
@@ -39,7 +39,7 @@ Core signet functionality. Each package has a focused responsibility.
 
 **`@xmtp/signet-core`** — The XMTP client abstraction layer. Defines the `XmtpClient` interface and manages client lifecycle, identity store (one inbox per agent via `bun:sqlite`), group and message streams, and raw event emission. Phase 2 wired `@xmtp/node-sdk` as a real dependency via `createSdkClientFactory` — the production `XmtpClientFactory` implementation that creates SDK clients, signers, and Result-wrapped stream adapters (`wrapMessageStream`, `wrapGroupStream`, `wrapSdkCall`).
 
-**`@xmtp/signet-keys`** — Three-tier key hierarchy inspired by [keypo-cli](https://github.com/xmtp/keypo-cli). v0 currently uses the encrypted software vault path on every platform; Secure Enclave and TPM-backed root keys are planned follow-on work. Operational keys handle day-to-day signing. Session keys are ephemeral and scoped to individual harness connections. All keys live in an encrypted vault. Phase 2 added **admin keys** — a separate key type (peer to the root→operational→session hierarchy) for authenticating CLI and admin socket operations. Includes `createAdminKeyManager`, JWT encode/decode/sign/verify, and base64url utilities.
+**`@xmtp/signet-keys`** — Three-tier key hierarchy inspired by [keypo-cli](https://github.com/xmtp/keypo-cli). Root key storage is platform-adaptive: on macOS with Apple Silicon, keys are backed by the Secure Enclave (P-256) via the `signet-signer` Swift CLI subprocess (see `signet-signer/` and the bridge in `packages/keys/src/se-bridge.ts`); on all other platforms, an encrypted software vault (AES-GCM + `bun:sqlite`) is used. Platform detection is automatic via `detectPlatform()`, which checks for signer binary availability and SE hardware support. The `findSignerBinary()` discovery chain checks `SIGNET_SIGNER_PATH` env var, then local build output, then `$PATH`. Subprocess calls use a 30-second timeout to accommodate biometric (Touch ID) prompts. On the SE path, root key private material never enters the TypeScript process. Operational keys handle day-to-day signing. Session keys are ephemeral and scoped to individual harness connections. All keys live in an encrypted vault. Phase 2 added **admin keys** — a separate key type (peer to the root→operational→session hierarchy) for authenticating CLI and admin socket operations. Includes `createAdminKeyManager`, JWT encode/decode/sign/verify, and base64url utilities.
 
 **`@xmtp/signet-sessions`** — Session lifecycle management. Generates cryptographically secure tokens, tracks session state, computes policy hashes, and detects material changes that require reauthorization.
 
@@ -47,7 +47,7 @@ Core signet functionality. Each package has a focused responsibility.
 
 **`@xmtp/signet-policy`** — The view projection pipeline. Filters messages by scope, content type, and visibility mode. Validates harness requests against the active grant. Tracks reveal state. Classifies changes as material or routine.
 
-**`@xmtp/signet-verifier`** — Standalone verification service with 6 discrete checks (source available, build provenance, release signing, seal signature, seal chain, schema compliance). Produces trust tier verdicts with rate limiting and statement caching.
+**`@xmtp/signet-verifier`** — Standalone verification service with 6 discrete checks (source available, build provenance, release signing, seal signature, seal chain, schema compliance). Build provenance performs structural verification (DSSE envelope validity, digest matching) and returns a `skip` verdict; cryptographic DSSE signature verification is TODO. Produces trust tier verdicts with rate limiting and statement caching.
 
 ### Transport
 
@@ -85,6 +85,15 @@ The registry (`createActionRegistry`) collects all action specs. Each transport 
 - **WebSocket** routes action names to handlers directly
 
 This means adding a new signet operation requires defining one `ActionSpec`. All transports pick it up automatically.
+
+## Action confirmation flow
+
+When a session's grant sets `grant.messaging.draftOnly` to true, outbound actions require explicit confirmation before execution:
+
+- **`PendingActionStore`** queues actions that need confirmation, tracking expiry
+- **`confirm_action`** re-validates the action against the current session policy before executing, preventing policy bypass via stale confirmations
+- **Expiry** — pending actions that exceed their TTL are auto-rejected
+- **Events** — broadcasts `action.confirmation_required` event to the harness when an action is queued for confirmation
 
 ## Admin authentication
 
@@ -152,12 +161,11 @@ Root Key (platform-bound)
        └─ Session Key (per-connection, ephemeral)
 ```
 
-**Root keys** use the encrypted software vault in v0. Planned future targets
-for hardware-backed storage are:
+**Root keys** are platform-adaptive with automatic detection via `detectPlatform()`:
 
-- macOS: Secure Enclave (P-256)
-- Linux: TPM 2.0
-- Fallback: Software-derived keys with encrypted vault
+- **macOS with Apple Silicon**: Secure Enclave (P-256) via `signet-signer` Swift CLI subprocess. Private key material never enters the TypeScript process. The `se-bridge.ts` module manages subprocess communication with a 30-second timeout for biometric prompts.
+- **All other platforms**: Encrypted software vault (AES-GCM + `bun:sqlite`).
+- **Planned**: Linux TPM 2.0 support.
 
 **Operational keys** are derived from the root and handle routine signing operations (seals, message provenance). They can be rotated without changing the root.
 
@@ -180,6 +188,16 @@ Raw XMTP Message
 
 Each stage can reject the message. A message that passes all stages is delivered as a typed event over the transport.
 
+## Threading model
+
+XMTP has no native thread concept at the protocol level. Threading is derived client-side:
+
+- `threadId` is extracted from the Reply content type's `referenceId` field in `toDecodedMessage()`
+- The value flows through `XmtpDecodedMessage` → `RawMessageEvent` → `MessageEvent` → the view projector
+- Scope filtering matches `threadId` against the session's `threadScopes` to determine visibility
+
+This allows harnesses to request thread-scoped views without protocol-level thread support.
+
 ## Transports
 
 ### WebSocket
@@ -197,6 +215,13 @@ Key features:
 - **Session resumption** — circular replay buffer allows reconnecting clients to catch up on missed events
 - **Backpressure** — tracks per-connection send buffer depth and notifies the harness when it should slow down
 - **Graceful shutdown** — draining phase allows in-flight messages to complete before closing
+- **Session freshness** — fail-closed session validation model:
+  - Fresh `sessionManager.lookup()` on every inbound frame (errors close the socket)
+  - Heartbeat refreshes session state for idle sockets
+  - Post-mutation re-sync after `update_view` / `reveal_content`
+  - `invalidateSession(sessionId)` API for push-based refresh from external sources
+  - `onSessionMutated` callback on the session manager wired to `invalidateSession()`
+  - Non-active sessions close the socket with proper close codes
 
 ### MCP
 
@@ -216,6 +241,15 @@ The CLI is the composition root that wires everything together:
 - **Admin socket** — Unix domain socket with JSON-RPC 2.0 protocol for out-of-band management
 - **Direct mode** — fallback for when no daemon is running; accesses the vault directly for key operations
 - **Config** — TOML-based configuration with path resolution and environment overrides
+
+### HTTP
+
+The HTTP transport provides a `Bun.serve()` adapter for non-streaming admin and status operations:
+
+- **Routes** — `GET /v1/health` (unauthenticated status), `POST /v1/admin/:method` (admin-authenticated dispatcher), `POST /v1/session/:method` (session dispatch for `session.issue`, `session.revoke`, `session.list`)
+- **Auth** — Bearer token extraction with admin JWT verification for admin routes
+- **Error mapping** — error taxonomy categories map to HTTP status codes (400, 401, 403, 404, 408, 499, 500)
+- **Status provider** — async status callback injected via `HttpServerDeps` for health endpoint
 
 ## Data flow
 
@@ -261,6 +295,8 @@ The project uses a minimal, deliberate set of dependencies:
 | TOML parsing      | `smol-toml`                | Config file loading (used by `cli`)                      |
 | MCP SDK           | `@modelcontextprotocol/sdk`| MCP server and tool protocol (used by `mcp`)             |
 | Schema→JSON       | `zod-to-json-schema`       | Convert Zod schemas to JSON Schema for MCP (used by `mcp`)|
+| Elliptic curves   | `@noble/curves`            | P-256 signature verification for SE tests (used by `keys`)|
+| QR codes          | `qrcode`                   | QR code generation for invite links (used by `cli`)       |
 
 Build tooling: TypeScript, Turbo, oxlint, oxfmt, Lefthook.
 

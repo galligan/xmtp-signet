@@ -76,6 +76,13 @@ export function createWsServer(
   const registry = new ConnectionRegistry();
   /** Per-session replay state: survives reconnections. */
   const sessionStates = new Map<string, SessionReplayState>();
+  /** Sessions with pending invalidations — broadcasts queue until all in-flight lookups complete. */
+  const pendingInvalidations = new Map<
+    string,
+    { refcount: number; generation: number; events: SignetEvent[] }
+  >();
+  /** Monotonic counter — highest generation wins the cache write. */
+  let invalidationGen = 0;
   let serverState: WsServerState = "idle";
   let bunServer: ReturnType<typeof Bun.serve<ConnectionData>> | null = null;
 
@@ -471,10 +478,14 @@ export function createWsServer(
   }
 
   function broadcastToSession(sessionId: string, event: SignetEvent): void {
-    // Broadcasts use the cached session snapshot. The request path
-    // keeps the cache fresh via lookup on every inbound frame, so
-    // permission updates propagate without an async race here that
-    // would corrupt sequence ordering.
+    // Queue events while any invalidation is in flight — they'll be
+    // replayed with the fresh session snapshot once all lookups complete.
+    const pending = pendingInvalidations.get(sessionId);
+    if (pending !== undefined) {
+      pending.events.push(event);
+      return;
+    }
+
     const connections = registry.getBySessionId(sessionId);
     for (const ws of connections) {
       if (ws.data.phase === "active") {
@@ -507,30 +518,66 @@ export function createWsServer(
     broadcast: broadcastToSession,
 
     async invalidateSession(sessionId: string): Promise<void> {
-      const lookupResult = await deps.sessionManager.lookup(sessionId);
-      const connections = registry.getBySessionId(sessionId);
-      for (const ws of connections) {
-        if (ws.data.phase !== "active") continue;
+      // Each invalidation gets a generation number. Only the highest
+      // generation writes to the cache, so later (narrower) policy
+      // always wins over earlier (broader) lookups that resolve late.
+      const myGen = ++invalidationGen;
+      const existing = pendingInvalidations.get(sessionId);
+      if (existing) {
+        existing.refcount++;
+        existing.generation = myGen;
+      } else {
+        pendingInvalidations.set(sessionId, {
+          refcount: 1,
+          generation: myGen,
+          events: [],
+        });
+      }
+      try {
+        const lookupResult = await deps.sessionManager.lookup(sessionId);
 
-        if (!lookupResult.isOk()) {
-          // Session gone — close the socket
-          ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
-          stopHeartbeat(ws);
-          continue;
+        // Only apply if this is still the latest invalidation for this session.
+        // An earlier broader lookup that resolves after a later narrower one
+        // must not overwrite the narrower snapshot.
+        const entry = pendingInvalidations.get(sessionId);
+        if (!entry || entry.generation !== myGen) return;
+
+        const connections = registry.getBySessionId(sessionId);
+        for (const ws of connections) {
+          if (ws.data.phase !== "active") continue;
+
+          if (!lookupResult.isOk()) {
+            ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+            stopHeartbeat(ws);
+            continue;
+          }
+
+          const fresh = lookupResult.value;
+          ws.data.sessionRecord = fresh;
+
+          if (fresh.state !== "active") {
+            const closeCode =
+              fresh.state === "revoked"
+                ? WS_CLOSE_CODES.SESSION_REVOKED
+                : fresh.state === "expired"
+                  ? WS_CLOSE_CODES.SESSION_EXPIRED
+                  : WS_CLOSE_CODES.POLICY_CHANGE;
+            ws.close(closeCode, `Session is ${fresh.state}`);
+            stopHeartbeat(ws);
+          }
         }
-
-        const fresh = lookupResult.value;
-        ws.data.sessionRecord = fresh;
-
-        if (fresh.state !== "active") {
-          const closeCode =
-            fresh.state === "revoked"
-              ? WS_CLOSE_CODES.SESSION_REVOKED
-              : fresh.state === "expired"
-                ? WS_CLOSE_CODES.SESSION_EXPIRED
-                : WS_CLOSE_CODES.POLICY_CHANGE;
-          ws.close(closeCode, `Session is ${fresh.state}`);
-          stopHeartbeat(ws);
+      } finally {
+        const entry = pendingInvalidations.get(sessionId);
+        if (entry) {
+          entry.refcount--;
+          if (entry.refcount <= 0) {
+            // Last invalidation done — drain queued events with fresh snapshot
+            const queued = entry.events;
+            pendingInvalidations.delete(sessionId);
+            for (const event of queued) {
+              broadcastToSession(sessionId, event);
+            }
+          }
         }
       }
     },
