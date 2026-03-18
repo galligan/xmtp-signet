@@ -24,6 +24,10 @@ export type { SealInput, SealBuildResult } from "./build.js";
 // Input delta computation
 export { computeInputDelta } from "./compute-delta.js";
 
+// Seal stamper
+export { createSealStamper } from "./stamper.js";
+export type { SigningKeyHandle, StamperDeps } from "./stamper.js";
+
 // Seal manager
 export { createSealManager } from "./manager.js";
 export type {
