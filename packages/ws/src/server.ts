@@ -54,6 +54,12 @@ export interface WsServer {
   readonly connectionCount: number;
   /** Broadcast an event to all connections for a session. */
   broadcast(sessionId: string, event: SignetEvent): void;
+  /**
+   * Invalidate cached session state for all connections on a session.
+   * Call this when session policy changes from outside the WS request path
+   * (admin, HTTP, MCP, expiry, revocation) so broadcasts project correctly.
+   */
+  invalidateSession(sessionId: string): Promise<void>;
 }
 
 export function createWsServer(
@@ -150,6 +156,13 @@ export function createWsServer(
     transition(data, "closed");
   }
 
+  function stopHeartbeat(ws: ServerWebSocket<ConnectionData>): void {
+    if (ws.data.heartbeatTimer !== null) {
+      clearInterval(ws.data.heartbeatTimer);
+      ws.data.heartbeatTimer = null;
+    }
+  }
+
   function startHeartbeat(ws: ServerWebSocket<ConnectionData>): void {
     const sessionRecord = ws.data.sessionRecord;
     if (!sessionRecord) return;
@@ -157,7 +170,7 @@ export function createWsServer(
     const deadThresholdMs =
       config.missedHeartbeatsBeforeDead * config.heartbeatIntervalMs;
 
-    ws.data.heartbeatTimer = setInterval(() => {
+    ws.data.heartbeatTimer = setInterval(async () => {
       if (ws.data.phase !== "active") return;
 
       // Dead-connection detection: close if no inbound activity
@@ -170,9 +183,34 @@ export function createWsServer(
         return;
       }
 
+      // Refresh session state so idle sockets pick up revocations/narrowing.
+      // This ensures broadcasts also see current permissions.
+      const currentSessionId =
+        ws.data.sessionRecord?.sessionId ?? sessionRecord.sessionId;
+      const lookupResult = await deps.sessionManager.lookup(currentSessionId);
+      if (!lookupResult.isOk()) {
+        ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+        stopHeartbeat(ws);
+        return;
+      }
+      const fresh = lookupResult.value;
+      ws.data.sessionRecord = fresh;
+
+      if (fresh.state !== "active") {
+        const closeCode =
+          fresh.state === "revoked"
+            ? WS_CLOSE_CODES.SESSION_REVOKED
+            : fresh.state === "expired"
+              ? WS_CLOSE_CODES.SESSION_EXPIRED
+              : WS_CLOSE_CODES.POLICY_CHANGE;
+        ws.close(closeCode, `Session is ${fresh.state}`);
+        stopHeartbeat(ws);
+        return;
+      }
+
       sendSequenced(ws, {
         type: "heartbeat",
-        sessionId: sessionRecord.sessionId,
+        sessionId: currentSessionId,
         timestamp: new Date().toISOString(),
       });
     }, config.heartbeatIntervalMs);
@@ -291,9 +329,36 @@ export function createWsServer(
     ws: ServerWebSocket<ConnectionData>,
     frame: unknown,
   ): Promise<void> {
-    const session = ws.data.sessionRecord;
-    if (!session) {
+    const cachedSession = ws.data.sessionRecord;
+    if (!cachedSession) {
       ws.close(WS_CLOSE_CODES.PROTOCOL_ERROR, "Not authenticated");
+      return;
+    }
+
+    // Fresh session lookup — fail closed on errors instead of
+    // falling back to a stale snapshot that may be revoked/expired.
+    const lookupResult = await deps.sessionManager.lookup(
+      cachedSession.sessionId,
+    );
+    if (!lookupResult.isOk()) {
+      ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+      stopHeartbeat(ws);
+      return;
+    }
+    const session = lookupResult.value;
+    ws.data.sessionRecord = session;
+
+    // Reject non-active sessions — close the socket so the client
+    // doesn't stay on a "healthy-looking" connection.
+    if (session.state !== "active") {
+      const closeCode =
+        session.state === "revoked"
+          ? WS_CLOSE_CODES.SESSION_REVOKED
+          : session.state === "expired"
+            ? WS_CLOSE_CODES.SESSION_EXPIRED
+            : WS_CLOSE_CODES.POLICY_CHANGE;
+      ws.close(closeCode, `Session is ${session.state}`);
+      stopHeartbeat(ws);
       return;
     }
 
@@ -359,6 +424,17 @@ export function createWsServer(
         deps.requestHandler,
       );
 
+      // Re-sync cached session after mutating requests so broadcasts
+      // immediately see updated policy instead of waiting for the next heartbeat.
+      if (request.type === "update_view" || request.type === "reveal_content") {
+        const refreshResult = await deps.sessionManager.lookup(
+          session.sessionId,
+        );
+        if (refreshResult.isOk()) {
+          ws.data.sessionRecord = refreshResult.value;
+        }
+      }
+
       const inflight = ws.data.inFlightRequests.get(requestId);
       if (!inflight) {
         return;
@@ -389,6 +465,10 @@ export function createWsServer(
   }
 
   function broadcastToSession(sessionId: string, event: SignetEvent): void {
+    // Broadcasts use the cached session snapshot. The request path
+    // keeps the cache fresh via lookup on every inbound frame, so
+    // permission updates propagate without an async race here that
+    // would corrupt sequence ordering.
     const connections = registry.getBySessionId(sessionId);
     for (const ws of connections) {
       if (ws.data.phase === "active") {
@@ -419,6 +499,35 @@ export function createWsServer(
     },
 
     broadcast: broadcastToSession,
+
+    async invalidateSession(sessionId: string): Promise<void> {
+      const lookupResult = await deps.sessionManager.lookup(sessionId);
+      const connections = registry.getBySessionId(sessionId);
+      for (const ws of connections) {
+        if (ws.data.phase !== "active") continue;
+
+        if (!lookupResult.isOk()) {
+          // Session gone — close the socket
+          ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+          stopHeartbeat(ws);
+          continue;
+        }
+
+        const fresh = lookupResult.value;
+        ws.data.sessionRecord = fresh;
+
+        if (fresh.state !== "active") {
+          const closeCode =
+            fresh.state === "revoked"
+              ? WS_CLOSE_CODES.SESSION_REVOKED
+              : fresh.state === "expired"
+                ? WS_CLOSE_CODES.SESSION_EXPIRED
+                : WS_CLOSE_CODES.POLICY_CHANGE;
+          ws.close(closeCode, `Session is ${fresh.state}`);
+          stopHeartbeat(ws);
+        }
+      }
+    },
 
     async start() {
       if (serverState !== "idle") {

@@ -76,13 +76,44 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
     async sendMessage(
       groupId: string,
       content: unknown,
+      contentType?: string,
     ): Promise<Result<string, SignetError>> {
       const groupResult = await getGroup(client, groupId);
       if (groupResult.isErr()) return groupResult;
       const group = groupResult.value;
 
-      const text = resolveTextContent(content);
+      // For custom content types, use group.send() with encoded content
+      if (contentType && contentType !== "xmtp.org/text:1.0") {
+        // Parse "authority/type:major.minor" format
+        const slashIdx = contentType.indexOf("/");
+        const colonIdx = contentType.indexOf(":");
+        const authorityId =
+          slashIdx > 0 ? contentType.slice(0, slashIdx) : "xmtp.org";
+        const typeId =
+          slashIdx > 0
+            ? contentType.slice(
+                slashIdx + 1,
+                colonIdx > slashIdx ? colonIdx : undefined,
+              )
+            : contentType;
+        const versionStr =
+          colonIdx > 0 ? contentType.slice(colonIdx + 1) : "1.0";
+        const [majorStr, minorStr] = versionStr.split(".");
+        const encoded = {
+          type: {
+            authorityId,
+            typeId,
+            versionMajor: parseInt(majorStr ?? "1", 10),
+            versionMinor: parseInt(minorStr ?? "0", 10),
+          },
+          content: new TextEncoder().encode(
+            typeof content === "string" ? content : JSON.stringify(content),
+          ),
+        };
+        return wrapSdkCall(async () => group.send(encoded), "sendMessage");
+      }
 
+      const text = resolveTextContent(content);
       return wrapSdkCall(async () => group.sendText(text), "sendMessage");
     },
 

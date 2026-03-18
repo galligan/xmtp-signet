@@ -779,10 +779,10 @@ All grant commands require the daemon and admin auth.
 #### `seal` -- Seal Lifecycle
 
 ```
-xmtp-broker attestation list [--group <groupId>] [--agent <inboxId>]
-xmtp-broker attestation inspect <id>
-xmtp-broker attestation verify <id>
-xmtp-broker attestation revoke <id>
+xmtp-signet seal list [--group <groupId>] [--agent <inboxId>]
+xmtp-signet seal inspect <id>
+xmtp-signet seal verify <id>
+xmtp-signet seal revoke <id>
 ```
 
 All seal commands require the daemon. `verify` and `inspect` have limited direct mode support if given raw seal data via stdin.

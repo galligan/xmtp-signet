@@ -23,14 +23,18 @@ export class SignetCoreContext {
   /** Send a message to a group. */
   async sendMessage(
     groupId: string,
-    _contentType: string,
+    contentType: string,
     content: unknown,
   ): Promise<Result<{ messageId: string }, SignetError>> {
     const managed = this.#registry.getByGroupId(groupId);
     if (!managed) {
       return Result.err(NotFoundError.create("group", groupId));
     }
-    const result = await managed.client.sendMessage(groupId, content);
+    const result = await managed.client.sendMessage(
+      groupId,
+      content,
+      contentType,
+    );
     if (result.isErr()) return result;
     return Result.ok({ messageId: result.value });
   }

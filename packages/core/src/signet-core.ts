@@ -309,6 +309,7 @@ export class SignetCoreImpl {
             contentType: msg.contentType,
             content: msg.content,
             sentAt: msg.sentAt,
+            threadId: msg.threadId,
             isHistorical: false,
           });
         }

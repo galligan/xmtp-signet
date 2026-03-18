@@ -31,6 +31,7 @@ describe("Integration: full round-trip", () => {
       visibility: "visible",
       sentAt: "2024-01-01T00:00:00Z",
       sealId: null,
+      threadId: null,
     });
 
     const events = await take(harness.handler.events, 1);

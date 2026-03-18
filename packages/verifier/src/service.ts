@@ -85,7 +85,7 @@ export function createVerifierService(
 
   const checks: readonly CheckHandler[] = options.checks ?? [
     createSourceAvailableCheck(),
-    createBuildProvenanceCheck(),
+    createBuildProvenanceCheck(config.buildProvenance),
     createReleaseSigningCheck(),
     createSealSignatureCheck(),
     createSealChainCheck(),

@@ -16,6 +16,8 @@ export interface RawMessageEvent {
   readonly contentType: string;
   readonly content: unknown;
   readonly sentAt: string;
+  /** Thread anchor ID — derived from Reply referenceId. Null for non-reply messages. */
+  readonly threadId: string | null;
   /** True if this message was received during recovery sync. */
   readonly isHistorical: boolean;
 }

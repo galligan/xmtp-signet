@@ -22,6 +22,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@noble/curves": "^2.0.1",
     "bun-types": "catalog:",
     "typescript": "catalog:"
   }

@@ -2,7 +2,7 @@
  * Key hierarchy integration tests.
  *
  * Validates the three-tier key hierarchy: root -> operational -> session.
- * Uses software-vault platform capability (no Secure Enclave).
+ * Platform-aware: uses Secure Enclave on macOS with signer, otherwise software-vault.
  */
 
 import { describe, test, expect, afterEach } from "bun:test";
@@ -14,6 +14,7 @@ import {
   createKeyManager,
   type KeyManager,
   createSignerProvider,
+  detectPlatform,
 } from "@xmtp/signet-keys";
 
 let keyManager: KeyManager | null = null;
@@ -40,12 +41,16 @@ afterEach(async () => {
 });
 
 describe("key-hierarchy", () => {
-  test("initialize creates root key and reports software-vault platform", async () => {
+  test("initialize creates root key and reports detected platform", async () => {
     const km = await setup();
+    const expectedPlatform = detectPlatform();
 
-    expect(km.platform).toBe("software-vault");
-    // software-vault maps to "unverified" trust tier
-    expect(km.trustTier).toBe("unverified");
+    expect(km.platform).toBe(expectedPlatform);
+    if (expectedPlatform === "secure-enclave") {
+      expect(km.trustTier).toBe("source-verified");
+    } else {
+      expect(km.trustTier).toBe("unverified");
+    }
 
     const rootResult = await km.initialize();
     expect(rootResult.isOk()).toBe(true);
@@ -55,7 +60,7 @@ describe("key-hierarchy", () => {
     expect(root.keyRef).toBeTruthy();
     expect(root.publicKey).toBeTruthy();
     expect(root.policy).toBeTruthy();
-    expect(root.platform).toBe("software-vault");
+    expect(root.platform).toBe(expectedPlatform);
     expect(root.createdAt).toBeTruthy();
   });
 

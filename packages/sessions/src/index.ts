@@ -8,6 +8,7 @@ export { createSessionActions } from "./actions.js";
 export { createRevealActions } from "./reveal-actions.js";
 export type {
   SessionManagerConfig,
+  SessionManagerOptions,
   InternalSessionRecord,
   InternalSessionManager,
 } from "./session-manager.js";

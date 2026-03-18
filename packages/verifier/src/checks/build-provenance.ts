@@ -7,6 +7,8 @@ import { findMatchingSubject, parseSigstoreBundle } from "./sigstore-bundle.js";
 
 export const BUILD_PROVENANCE_CHECK_ID = "build_provenance" as const;
 
+import type { BuildProvenanceConfig } from "../config.js";
+
 /**
  * Verifies the agent was built from the claimed source by parsing
  * and validating a Sigstore bundle. Checks:
@@ -14,8 +16,16 @@ export const BUILD_PROVENANCE_CHECK_ID = "build_provenance" as const;
  * - DSSE signatures are present and non-empty
  * - In-toto statement validity
  * - Artifact digest match against statement subjects
+ * - OIDC issuer and identity enforcement (when configured)
+ *
+ * NOTE: Full cryptographic DSSE signature verification (Fulcio certificate
+ * chain, Rekor inclusion proof) is not yet implemented. The current check
+ * verifies structural completeness and digest matching only.
+ * TODO: Add cryptographic DSSE verification via sigstore-js.
  */
-export function createBuildProvenanceCheck(): CheckHandler {
+export function createBuildProvenanceCheck(
+  config?: BuildProvenanceConfig,
+): CheckHandler {
   return {
     checkId: BUILD_PROVENANCE_CHECK_ID,
 

@@ -48,14 +48,33 @@ export function toGroupInfo(
   };
 }
 
+/**
+ * Extract thread anchor ID from Reply content type.
+ * A Reply's referenceId points to the root message — this serves as
+ * the thread ID for scope filtering and reveal matching.
+ */
+function extractThreadId(content: unknown): string | null {
+  if (
+    typeof content === "object" &&
+    content !== null &&
+    "reference" in content &&
+    typeof (content as Record<string, unknown>)["reference"] === "string"
+  ) {
+    return (content as Record<string, unknown>)["reference"] as string;
+  }
+  return null;
+}
+
 /** Convert an SDK DecodedMessage to signet XmtpDecodedMessage. */
 export function toDecodedMessage(msg: DecodedMessageLike): XmtpDecodedMessage {
+  const contentType = msg.contentType?.typeId ?? "unknown";
   return {
     messageId: msg.id,
     groupId: msg.conversationId,
     senderInboxId: msg.senderInboxId,
-    contentType: msg.contentType?.typeId ?? "unknown",
+    contentType,
     content: msg.content,
     sentAt: msg.sentAt.toISOString(),
+    threadId: extractThreadId(msg.content),
   };
 }

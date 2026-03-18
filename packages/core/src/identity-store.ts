@@ -133,6 +133,14 @@ export class SqliteIdentityStore {
     return row ? rowToIdentity(row) : null;
   }
 
+  /** Look up an identity by its XMTP inbox ID. */
+  async getByInboxId(inboxId: string): Promise<AgentIdentity | null> {
+    const row = this.#db
+      .prepare("SELECT * FROM identities WHERE inbox_id = ?")
+      .get(inboxId) as IdentityRow | null;
+    return row ? rowToIdentity(row) : null;
+  }
+
   /** List all identities. */
   async list(): Promise<readonly AgentIdentity[]> {
     const rows = this.#db
