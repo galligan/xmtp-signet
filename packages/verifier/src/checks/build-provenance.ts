@@ -3,13 +3,17 @@ import type { InternalError } from "@xmtp/signet-schemas";
 import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
+import { findMatchingSubject, parseSigstoreBundle } from "./sigstore-bundle.js";
 
 export const BUILD_PROVENANCE_CHECK_ID = "build_provenance" as const;
 
 /**
- * Verifies the agent was built from the claimed source.
- * v0: stub that returns "skip" when no bundle is provided,
- * or a basic structural validation when one is.
+ * Verifies the agent was built from the claimed source by parsing
+ * and validating a Sigstore bundle. Checks:
+ * - Bundle structural validity (DSSE envelope, verification material)
+ * - DSSE signatures are present and non-empty
+ * - In-toto statement validity
+ * - Artifact digest match against statement subjects
  */
 export function createBuildProvenanceCheck(): CheckHandler {
   return {
@@ -27,31 +31,132 @@ export function createBuildProvenanceCheck(): CheckHandler {
         });
       }
 
-      // v0 stub: attempt basic JSON parse but don't do full verification
-      try {
-        const decoded = atob(request.buildProvenanceBundle);
-        JSON.parse(decoded);
+      // Parse and validate bundle structure
+      const parseResult = parseSigstoreBundle(request.buildProvenanceBundle);
 
+      if (!parseResult.isOk()) {
         return Result.ok({
           checkId: BUILD_PROVENANCE_CHECK_ID,
           verdict: "fail",
-          reason: "Build provenance verification not yet implemented (v0 stub)",
-          evidence: {
-            bundlePresent: true,
-            artifactDigest: request.artifactDigest,
-          },
-        });
-      } catch {
-        return Result.ok({
-          checkId: BUILD_PROVENANCE_CHECK_ID,
-          verdict: "fail",
-          reason: "Build provenance bundle is not valid base64-encoded JSON",
+          reason: parseResult.error,
           evidence: {
             bundlePresent: true,
             artifactDigest: request.artifactDigest,
           },
         });
       }
+
+      const { statement, bundle, certificateRawBytes } = parseResult.value;
+
+      // Verify DSSE signatures are present and non-empty
+      const signatures = bundle.dsseEnvelope.signatures;
+      const hasValidSignature = signatures.some(
+        (s) => typeof s.sig === "string" && s.sig.length > 0,
+      );
+      if (!hasValidSignature) {
+        return Result.ok({
+          checkId: BUILD_PROVENANCE_CHECK_ID,
+          verdict: "fail",
+          reason: "DSSE envelope has no non-empty signatures",
+          evidence: {
+            signatureCount: signatures.length,
+            allEmpty: true,
+          },
+        });
+      }
+
+      // Verify artifact digest matches a subject in the statement
+      const matchingSubject = findMatchingSubject(
+        statement,
+        request.artifactDigest,
+      );
+
+      if (matchingSubject === null) {
+        const statementDigests = statement.subject.map((s) => s.digest.sha256);
+        return Result.ok({
+          checkId: BUILD_PROVENANCE_CHECK_ID,
+          verdict: "fail",
+          reason:
+            "Artifact digest does not match any subject in the in-toto statement",
+          evidence: {
+            expectedDigest: request.artifactDigest,
+            statementDigests,
+          },
+        });
+      }
+
+      // Enforce OIDC issuer when configured
+      if (config?.expectedOidcIssuer) {
+        const predicate = statement.predicate as
+          | {
+              runDetails?: {
+                metadata?: { oidcIssuer?: string };
+              };
+            }
+          | undefined;
+        const actualIssuer =
+          predicate?.runDetails?.metadata?.oidcIssuer ?? null;
+        if (actualIssuer !== config.expectedOidcIssuer) {
+          return Result.ok({
+            checkId: BUILD_PROVENANCE_CHECK_ID,
+            verdict: "fail",
+            reason: "OIDC issuer does not match expected value",
+            evidence: {
+              expectedIssuer: config.expectedOidcIssuer,
+              actualIssuer,
+            },
+          });
+        }
+      }
+
+      // Enforce identity pattern when configured
+      if (config?.expectedIdentityPattern) {
+        const predicate = statement.predicate as
+          | {
+              runDetails?: {
+                metadata?: {
+                  buildConfigSource?: { identity?: string };
+                };
+              };
+            }
+          | undefined;
+        const actualIdentity =
+          predicate?.runDetails?.metadata?.buildConfigSource?.identity ?? null;
+        if (
+          !actualIdentity ||
+          !actualIdentity.startsWith(config.expectedIdentityPattern)
+        ) {
+          return Result.ok({
+            checkId: BUILD_PROVENANCE_CHECK_ID,
+            verdict: "fail",
+            reason: "Build identity does not match expected pattern",
+            evidence: {
+              expectedPattern: config.expectedIdentityPattern,
+              actualIdentity,
+            },
+          });
+        }
+      }
+
+      // Structural validation passed but cryptographic DSSE signature
+      // verification is not yet implemented. Return skip (not pass) to
+      // avoid false-positive trust escalation. A pass verdict requires
+      // full Fulcio certificate chain + Rekor inclusion proof verification.
+      return Result.ok({
+        checkId: BUILD_PROVENANCE_CHECK_ID,
+        verdict: "skip",
+        reason:
+          "Build provenance bundle is structurally valid and digest matches, but cryptographic DSSE verification is not yet implemented",
+        evidence: {
+          matchedSubject: matchingSubject.name,
+          matchedDigest: matchingSubject.digest,
+          predicateType: statement.predicateType,
+          hasCertificate: certificateRawBytes.length > 0,
+          subjectCount: statement.subject.length,
+          signatureCount: signatures.length,
+          cryptoVerified: false,
+        },
+      });
     },
   };
 }

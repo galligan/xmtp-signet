@@ -19,6 +19,7 @@ export {
 export {
   VerifierConfigSchema,
   type VerifierConfig,
+  type BuildProvenanceConfig,
   DEFAULT_STATEMENT_TTL_SECONDS,
   DEFAULT_MAX_REQUESTS_PER_HOUR,
 } from "./config.js";

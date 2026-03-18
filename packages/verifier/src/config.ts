@@ -1,11 +1,18 @@
 import { z } from "zod";
 
+/** Build provenance verification settings. */
+export type BuildProvenanceConfig = {
+  expectedOidcIssuer?: string | undefined;
+  expectedIdentityPattern?: string | undefined;
+};
+
 /** Parsed verifier configuration (all defaults applied). */
 export type VerifierConfig = {
   verifierInboxId: string;
   sourceRepoUrl: string;
   statementTtlSeconds: number;
   maxRequestsPerRequesterPerHour: number;
+  buildProvenance?: BuildProvenanceConfig | undefined;
 };
 
 /** Input to VerifierConfigSchema (fields with defaults are optional). */
@@ -14,7 +21,28 @@ type VerifierConfigInput = {
   sourceRepoUrl: string;
   statementTtlSeconds?: number | undefined;
   maxRequestsPerRequesterPerHour?: number | undefined;
+  buildProvenance?: BuildProvenanceConfigInput | undefined;
 };
+
+type BuildProvenanceConfigInput = {
+  expectedOidcIssuer?: string | undefined;
+  expectedIdentityPattern?: string | undefined;
+};
+
+const BuildProvenanceConfigSchema = z
+  .object({
+    expectedOidcIssuer: z
+      .string()
+      .optional()
+      .describe(
+        "Expected OIDC issuer (e.g. https://token.actions.githubusercontent.com)",
+      ),
+    expectedIdentityPattern: z
+      .string()
+      .optional()
+      .describe("Prefix match for expected workflow identity (e.g. https://github.com/org/repo/)"),
+  })
+  .describe("Build provenance verification settings");
 
 export const VerifierConfigSchema: z.ZodType<
   VerifierConfig,
@@ -37,6 +65,9 @@ export const VerifierConfigSchema: z.ZodType<
     .positive()
     .default(10)
     .describe("Rate limit per requester per hour"),
+  buildProvenance: BuildProvenanceConfigSchema.optional().describe(
+    "Build provenance verification settings",
+  ),
 });
 
 export const DEFAULT_STATEMENT_TTL_SECONDS = 86400;
