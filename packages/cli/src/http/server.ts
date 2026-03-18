@@ -161,19 +161,57 @@ export function createHttpServer(
 
   async function handleSessionRoute(
     req: Request,
-    _method: string,
+    method: string,
   ): Promise<Response> {
     const token = extractBearerToken(req);
     if (token === null) {
       return errorResponse("auth", "Missing session token", null);
     }
 
-    // Session routing will be wired when session handlers are HTTP-capable
-    return errorResponse(
-      "not_found",
-      "Session HTTP routes not yet implemented",
-      null,
-    );
+    // Verify the session token is valid
+    const sessionResult = await deps.sessionManager.lookupByToken(token);
+    if (!sessionResult.isOk()) {
+      return errorResponse("auth", "Invalid session token", null);
+    }
+
+    const session = sessionResult.value;
+
+    // Accept both "session.info" and "info" styles for compatibility
+    // with the dot-prefixed convention and the bare request-type convention
+    const bareMethod = method.startsWith("session.")
+      ? method.slice("session.".length)
+      : method;
+
+    switch (bareMethod) {
+      case "info": {
+        return successResponse({
+          sessionId: session.sessionId,
+          agentInboxId: session.agentInboxId,
+          state: session.state,
+          view: session.view,
+          grant: session.grant,
+          issuedAt: session.issuedAt,
+          expiresAt: session.expiresAt,
+        });
+      }
+
+      case "heartbeat": {
+        const hbResult = await deps.sessionManager.heartbeat(session.sessionId);
+        if (!hbResult.isOk()) {
+          return errorResponse(
+            hbResult.error.category,
+            hbResult.error.message,
+            null,
+          );
+        }
+        return successResponse({ ok: true });
+      }
+
+      default:
+        return errorResponse("not_found", `Unknown session method: ${method}`, {
+          method,
+        });
+    }
   }
 
   async function handleRequest(req: Request): Promise<Response> {
