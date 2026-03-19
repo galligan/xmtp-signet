@@ -16,7 +16,7 @@ describe("seal_chain check", () => {
     }
   });
 
-  test("passes for initial seal (null previous)", async () => {
+  test("validates initial seal (null previous)", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
@@ -28,12 +28,15 @@ describe("seal_chain check", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.verdict).toBe("pass");
+      expect(result.value.verdict).toBe("skip");
       expect(result.value.reason).toContain("Initial seal");
+      const evidence = result.value.evidence as Record<string, unknown>;
+      expect(evidence["isInitial"]).toBe(true);
+      expect(evidence["chainWalked"]).toBe(false);
     }
   });
 
-  test("passes for seal with valid previous ID", async () => {
+  test("validates seal with valid previous ID", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
@@ -46,8 +49,11 @@ describe("seal_chain check", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.verdict).toBe("pass");
+      expect(result.value.verdict).toBe("skip");
       expect(result.value.reason).toContain("structurally valid");
+      const evidence = result.value.evidence as Record<string, unknown>;
+      expect(evidence["previousSealId"]).toBe("att-001");
+      expect(evidence["chainWalked"]).toBe(false);
     }
   });
 
@@ -69,22 +75,33 @@ describe("seal_chain check", () => {
     }
   });
 
-  test("includes chain evidence", async () => {
+  test("fails when groupId is empty", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
-        seal: createTestSeal({
-          sealId: "att-002",
-          previousSealId: "att-001",
-        }),
+        seal: createTestSeal({ groupId: "" }),
       }),
     );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      const evidence = result.value.evidence as Record<string, unknown>;
-      expect(evidence["previousId"]).toBe("att-001");
-      expect(evidence["chainValid"]).toBe(true);
+      expect(result.value.verdict).toBe("fail");
+      expect(result.value.reason).toContain("groupId");
+    }
+  });
+
+  test("fails when agentInboxId is empty", async () => {
+    const check = createSealChainCheck();
+    const result = await check.execute(
+      createTestVerificationRequest({
+        seal: createTestSeal({ agentInboxId: "" }),
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.verdict).toBe("fail");
+      expect(result.value.reason).toContain("agentInboxId");
     }
   });
 });
