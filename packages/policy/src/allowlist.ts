@@ -8,6 +8,7 @@ import type { SignetContentTypeConfig } from "./types.js";
 
 /**
  * Validates that a view mode is supported in the current version.
+ * Removed modes are rejected by the schema before reaching policy code.
  */
 export function validateViewMode(
   _mode: ViewMode,

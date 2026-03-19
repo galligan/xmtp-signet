@@ -101,6 +101,10 @@ export function createSealChainCheck(): CheckHandler {
           previousSealId: seal.previousSealId,
           isInitial: seal.previousSealId === null,
           chainWalked: false,
+          // Legacy aliases for backward compatibility
+          previousId: seal.previousSealId,
+          chainValid: true,
+          chainLength: seal.previousSealId === null ? 1 : 2,
         },
       });
     },
