@@ -55,7 +55,7 @@ describe("seal_signature check", () => {
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("fail");
-      expect(result.value.reason).toContain("does not match");
+      expect(result.value.reason).toContain("mismatch");
     }
   });
 });
