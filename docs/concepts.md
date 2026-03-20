@@ -161,7 +161,13 @@ A **reveal** is an explicit authorization to expose previously hidden content to
 | `thread`       | All messages in a thread (by `threadId`)               |
 | `sender`       | All messages from a specific sender                    |
 | `content-type` | All messages of a specific content type                |
-| `time-window`  | All messages within a time range *(defined in schema, not yet implemented)* |
+| `time-window`  | All messages within a time range (`startISO\|endISO` in targetId) |
+
+### Scope and thread interaction
+
+Reveals operate **within** the session's thread scopes, not outside them. The projection pipeline drops out-of-scope messages before checking reveal state, so a `sender` reveal in a thread-scoped session only reveals that sender's messages within the allowed threads — it cannot expose messages from other threads.
+
+All reveal scopes respect the session's `threadScopes` boundary. The `thread` scope additionally matches by `threadId`, providing finer control within an already-scoped view.
 
 ### Lifecycle
 
