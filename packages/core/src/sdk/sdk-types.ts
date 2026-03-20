@@ -64,6 +64,12 @@ export interface SdkGroupShape {
   send(encoded: unknown): Promise<string>;
   addMembers(inboxIds: string[]): Promise<void>;
   removeMembers(inboxIds: string[]): Promise<void>;
+  messages(options?: {
+    limit?: number;
+    sentBeforeNs?: bigint;
+    sentAfterNs?: bigint;
+    direction?: number;
+  }): Promise<SdkDecodedMessageShape[]>;
   stream(
     options?: unknown,
   ): Promise<SdkAsyncStreamProxyShape<SdkDecodedMessageShape>>;

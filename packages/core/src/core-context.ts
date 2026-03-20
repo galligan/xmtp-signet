@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { NotFoundError, type SignetError } from "@xmtp/signet-schemas";
 import type { ClientRegistry } from "./client-registry.js";
 import type { SqliteIdentityStore } from "./identity-store.js";
-import type { XmtpGroupInfo } from "./xmtp-client-factory.js";
+import type {
+  ListMessagesOptions,
+  XmtpDecodedMessage,
+  XmtpGroupInfo,
+} from "./xmtp-client-factory.js";
 
 /**
  * Sealed interface for performing actions through the signet core.
@@ -104,6 +108,18 @@ export class SignetCoreContext {
       return Result.err(NotFoundError.create("inboxId", groupId));
     }
     return Result.ok(identity.inboxId);
+  }
+
+  /** Query historical messages from a conversation. */
+  async listMessages(
+    groupId: string,
+    options?: ListMessagesOptions,
+  ): Promise<Result<readonly XmtpDecodedMessage[], SignetError>> {
+    const managed = this.#registry.getByGroupId(groupId);
+    if (!managed) {
+      return Result.err(NotFoundError.create("group", groupId));
+    }
+    return managed.client.listMessages(groupId, options);
   }
 
   /** Force a sync for a specific group. */

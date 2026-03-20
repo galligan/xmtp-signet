@@ -196,6 +196,10 @@ export function createMockXmtpClient(options?: MockXmtpClientOptions): {
       return Result.ok(undefined);
     },
 
+    async listMessages(_groupId: string) {
+      return Result.ok([] as readonly XmtpDecodedMessage[]);
+    },
+
     async streamAllMessages() {
       const stream: MessageStream = {
         messages: msgStream.iterable,

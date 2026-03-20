@@ -58,6 +58,12 @@ export interface XmtpClient {
     inboxIds: readonly string[],
   ): Promise<Result<void, SignetError>>;
 
+  /** Query historical messages from a conversation. */
+  listMessages(
+    groupId: string,
+    options?: ListMessagesOptions,
+  ): Promise<Result<readonly XmtpDecodedMessage[], SignetError>>;
+
   /**
    * Stream all messages across all groups.
    * Returns an async iterable and an abort function.
@@ -108,6 +114,21 @@ export interface XmtpGroupEvent {
 export interface MessageStream {
   readonly messages: AsyncIterable<XmtpDecodedMessage>;
   readonly abort: () => void;
+}
+
+/** Options for querying historical messages from a conversation. */
+export interface ListMessagesOptions {
+  /** Maximum number of messages to return. */
+  readonly limit?: number;
+  /** Filter messages sent before this ISO timestamp. */
+  readonly before?: string;
+  /** Filter messages sent after this ISO timestamp. */
+  readonly after?: string;
+  /**
+   * Sort direction: "ascending" (oldest first) or
+   * "descending" (newest first, default).
+   */
+  readonly direction?: "ascending" | "descending";
 }
 
 /** Group stream with abort capability. */

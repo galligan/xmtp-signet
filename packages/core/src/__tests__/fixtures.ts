@@ -82,6 +82,7 @@ export function createMockXmtpClient(options?: {
       }),
     addMembers: async (_groupId, _inboxIds) => Result.ok(),
     removeMembers: async (_groupId, _inboxIds) => Result.ok(),
+    listMessages: async (_groupId) => Result.ok([]),
     streamAllMessages: async () =>
       Result.ok({
         messages: emptyAsyncIterable<XmtpDecodedMessage>(),

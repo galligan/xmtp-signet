@@ -92,6 +92,7 @@ export function createMockGroup(
     send: async (_encoded: unknown) => `msg-${Date.now()}`,
     addMembers: async (_inboxIds: string[]) => {},
     removeMembers: async (_inboxIds: string[]) => {},
+    messages: async () => [],
     stream: async () => createMockAsyncStreamProxy<SdkDecodedMessageShape>([]),
     metadata: async () => ({
       creatorInboxId: "creator-inbox",

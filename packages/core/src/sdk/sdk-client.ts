@@ -3,13 +3,15 @@ import type { SignetError } from "@xmtp/signet-schemas";
 import { NotFoundError } from "@xmtp/signet-schemas";
 import type {
   XmtpClient,
+  XmtpDecodedMessage,
   XmtpDmInfo,
   XmtpGroupInfo,
+  ListMessagesOptions,
   MessageStream,
   GroupStream,
 } from "../xmtp-client-factory.js";
 import { wrapSdkCall } from "./error-mapping.js";
-import { toGroupInfo } from "./type-mapping.js";
+import { toGroupInfo, toDecodedMessage } from "./type-mapping.js";
 import { wrapMessageStream, wrapGroupStream } from "./stream-wrappers.js";
 import type { SdkClientShape, SdkGroupShape } from "./sdk-types.js";
 
@@ -229,6 +231,42 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
       return wrapSdkCall(
         async () => groupResult.value.removeMembers([...inboxIds]),
         "removeMembers",
+        { resourceType: "group", resourceId: groupId },
+      );
+    },
+
+    async listMessages(
+      groupId: string,
+      options?: ListMessagesOptions,
+    ): Promise<Result<readonly XmtpDecodedMessage[], SignetError>> {
+      const groupResult = await getGroup(client, groupId);
+      if (groupResult.isErr()) return groupResult;
+      const group = groupResult.value;
+
+      return wrapSdkCall(
+        async () => {
+          const sdkOptions: Record<string, unknown> = {};
+          if (options?.limit !== undefined) {
+            sdkOptions["limit"] = options.limit;
+          }
+          if (options?.before !== undefined) {
+            sdkOptions["sentBeforeNs"] =
+              BigInt(new Date(options.before).getTime()) * 1_000_000n;
+          }
+          if (options?.after !== undefined) {
+            sdkOptions["sentAfterNs"] =
+              BigInt(new Date(options.after).getTime()) * 1_000_000n;
+          }
+          if (options?.direction !== undefined) {
+            // Map public strings to SDK SortDirection enum values
+            sdkOptions["direction"] =
+              options.direction === "ascending" ? 1 : 2;
+          }
+
+          const messages = await group.messages(sdkOptions);
+          return messages.map((m) => toDecodedMessage(m));
+        },
+        "listMessages",
         { resourceType: "group", resourceId: groupId },
       );
     },

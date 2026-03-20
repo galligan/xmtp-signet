@@ -45,6 +45,7 @@ export type {
   XmtpGroupInfo,
   XmtpDecodedMessage,
   XmtpGroupEvent,
+  ListMessagesOptions,
   MessageStream,
   GroupStream,
   SignerProviderLike,
