@@ -16,10 +16,22 @@ import type {
   RevealGrant,
 } from "@xmtp/signet-schemas";
 import type { SessionManager, SessionRecord } from "@xmtp/signet-contracts";
-import { validateSendMessage } from "@xmtp/signet-policy";
+import { validateSendMessage, projectMessage } from "@xmtp/signet-policy";
+import type { RawMessage } from "@xmtp/signet-policy";
 import type { RequestHandler } from "@xmtp/signet-ws";
 import type { InternalSessionManager } from "@xmtp/signet-sessions";
 import type { PendingActionStore } from "@xmtp/signet-sessions";
+
+/** Minimal message shape needed for reveal replay. */
+export interface ReplayMessage {
+  readonly messageId: string;
+  readonly groupId: string;
+  readonly senderInboxId: string;
+  readonly contentType: string;
+  readonly content: unknown;
+  readonly sentAt: string;
+  readonly threadId: string | null;
+}
 
 /** Default expiry for pending actions: 5 minutes. */
 const PENDING_ACTION_TTL_MS = 5 * 60 * 1000;
@@ -39,6 +51,15 @@ export interface HarnessRequestHandlerDeps {
   readonly internalSessionManager?: InternalSessionManager;
   readonly pendingActions?: PendingActionStore;
   readonly broadcast?: (sessionId: string, event: SignetEvent) => void;
+  readonly listMessages?: (
+    groupId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+      direction?: "ascending" | "descending";
+    },
+  ) => Promise<Result<readonly ReplayMessage[], SignetError>>;
 }
 
 /**
@@ -211,10 +232,53 @@ export function createWsRequestHandler(
 
     store.grant(grant, reveal);
 
-    // TODO: Replay affected historical messages through the projection pipeline
-    // and emit message.revealed events. Currently the grant is stored but
-    // already-hidden content is not re-delivered — future messages will use the
-    // reveal state, but historical content requires a replay mechanism.
+    // Replay historical messages through the projection pipeline
+    if (deps.listMessages && deps.broadcast) {
+      const messagesResult = await deps.listMessages(reveal.groupId);
+      if (messagesResult.isOk()) {
+        const allowlist = new Set(session.view.contentTypes);
+        for (const msg of messagesResult.value) {
+          const isRevealed = store.isRevealed(
+            msg.messageId,
+            msg.groupId,
+            msg.threadId,
+            msg.senderInboxId,
+            msg.contentType,
+            msg.sentAt,
+          );
+          if (!isRevealed) continue;
+
+          // Run through the view projection pipeline to enforce
+          // scope and content-type filters before emitting.
+          const rawMessage: RawMessage = {
+            messageId: msg.messageId,
+            groupId: msg.groupId,
+            senderInboxId: msg.senderInboxId,
+            contentType: msg.contentType,
+            content: msg.content,
+            sentAt: msg.sentAt,
+            sealId: null,
+            threadId: msg.threadId,
+          };
+          const projection = projectMessage(
+            rawMessage,
+            session.view,
+            allowlist,
+            true,
+          );
+          if (projection.action === "emit") {
+            deps.broadcast(session.sessionId, {
+              type: "message.revealed",
+              messageId: msg.messageId,
+              groupId: msg.groupId,
+              contentType: msg.contentType,
+              content: projection.event.content,
+              revealId: grant.revealId,
+            });
+          }
+        }
+      }
+    }
 
     return Result.ok(grant);
   }

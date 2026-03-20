@@ -1,14 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import type { SessionRecord } from "@xmtp/signet-contracts";
-import type { HarnessRequest, SignetEvent } from "@xmtp/signet-schemas";
+import type {
+  HarnessRequest,
+  RevealEvent,
+  SignetEvent,
+} from "@xmtp/signet-schemas";
 import {
   AuthError,
   NotFoundError,
   PermissionError,
 } from "@xmtp/signet-schemas";
 import { createWsRequestHandler } from "../ws/request-handler.js";
+import type { ReplayMessage } from "../ws/request-handler.js";
 import { createPendingActionStore } from "@xmtp/signet-sessions";
+import { createRevealStateStore } from "@xmtp/signet-policy";
 
 function makeSessionRecord(
   overrides: Partial<SessionRecord> = {},
@@ -420,5 +426,328 @@ describe("createWsRequestHandler", () => {
     if (result.isErr()) {
       expect(result.error).toBeInstanceOf(PermissionError);
     }
+  });
+
+  test("reveal_content replays historical messages as message.revealed events", async () => {
+    const revealStore = createRevealStateStore();
+    const broadcastedEvents: {
+      sessionId: string;
+      event: SignetEvent;
+    }[] = [];
+
+    const messages: readonly ReplayMessage[] = [
+      {
+        messageId: "msg_1",
+        groupId: "g1",
+        senderInboxId: "sender_a",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "hello" },
+        sentAt: "2024-01-01T00:01:00Z",
+        threadId: "thread_1",
+      },
+      {
+        messageId: "msg_2",
+        groupId: "g1",
+        senderInboxId: "sender_b",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "world" },
+        sentAt: "2024-01-01T00:02:00Z",
+        threadId: "thread_1",
+      },
+    ];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      sessionManager: {
+        heartbeat: async () => Result.ok(undefined),
+        getRevealState: () => Result.ok(revealStore),
+      },
+      broadcast: (sessionId, event) => {
+        broadcastedEvents.push({ sessionId, event });
+      },
+      listMessages: async () => Result.ok(messages),
+    });
+
+    const request: HarnessRequest = {
+      type: "reveal_content",
+      requestId: "req_reveal_1",
+      reveal: {
+        revealId: "rev_1",
+        groupId: "g1",
+        scope: "thread",
+        targetId: "thread_1",
+        requestedBy: "owner_1",
+        expiresAt: null,
+      },
+    };
+
+    const result = await handler(request, makeSessionRecord());
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      const grant = result.value as { revealId: string };
+      expect(grant.revealId).toBe("rev_1");
+    }
+
+    // Both messages should be revealed via broadcast
+    expect(broadcastedEvents).toHaveLength(2);
+    for (const entry of broadcastedEvents) {
+      expect(entry.sessionId).toBe("sess_123");
+      expect(entry.event.type).toBe("message.revealed");
+    }
+
+    const first = broadcastedEvents[0]?.event as RevealEvent;
+    expect(first.messageId).toBe("msg_1");
+    expect(first.revealId).toBe("rev_1");
+    expect(first.content).toEqual({ text: "hello" });
+
+    const second = broadcastedEvents[1]?.event as RevealEvent;
+    expect(second.messageId).toBe("msg_2");
+    expect(second.revealId).toBe("rev_1");
+  });
+
+  test("reveal_content skips replay when listMessages is not provided", async () => {
+    const revealStore = createRevealStateStore();
+    const broadcastedEvents: {
+      sessionId: string;
+      event: SignetEvent;
+    }[] = [];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      sessionManager: {
+        heartbeat: async () => Result.ok(undefined),
+        getRevealState: () => Result.ok(revealStore),
+      },
+      broadcast: (sessionId, event) => {
+        broadcastedEvents.push({ sessionId, event });
+      },
+    });
+
+    const request: HarnessRequest = {
+      type: "reveal_content",
+      requestId: "req_reveal_2",
+      reveal: {
+        revealId: "rev_2",
+        groupId: "g1",
+        scope: "message",
+        targetId: "msg_1",
+        requestedBy: "owner_1",
+        expiresAt: null,
+      },
+    };
+
+    const result = await handler(request, makeSessionRecord());
+
+    expect(result.isOk()).toBe(true);
+    // No broadcast since listMessages is not wired
+    expect(broadcastedEvents).toHaveLength(0);
+  });
+
+  test("reveal_content filters out replayed messages with disallowed content types", async () => {
+    const revealStore = createRevealStateStore();
+    const broadcastedEvents: {
+      sessionId: string;
+      event: SignetEvent;
+    }[] = [];
+
+    const messages: readonly ReplayMessage[] = [
+      {
+        messageId: "msg_text",
+        groupId: "g1",
+        senderInboxId: "sender_a",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "allowed" },
+        sentAt: "2024-01-01T00:01:00Z",
+        threadId: null,
+      },
+      {
+        messageId: "msg_reaction",
+        groupId: "g1",
+        senderInboxId: "sender_a",
+        contentType: "xmtp.org/reaction:1.0",
+        content: { emoji: ":+1:" },
+        sentAt: "2024-01-01T00:02:00Z",
+        threadId: null,
+      },
+    ];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      sessionManager: {
+        heartbeat: async () => Result.ok(undefined),
+        getRevealState: () => Result.ok(revealStore),
+      },
+      broadcast: (sessionId, event) => {
+        broadcastedEvents.push({ sessionId, event });
+      },
+      listMessages: async () => Result.ok(messages),
+    });
+
+    // Use sender scope to reveal all messages from sender_a.
+    // Session only allows text content type, so reaction should be filtered.
+    const request: HarnessRequest = {
+      type: "reveal_content",
+      requestId: "req_reveal_filter",
+      reveal: {
+        revealId: "rev_filter",
+        groupId: "g1",
+        scope: "sender",
+        targetId: "sender_a",
+        requestedBy: "owner_1",
+        expiresAt: null,
+      },
+    };
+
+    const result = await handler(request, makeSessionRecord());
+
+    expect(result.isOk()).toBe(true);
+    // Only the text message should be broadcast; the reaction is filtered
+    expect(broadcastedEvents).toHaveLength(1);
+    const revealed = broadcastedEvents[0]?.event as RevealEvent;
+    expect(revealed.messageId).toBe("msg_text");
+    expect(revealed.contentType).toBe("xmtp.org/text:1.0");
+  });
+
+  test("reveal_content filters out replayed messages outside thread scope", async () => {
+    const revealStore = createRevealStateStore();
+    const broadcastedEvents: {
+      sessionId: string;
+      event: SignetEvent;
+    }[] = [];
+
+    const messages: readonly ReplayMessage[] = [
+      {
+        messageId: "msg_in_scope",
+        groupId: "g1",
+        senderInboxId: "sender_a",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "in scope" },
+        sentAt: "2024-01-01T00:01:00Z",
+        threadId: "thread_allowed",
+      },
+      {
+        messageId: "msg_out_scope",
+        groupId: "g1",
+        senderInboxId: "sender_a",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "out of scope" },
+        sentAt: "2024-01-01T00:02:00Z",
+        threadId: "thread_not_allowed",
+      },
+    ];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      sessionManager: {
+        heartbeat: async () => Result.ok(undefined),
+        getRevealState: () => Result.ok(revealStore),
+      },
+      broadcast: (sessionId, event) => {
+        broadcastedEvents.push({ sessionId, event });
+      },
+      listMessages: async () => Result.ok(messages),
+    });
+
+    // Session scoped to a specific thread. Use sender scope to reveal
+    // all messages from sender_a; thread scope filter should drop the
+    // message in thread_not_allowed.
+    const session = makeSessionRecord({
+      view: {
+        mode: "full",
+        threadScopes: [{ groupId: "g1", threadId: "thread_allowed" }],
+        contentTypes: ["xmtp.org/text:1.0"],
+      },
+    });
+
+    const request: HarnessRequest = {
+      type: "reveal_content",
+      requestId: "req_reveal_scope",
+      reveal: {
+        revealId: "rev_scope",
+        groupId: "g1",
+        scope: "sender",
+        targetId: "sender_a",
+        requestedBy: "owner_1",
+        expiresAt: null,
+      },
+    };
+
+    const result = await handler(request, session);
+
+    expect(result.isOk()).toBe(true);
+    // Only in-scope thread message should be broadcast
+    expect(broadcastedEvents).toHaveLength(1);
+    const revealed = broadcastedEvents[0]?.event as RevealEvent;
+    expect(revealed.messageId).toBe("msg_in_scope");
+  });
+
+  test("reveal_content only replays messages matching the reveal scope", async () => {
+    const revealStore = createRevealStateStore();
+    const broadcastedEvents: {
+      sessionId: string;
+      event: SignetEvent;
+    }[] = [];
+
+    const messages: readonly ReplayMessage[] = [
+      {
+        messageId: "msg_target",
+        groupId: "g1",
+        senderInboxId: "sender_a",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "revealed" },
+        sentAt: "2024-01-01T00:01:00Z",
+        threadId: null,
+      },
+      {
+        messageId: "msg_other",
+        groupId: "g1",
+        senderInboxId: "sender_b",
+        contentType: "xmtp.org/text:1.0",
+        content: { text: "not revealed" },
+        sentAt: "2024-01-01T00:02:00Z",
+        threadId: null,
+      },
+    ];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      sessionManager: {
+        heartbeat: async () => Result.ok(undefined),
+        getRevealState: () => Result.ok(revealStore),
+      },
+      broadcast: (sessionId, event) => {
+        broadcastedEvents.push({ sessionId, event });
+      },
+      listMessages: async () => Result.ok(messages),
+    });
+
+    // Reveal only a single message by ID
+    const request: HarnessRequest = {
+      type: "reveal_content",
+      requestId: "req_reveal_3",
+      reveal: {
+        revealId: "rev_3",
+        groupId: "g1",
+        scope: "message",
+        targetId: "msg_target",
+        requestedBy: "owner_1",
+        expiresAt: null,
+      },
+    };
+
+    const result = await handler(request, makeSessionRecord());
+
+    expect(result.isOk()).toBe(true);
+    // Only the targeted message should be revealed
+    expect(broadcastedEvents).toHaveLength(1);
+    const revealed = broadcastedEvents[0]?.event as RevealEvent;
+    expect(revealed.messageId).toBe("msg_target");
+    expect(revealed.revealId).toBe("rev_3");
   });
 });

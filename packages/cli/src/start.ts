@@ -326,6 +326,24 @@ export function createProductionDeps(): SignetRuntimeDeps {
             event as import("@xmtp/signet-schemas").SignetEvent,
           );
         },
+        listMessages: async (
+          groupId: string,
+          options?: {
+            limit?: number;
+            before?: string;
+            after?: string;
+            direction?: "ascending" | "descending";
+          },
+        ) => {
+          if (!coreImplRef) {
+            return Result.err(
+              InternalError.create(
+                "Core not initialized -- cannot list messages",
+              ),
+            );
+          }
+          return coreImplRef.context.listMessages(groupId, options);
+        },
       };
       // Only add internalSessionManager when available (exactOptionalPropertyTypes)
       if (internalSessionManagerRef) {
