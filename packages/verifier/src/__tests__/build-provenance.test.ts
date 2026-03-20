@@ -253,6 +253,7 @@ describe("build_provenance check", () => {
     if (result.isOk()) {
       expect(result.value.verdict).toBe("skip");
       expect(result.value.checkId).toBe("build_provenance");
+      expect(result.value.reason).toContain("Fulcio");
       expect(result.value.evidence).not.toBeNull();
       const evidence = result.value.evidence as Record<string, unknown>;
       expect(evidence["cryptoVerified"]).toBe(true);
