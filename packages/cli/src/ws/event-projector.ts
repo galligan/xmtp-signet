@@ -67,6 +67,7 @@ export function createEventProjector(
       sentAt: event.sentAt,
       sealId: event.sealId,
       threadId,
+      isHistorical: event.visibility === "historical",
     };
 
     const effectiveAllowlist = getEffectiveAllowlist(session);

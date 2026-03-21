@@ -39,10 +39,20 @@ export function projectMessage(
   }
 
   // Stage 3: Visibility resolver
-  const visibility = resolveVisibility(view.mode, isRevealed);
-  if (visibility === "hidden") {
+  const baseVisibility = resolveVisibility(view.mode, isRevealed);
+  if (baseVisibility === "hidden") {
     return DROP;
   }
+
+  // Stage 3b: Historical override — non-hidden messages during recovery
+  // are tagged as historical so the harness can treat them as context,
+  // not action triggers.
+  const visibility =
+    message.isHistorical === true &&
+    baseVisibility !== "redacted" &&
+    baseVisibility !== "revealed"
+      ? ("historical" as const)
+      : baseVisibility;
 
   // Stage 4: Content projector
   const content = projectContent(

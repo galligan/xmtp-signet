@@ -215,7 +215,8 @@ export class SignetCoreImpl {
         }
         const msgStream = msgStreamResult.value;
         this.#streams.push(msgStream);
-        this.#consumeMessageStream(msgStream.messages);
+        const streamStartedAt = new Date().toISOString();
+        this.#consumeMessageStream(msgStream.messages, streamStartedAt);
 
         const groupStreamResult = await client.streamGroups();
         if (groupStreamResult.isErr()) {
@@ -296,8 +297,18 @@ export class SignetCoreImpl {
   /**
    * Consume messages from a stream and emit raw events.
    * Runs as a fire-and-forget async loop; errors are swallowed.
+   *
+   * Messages with sentAt before the stream start time are tagged as
+   * historical (recovery sync). This lets the harness distinguish
+   * catch-up context from live action triggers.
    */
-  #consumeMessageStream(messages: AsyncIterable<XmtpDecodedMessage>): void {
+  #consumeMessageStream(
+    messages: AsyncIterable<XmtpDecodedMessage>,
+    streamStartedAt?: string,
+  ): void {
+    const cutoffMs = streamStartedAt
+      ? new Date(streamStartedAt).getTime()
+      : Date.now();
     void (async () => {
       try {
         for await (const msg of messages) {
@@ -310,7 +321,7 @@ export class SignetCoreImpl {
             content: msg.content,
             sentAt: msg.sentAt,
             threadId: msg.threadId,
-            isHistorical: false,
+            isHistorical: new Date(msg.sentAt).getTime() < cutoffMs,
           });
         }
       } catch {

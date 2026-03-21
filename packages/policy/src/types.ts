@@ -14,6 +14,8 @@ export interface RawMessage {
   readonly sentAt: string;
   readonly threadId: string | null;
   readonly sealId: string | null;
+  /** True if received during broker recovery sync. Defaults to false. */
+  readonly isHistorical?: boolean;
 }
 
 /** Result of projecting a raw message through the view pipeline. */
