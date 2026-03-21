@@ -67,6 +67,7 @@ describe("createWsRequestHandler", () => {
       },
       sessionManager: {
         heartbeat: async () => Result.ok(undefined),
+        lookup: async () => Result.ok(makeSessionRecord()),
       },
     });
 
