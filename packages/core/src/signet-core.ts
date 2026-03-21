@@ -49,6 +49,7 @@ export class SignetCoreImpl {
   readonly #identityStore: SqliteIdentityStore;
   readonly #context: SignetCoreContext;
   #heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  #livenessTimer: ReturnType<typeof setInterval> | null = null;
   #streams: Array<{ abort: () => void }> = [];
 
   constructor(
@@ -376,12 +377,28 @@ export class SignetCoreImpl {
         timestamp: new Date().toISOString(),
       });
     }, this.#config.heartbeatIntervalMs);
+
+    // Liveness signal: published at a separate (typically slower) cadence
+    // so group members can detect agent availability.
+    this.#livenessTimer = setInterval(() => {
+      this.#emitter.emit({
+        type: "raw.liveness",
+        timestamp: new Date().toISOString(),
+        heartbeatIntervalSeconds: Math.round(
+          this.#config.livenessIntervalMs / 1000,
+        ),
+      });
+    }, this.#config.livenessIntervalMs);
   }
 
   #stopHeartbeat(): void {
     if (this.#heartbeatTimer !== null) {
       clearInterval(this.#heartbeatTimer);
       this.#heartbeatTimer = null;
+    }
+    if (this.#livenessTimer !== null) {
+      clearInterval(this.#livenessTimer);
+      this.#livenessTimer = null;
     }
   }
 }
