@@ -49,6 +49,18 @@ export { createSignerProvider } from "./signer-provider.js";
 // Seal stamper
 export { createSealStamper } from "./seal-stamper.js";
 
+// Biometric gate
+export {
+  createBiometricGate,
+  BiometricGateConfigSchema,
+} from "./biometric-gate.js";
+export type {
+  BiometricGateConfig,
+  BiometricGateConfigInput,
+  GatedOperation,
+  BiometricPrompter,
+} from "./biometric-gate.js";
+
 // Operational key manager
 export { createOperationalKeyManager } from "./operational-key.js";
 export type { OperationalKeyManager } from "./operational-key.js";
