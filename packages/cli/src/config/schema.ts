@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { BiometricGateConfigSchema } from "@xmtp/signet-keys";
+import type {
+  BiometricGateConfig,
+  BiometricGateConfigInput,
+} from "@xmtp/signet-keys";
 
 // -- Admin server config --
 
@@ -90,6 +95,7 @@ export type CliConfig = {
     rootKeyPolicy: "biometric" | "passcode" | "open";
     operationalKeyPolicy: "biometric" | "passcode" | "open";
   };
+  biometricGating: BiometricGateConfig;
   ws: {
     port: number;
     host: string;
@@ -116,6 +122,7 @@ type CliConfigInput = {
         operationalKeyPolicy?: "biometric" | "passcode" | "open" | undefined;
       }
     | undefined;
+  biometricGating?: BiometricGateConfigInput | undefined;
   ws?:
     | {
         port?: number | undefined;
@@ -173,6 +180,7 @@ const CliConfigBaseSchema = z
           .describe("Protection level for operational keys"),
       })
       .default({}),
+    biometricGating: BiometricGateConfigSchema.default({}),
     ws: z
       .object({
         port: z
