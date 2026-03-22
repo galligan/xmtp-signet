@@ -126,6 +126,8 @@ export interface InternalSessionManager {
 export interface SessionManagerOptions {
   /** Called when a session's policy/state is mutated (for cache invalidation). */
   readonly onSessionMutated?: (sessionId: string) => void;
+  /** Called when a session is revoked. Receives the full record for seal publishing. */
+  readonly onSessionRevoked?: (session: InternalSessionRecord) => void;
 }
 
 /** Create a new session manager with the given configuration. */
@@ -234,11 +236,15 @@ export function createSessionManager(
     reason: SessionRevocationReason,
   ): Result<InternalSessionRecord, InternalError> {
     cleanupRevealState(sessionId);
-    return mutateRecord(sessionId, {
+    const result = mutateRecord(sessionId, {
       state: "revoked",
       revokedAt: now(),
       revocationReason: reason,
     });
+    if (result.isOk()) {
+      options?.onSessionRevoked?.(result.value);
+    }
+    return result;
   }
 
   const manager: InternalSessionManager = {

@@ -83,6 +83,10 @@ export function createProductionDeps(): SignetRuntimeDeps {
   let internalSessionManagerRef: InternalSessionManager | null = null;
   // Late-bound WS server ref for session invalidation callbacks
   let globalWsServerRef: WsServer | null = null;
+  // Late-bound seal manager ref for revocation publishing
+  let globalSealManagerRef:
+    | import("@xmtp/signet-contracts").SealManager
+    | null = null;
 
   return {
     async createKeyManager(
@@ -198,6 +202,27 @@ export function createProductionDeps(): SignetRuntimeDeps {
             // the async lookup, so no events leak under stale policy.
             void globalWsServerRef?.invalidateSession(sessionId);
           },
+          onSessionRevoked(session) {
+            // Trigger seal revocation publishing when a session is revoked.
+            // The seal manager publishes a RevocationSeal to the XMTP group.
+            if (!globalSealManagerRef) return;
+            const reason =
+              session.revocationReason === "reauthorization-required"
+                ? "admin-removed"
+                : (session.revocationReason ?? "owner-initiated");
+            void (async () => {
+              const sealResult = await globalSealManagerRef!.current(
+                session.agentInboxId,
+                "", // groupId not available on session — seal lookup by agent
+              );
+              if (sealResult.isOk() && sealResult.value !== null) {
+                await globalSealManagerRef!.revoke(
+                  sealResult.value.seal.sealId,
+                  reason as import("@xmtp/signet-schemas").AgentRevocationReason,
+                );
+              }
+            })();
+          },
         },
       );
       internalSessionManagerRef = internal;
@@ -291,11 +316,13 @@ export function createProductionDeps(): SignetRuntimeDeps {
         );
       };
 
-      return createSealManagerImpl({
+      const sealManager = createSealManagerImpl({
         signer,
         publisher,
         resolveInput,
       });
+      globalSealManagerRef = sealManager;
+      return sealManager;
     },
 
     createWsServer(config: unknown, deps: unknown): WsServer {
