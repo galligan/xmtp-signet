@@ -168,6 +168,25 @@ export function createWsRequestHandler(
       return readyResult;
     }
 
+    // Fail-closed: re-check session state after core readiness.
+    // The session may have been revoked during the ensureCoreReady() await.
+    const freshResult = await deps.sessionManager.lookup(session.sessionId);
+    if (freshResult.isErr()) {
+      return freshResult;
+    }
+    if (freshResult.value.state !== "active") {
+      return Result.err(
+        AuthError.create(
+          `Session is ${freshResult.value.state} — cannot send messages`,
+        ),
+      );
+    }
+
+    const readyResult = await deps.ensureCoreReady();
+    if (readyResult.isErr()) {
+      return readyResult;
+    }
+
     const sendResult = await deps.sendMessage(
       request.groupId,
       request.contentType,
