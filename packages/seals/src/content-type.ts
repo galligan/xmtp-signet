@@ -7,6 +7,9 @@ import {
 import { RevocationSeal } from "@xmtp/signet-schemas";
 import type { RevocationSeal as RevocationSealType } from "@xmtp/signet-schemas";
 
+/** Custom XMTP content type identifier for liveness payloads. */
+export const LIVENESS_CONTENT_TYPE_ID = "xmtp.org/agentLiveness:1.0" as const;
+
 /** Custom XMTP content type identifier for seal payloads. */
 export const SEAL_CONTENT_TYPE_ID = "xmtp.org/agentSeal:1.0" as const;
 
@@ -66,4 +69,36 @@ export function encodeRevocationMessage(
   envelope: SignedRevocationEnvelope,
 ): RevocationMessage {
   return { contentType: REVOCATION_CONTENT_TYPE_ID, ...envelope };
+}
+
+// ---------------------------------------------------------------------------
+// Liveness
+// ---------------------------------------------------------------------------
+
+/** Liveness signal published to XMTP groups for group-visible agent status. */
+export type LivenessMessage = {
+  readonly agentInboxId: string;
+  readonly timestamp: string;
+  readonly heartbeatIntervalSeconds: number;
+  readonly contentType: typeof LIVENESS_CONTENT_TYPE_ID;
+};
+
+/** Schema for a liveness signal with contentType discriminator. */
+const _LivenessMessage = z
+  .object({
+    agentInboxId: z.string(),
+    timestamp: z.string().datetime(),
+    heartbeatIntervalSeconds: z.number().int().positive(),
+    contentType: z.literal(LIVENESS_CONTENT_TYPE_ID),
+  })
+  .describe("Liveness signal with content type discriminator");
+
+/** Zod schema for a liveness signal payload. */
+export const LivenessMessage: z.ZodType<LivenessMessage> = _LivenessMessage;
+
+/** Wraps liveness data with the contentType discriminator field. */
+export function encodeLivenessMessage(
+  data: Omit<LivenessMessage, "contentType">,
+): LivenessMessage {
+  return { contentType: LIVENESS_CONTENT_TYPE_ID, ...data };
 }

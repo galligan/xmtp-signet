@@ -55,6 +55,13 @@ export interface RawHeartbeatEvent {
   readonly timestamp: string;
 }
 
+/** Liveness signal to be published to XMTP groups. */
+export interface RawLivenessEvent {
+  readonly type: "raw.liveness";
+  readonly timestamp: string;
+  readonly heartbeatIntervalSeconds: number;
+}
+
 /** Union of all raw events emitted by the core. */
 export type CoreRawEvent =
   | RawMessageEvent
@@ -62,7 +69,8 @@ export type CoreRawEvent =
   | RawGroupUpdatedEvent
   | RawCoreStartedEvent
   | RawCoreStoppedEvent
-  | RawHeartbeatEvent;
+  | RawHeartbeatEvent
+  | RawLivenessEvent;
 
 /** Handler function for raw events. */
 export type RawEventHandler = (event: CoreRawEvent) => void;

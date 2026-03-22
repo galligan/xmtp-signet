@@ -22,6 +22,7 @@ export type SignetCoreConfig = {
   env: XmtpEnv;
   identityMode: IdentityMode;
   heartbeatIntervalMs: number;
+  livenessIntervalMs: number;
   syncTimeoutMs: number;
   appVersion: string;
 };
@@ -32,6 +33,7 @@ type SignetCoreConfigInput = {
   env?: XmtpEnv | undefined;
   identityMode?: IdentityMode | undefined;
   heartbeatIntervalMs?: number | undefined;
+  livenessIntervalMs?: number | undefined;
   syncTimeoutMs?: number | undefined;
   appVersion?: string | undefined;
 };
@@ -54,6 +56,12 @@ export const SignetCoreConfigSchema: z.ZodType<
       .positive()
       .default(30_000)
       .describe("Heartbeat emission interval in milliseconds"),
+    livenessIntervalMs: z
+      .number()
+      .int()
+      .positive()
+      .default(60_000)
+      .describe("Liveness signal publication interval in milliseconds"),
     syncTimeoutMs: z
       .number()
       .int()

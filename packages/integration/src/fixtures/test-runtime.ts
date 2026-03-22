@@ -154,6 +154,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
       env: "dev",
       identityMode: "per-group",
       heartbeatIntervalMs: 60_000, // long to avoid noise in tests
+      livenessIntervalMs: 120_000,
       syncTimeoutMs: 5_000,
       appVersion: "test/0.1.0",
     },
