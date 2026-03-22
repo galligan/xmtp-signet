@@ -458,6 +458,9 @@ export async function createSignetRuntime(
           );
         }
 
+        // 7. Start key auto-rotation (no-op if interval is 0)
+        keyManager.startAutoRotation();
+
         currentState = "running";
 
         return Result.ok(undefined);
@@ -487,7 +490,10 @@ export async function createSignetRuntime(
 
         // Reverse order of startup
 
-        // 0. Stop HTTP server (if running)
+        // 0. Stop key auto-rotation
+        keyManager.stopAutoRotation();
+
+        // 0b. Stop HTTP server (if running)
         if (httpServer !== null) {
           const httpStopResult = await httpServer.stop();
           if (Result.isError(httpStopResult)) {

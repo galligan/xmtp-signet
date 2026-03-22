@@ -1,0 +1,47 @@
+# Fly.io deployment configuration for xmtp-signet
+# Deploy: fly launch --no-deploy && fly deploy
+# Docs: https://fly.io/docs/reference/configuration/
+
+app = "xmtp-signet"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  XMTP_SIGNET_DATA_DIR = "/data"
+  XMTP_SIGNET_ENV = "dev"
+  XMTP_SIGNET_WS_HOST = "0.0.0.0"
+  XMTP_SIGNET_WS_PORT = "8393"
+  XMTP_SIGNET_HTTP_ENABLED = "true"
+  XMTP_SIGNET_HTTP_HOST = "0.0.0.0"
+  XMTP_SIGNET_HTTP_PORT = "8081"
+
+[http_service]
+  internal_port = 8081
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8393
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls"]
+
+[checks]
+  [checks.health]
+    port = 8081
+    type = "http"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/v1/health"
+
+[mounts]
+  source = "signet_data"
+  destination = "/data"

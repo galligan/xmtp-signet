@@ -96,6 +96,34 @@ function applyEnvOverrides(
     }
   }
 
+  const wsHost = env["XMTP_SIGNET_WS_HOST"];
+  if (wsHost !== undefined) {
+    ensureSection(data, "ws");
+    (data["ws"] as Record<string, unknown>)["host"] = wsHost;
+  }
+
+  const httpEnabled = env["XMTP_SIGNET_HTTP_ENABLED"];
+  if (httpEnabled !== undefined) {
+    ensureSection(data, "http");
+    (data["http"] as Record<string, unknown>)["enabled"] =
+      httpEnabled === "true" || httpEnabled === "1";
+  }
+
+  const httpPort = env["XMTP_SIGNET_HTTP_PORT"];
+  if (httpPort !== undefined) {
+    const parsed = Number(httpPort);
+    if (!Number.isNaN(parsed)) {
+      ensureSection(data, "http");
+      (data["http"] as Record<string, unknown>)["port"] = parsed;
+    }
+  }
+
+  const httpHost = env["XMTP_SIGNET_HTTP_HOST"];
+  if (httpHost !== undefined) {
+    ensureSection(data, "http");
+    (data["http"] as Record<string, unknown>)["host"] = httpHost;
+  }
+
   const logLevel = env["XMTP_SIGNET_LOG_LEVEL"];
   if (logLevel !== undefined) {
     ensureSection(data, "logging");

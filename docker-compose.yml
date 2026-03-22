@@ -2,16 +2,30 @@ services:
   signet:
     build: .
     ports:
-      - "8080:8080"
+      - "8393:8393"   # WebSocket
+      - "8081:8081"   # HTTP API
     volumes:
       - signet-data:/data
     environment:
       - XMTP_SIGNET_DATA_DIR=/data
       - XMTP_SIGNET_ENV=dev
-      - XMTP_SIGNET_WS_PORT=8080
+      - XMTP_SIGNET_WS_PORT=8393
       - XMTP_SIGNET_WS_HOST=0.0.0.0
+      - XMTP_SIGNET_HTTP_ENABLED=true
+      - XMTP_SIGNET_HTTP_PORT=8081
+      - XMTP_SIGNET_HTTP_HOST=0.0.0.0
       - XMTP_SIGNET_LOG_LEVEL=info
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   signet-data:

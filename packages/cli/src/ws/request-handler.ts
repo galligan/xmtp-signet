@@ -182,11 +182,6 @@ export function createWsRequestHandler(
       );
     }
 
-    const readyResult = await deps.ensureCoreReady();
-    if (readyResult.isErr()) {
-      return readyResult;
-    }
-
     const sendResult = await deps.sendMessage(
       request.groupId,
       request.contentType,

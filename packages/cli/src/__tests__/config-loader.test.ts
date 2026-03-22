@@ -198,6 +198,37 @@ identityMode = "shared"
     expect(result.error._tag).toBe("ValidationError");
   });
 
+  test("HTTP and WS host env vars are applied", async () => {
+    const result = await loadConfig({
+      configPath: join(tempDir, "nonexistent.toml"),
+      envOverrides: {
+        XMTP_SIGNET_WS_HOST: "0.0.0.0",
+        XMTP_SIGNET_HTTP_ENABLED: "true",
+        XMTP_SIGNET_HTTP_PORT: "9090",
+        XMTP_SIGNET_HTTP_HOST: "0.0.0.0",
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    const config = result.value;
+    expect(config.ws.host).toBe("0.0.0.0");
+    expect(config.http.enabled).toBe(true);
+    expect(config.http.port).toBe(9090);
+    expect(config.http.host).toBe("0.0.0.0");
+  });
+
+  test("XMTP_SIGNET_HTTP_ENABLED=false disables HTTP", async () => {
+    const result = await loadConfig({
+      configPath: join(tempDir, "nonexistent.toml"),
+      envOverrides: {
+        XMTP_SIGNET_HTTP_ENABLED: "false",
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.http.enabled).toBe(false);
+  });
+
   test("no arguments returns defaults", async () => {
     // When called without configPath, it tries the default XDG path
     // which likely doesn't exist, so it should return defaults

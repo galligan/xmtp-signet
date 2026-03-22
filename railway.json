@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "XMTP_SIGNET_WS_HOST=0.0.0.0 XMTP_SIGNET_HTTP_ENABLED=true XMTP_SIGNET_HTTP_HOST=0.0.0.0 XMTP_SIGNET_HTTP_PORT=${PORT:-8081} bun run packages/cli/dist/bin.js start",
+    "startCommand": "XMTP_SIGNET_WS_HOST=0.0.0.0 XMTP_SIGNET_WS_PORT=${PORT:-8393} XMTP_SIGNET_HTTP_ENABLED=true XMTP_SIGNET_HTTP_HOST=0.0.0.0 XMTP_SIGNET_HTTP_PORT=8081 bun run packages/cli/src/bin.ts start",
     "healthcheckPath": "/v1/health",
     "healthcheckTimeout": 10,
     "restartPolicyType": "ON_FAILURE",

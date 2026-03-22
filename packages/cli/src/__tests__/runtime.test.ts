@@ -117,6 +117,17 @@ function makeMockDeps(tracker: {
           }),
         revokeSessionKey: () => Result.ok(undefined),
         signWithOperationalKey: async () => Result.ok(new Uint8Array()),
+        signWithSessionKey: async () => Result.ok(new Uint8Array()),
+        getOrCreateDbKey: async () => Result.ok(new Uint8Array(32)),
+        getOrCreateXmtpIdentityKey: async () =>
+          Result.ok("0x00" as `0x${string}`),
+        vaultSet: async () => Result.ok(undefined),
+        vaultGet: async () => Result.ok(new Uint8Array()),
+        vaultDelete: async () => Result.ok(undefined),
+        vaultList: () => [],
+        startAutoRotation: () => {},
+        stopAutoRotation: () => {},
+        close: () => {},
       });
     },
     createSignetCore: () => {

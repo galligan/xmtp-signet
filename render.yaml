@@ -1,0 +1,35 @@
+# Render Blueprint for xmtp-signet
+# Deploy: connect repo in Render dashboard
+# Docs: https://docs.render.com/blueprint-spec
+# Note: Render exposes a single port. WS is the primary service;
+# HTTP health check runs on a separate internal port (8081).
+
+services:
+  - type: web
+    name: xmtp-signet
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /v1/health
+    envVars:
+      - key: XMTP_SIGNET_DATA_DIR
+        value: /data
+      - key: XMTP_SIGNET_ENV
+        value: dev
+      - key: XMTP_SIGNET_WS_HOST
+        value: "0.0.0.0"
+      - key: XMTP_SIGNET_WS_PORT
+        fromService:
+          type: web
+          name: xmtp-signet
+          property: port
+      - key: XMTP_SIGNET_HTTP_ENABLED
+        value: "true"
+      - key: XMTP_SIGNET_HTTP_HOST
+        value: "0.0.0.0"
+      - key: XMTP_SIGNET_HTTP_PORT
+        value: "8081"
+    disk:
+      name: signet-data
+      mountPath: /data
+      sizeGB: 1

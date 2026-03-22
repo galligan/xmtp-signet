@@ -1,0 +1,12 @@
+node_modules
+.reference
+.agents
+.trail
+.claude
+.git
+docs
+signet-signer
+*.test.ts
+__tests__
+*.md
+!README.md

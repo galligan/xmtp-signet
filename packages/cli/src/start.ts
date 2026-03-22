@@ -206,20 +206,41 @@ export function createProductionDeps(): SignetRuntimeDeps {
             // Trigger seal revocation publishing when a session is revoked.
             // The seal manager publishes a RevocationSeal to the XMTP group.
             if (!globalSealManagerRef) return;
+            const sealMgr = globalSealManagerRef;
+
+            // Map session revocation reason to agent revocation reason.
+            // All SessionRevocationReason values except "reauthorization-required"
+            // are valid AgentRevocationReason values.
+            const reasonMap: Record<
+              string,
+              import("@xmtp/signet-schemas").AgentRevocationReason
+            > = {
+              "owner-initiated": "owner-initiated",
+              "session-expired": "session-expired",
+              "heartbeat-timeout": "heartbeat-timeout",
+              "policy-violation": "policy-violation",
+              "reauthorization-required": "admin-removed",
+            };
             const reason =
-              session.revocationReason === "reauthorization-required"
-                ? "admin-removed"
-                : (session.revocationReason ?? "owner-initiated");
+              reasonMap[session.revocationReason ?? ""] ?? "owner-initiated";
+
+            // Extract group IDs from the session's view scopes and revoke
+            // the seal for each group the session was scoped to.
+            const groupIds = session.view.threadScopes.map((s) => s.groupId);
+
             void (async () => {
-              const sealResult = await globalSealManagerRef!.current(
-                session.agentInboxId,
-                "", // groupId not available on session — seal lookup by agent
-              );
-              if (sealResult.isOk() && sealResult.value !== null) {
-                await globalSealManagerRef!.revoke(
-                  sealResult.value.seal.sealId,
-                  reason as import("@xmtp/signet-schemas").AgentRevocationReason,
-                );
+              for (const groupId of groupIds) {
+                try {
+                  const sealResult = await sealMgr.current(
+                    session.agentInboxId,
+                    groupId,
+                  );
+                  if (sealResult.isOk() && sealResult.value !== null) {
+                    await sealMgr.revoke(sealResult.value.seal.sealId, reason);
+                  }
+                } catch {
+                  // Best-effort: log failures but don't block revocation
+                }
               }
             })();
           },
