@@ -77,7 +77,7 @@ describe("SealStamper", () => {
         chatId: "conv_12345678",
         reason: "owner-initiated" as const,
         revokedAt: new Date().toISOString(),
-        issuer: "signet",
+        issuer: "signet-1",
       };
       const result = await signer.signRevocation(revocation);
       expect(Result.isOk(result)).toBe(true);
