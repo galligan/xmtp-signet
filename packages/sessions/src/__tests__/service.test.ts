@@ -1,50 +1,35 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { Result } from "better-result";
-import { InternalError } from "@xmtp/signet-schemas";
-import { createSessionService } from "../service.js";
-import { createSessionManager } from "../session-manager.js";
-import type { InternalSessionManager } from "../session-manager.js";
-import { createTestSessionConfig } from "./fixtures.js";
+import { createCredentialService } from "../service.js";
+import { createCredentialManager } from "../session-manager.js";
+import type { InternalCredentialManager } from "../session-manager.js";
+import { createTestCredentialConfig } from "./fixtures.js";
 
-describe("createSessionService", () => {
-  let manager: InternalSessionManager;
-  let issued: string[];
-  let service: ReturnType<typeof createSessionService>;
+describe("createCredentialService", () => {
+  let manager: InternalCredentialManager;
+  let service: ReturnType<typeof createCredentialService>;
 
   beforeEach(() => {
-    manager = createSessionManager({
+    manager = createCredentialManager({
       defaultTtlSeconds: 60,
-      maxConcurrentPerAgent: 3,
+      maxConcurrentPerOperator: 3,
       renewalWindowSeconds: 10,
       heartbeatGracePeriod: 3,
     });
-    issued = [];
-    service = createSessionService({
-      manager,
-      keyManager: {
-        async issueSessionKey(sessionId, ttlSeconds) {
-          issued.push(`${sessionId}:${ttlSeconds}`);
-          return Result.ok({ fingerprint: `fp_${sessionId}` });
-        },
-      },
-    });
+    service = createCredentialService({ manager });
   });
 
-  test("issues bearer credentials with session metadata", async () => {
-    const result = await service.issue(createTestSessionConfig());
+  test("issues bearer credentials with credential metadata", async () => {
+    const result = await service.issue(createTestCredentialConfig());
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
 
     expect(result.value.token).toHaveLength(43);
-    expect(result.value.session.sessionId).toMatch(/^ses_[0-9a-f]{32}$/);
-    expect(result.value.session.sessionKeyFingerprint).toBe(
-      `fp_${result.value.session.sessionId}`,
-    );
-    expect(issued).toEqual([`${result.value.session.sessionId}:3600`]);
+    expect(result.value.credential.id).toMatch(/^cred_[0-9a-f]{16}$/);
+    expect(result.value.credential.config.operatorId).toBe("op_test1234");
   });
 
-  test("reuses an existing matching active session without issuing a new key", async () => {
-    const config = createTestSessionConfig();
+  test("reuses an existing matching active credential", async () => {
+    const config = createTestCredentialConfig();
     const first = await service.issue(config);
     const second = await service.issue(config);
 
@@ -53,64 +38,55 @@ describe("createSessionService", () => {
     if (!first.isOk() || !second.isOk()) return;
 
     expect(second.value.token).toBe(first.value.token);
-    expect(second.value.session.sessionId).toBe(first.value.session.sessionId);
-    expect(issued).toHaveLength(1);
+    expect(second.value.credential.id).toBe(first.value.credential.id);
   });
 
-  test("lists public session records without exposing bearer tokens", async () => {
-    const issuedSession = await service.issue(createTestSessionConfig());
-    expect(issuedSession.isOk()).toBe(true);
-    if (!issuedSession.isOk()) return;
+  test("lists public credential records without exposing bearer tokens", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
 
-    const listed = await service.list("agent-inbox-1");
+    const listed = await service.list("op_test1234");
     expect(listed.isOk()).toBe(true);
     if (!listed.isOk()) return;
 
     expect(listed.value).toHaveLength(1);
-    expect(listed.value[0]?.sessionId).toBe(
-      issuedSession.value.session.sessionId,
-    );
+    expect(listed.value[0]?.id).toBe(issuedCred.value.credential.id);
+    expect(listed.value[0]?.credentialId).toBe(issuedCred.value.credential.id);
+    expect(listed.value[0]?.effectiveScopes.allow).toContain("read-messages");
+    expect(listed.value[0]?.isExpired).toBe(false);
     expect("token" in listed.value[0]!).toBe(false);
   });
 
-  test("reports whether a session is active", async () => {
-    const issuedSession = await service.issue(createTestSessionConfig());
-    expect(issuedSession.isOk()).toBe(true);
-    if (!issuedSession.isOk()) return;
+  test("revokes a credential", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
 
-    const active = await service.isActive(
-      issuedSession.value.session.sessionId,
-    );
-    expect(active.isOk()).toBe(true);
-    if (!active.isOk()) return;
-    expect(active.value).toBe(true);
-
-    await service.revoke(
-      issuedSession.value.session.sessionId,
+    const revokeResult = await service.revoke(
+      issuedCred.value.credential.id,
       "owner-initiated",
     );
+    expect(revokeResult.isOk()).toBe(true);
 
-    const revoked = await service.isActive(
-      issuedSession.value.session.sessionId,
-    );
-    expect(revoked.isOk()).toBe(true);
-    if (!revoked.isOk()) return;
-    expect(revoked.value).toBe(false);
+    // Lookup should still return but with revoked status
+    const lookup = await service.lookup(issuedCred.value.credential.id);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
+    expect(lookup.value.status).toBe("revoked");
   });
 
-  test("propagates session-key issuance errors", async () => {
-    const failing = createSessionService({
-      manager,
-      keyManager: {
-        async issueSessionKey() {
-          return Result.err(InternalError.create("session key failed"));
-        },
-      },
-    });
+  test("looks up credential by token", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
 
-    const result = await failing.issue(createTestSessionConfig());
-    expect(result.isErr()).toBe(true);
-    if (!result.isErr()) return;
-    expect(result.error.message).toContain("session key failed");
+    const lookup = await service.lookupByToken(issuedCred.value.token);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
+    expect(lookup.value.id).toBe(issuedCred.value.credential.id);
+    expect(lookup.value.credentialId).toBe(issuedCred.value.credential.id);
+    expect(lookup.value.operatorId).toBe("op_test1234");
+    expect(lookup.value.effectiveScopes.allow).toContain("read-messages");
   });
 });

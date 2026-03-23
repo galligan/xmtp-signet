@@ -1,26 +1,23 @@
 /**
- * Session permission update actions.
+ * Credential scope update actions.
  *
- * Allows modifying a session's view or grant in-place without
+ * Allows modifying a credential's scopes in-place without
  * revoke + reissue. Non-material changes (narrowing scope) apply
  * immediately. Material escalations trigger reauthorization.
  */
 
 import { Result } from "better-result";
 import { z } from "zod";
-import type { ActionSpec, SessionManager } from "@xmtp/signet-contracts";
-import type {
-  SignetError,
-  ViewConfig as ViewConfigType,
-  GrantConfig as GrantConfigType,
-} from "@xmtp/signet-schemas";
-import { AuthError, ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
-import type { InternalSessionManager } from "./session-manager.js";
+import type { ActionSpec } from "@xmtp/signet-contracts";
+import type { CredentialManager } from "@xmtp/signet-contracts";
+import type { SignetError, ScopeSetType } from "@xmtp/signet-schemas";
+import { AuthError, ScopeSet } from "@xmtp/signet-schemas";
+import type { InternalCredentialManager } from "./session-manager.js";
 
-/** Dependencies for session update actions. */
+/** Dependencies for credential update actions. */
 export interface UpdateActionDeps {
-  readonly sessionManager: SessionManager;
-  readonly internalManager: InternalSessionManager;
+  readonly credentialManager: CredentialManager;
+  readonly internalManager: InternalCredentialManager;
 }
 
 /** Result shape for update operations. */
@@ -36,40 +33,41 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
-/** Create CLI and MCP actions for in-place session updates. */
+/** Create CLI and MCP actions for in-place credential scope updates. */
 export function createUpdateActions(
   deps: UpdateActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {
-  const updateView: ActionSpec<
-    { sessionId: string; view: ViewConfigType },
+  const updateScopes: ActionSpec<
+    { credentialId: string; scopes: ScopeSetType },
     UpdateResult,
     SignetError
   > = {
-    id: "session.updateView",
+    id: "credential.updateScopes",
     input: z.object({
-      sessionId: z.string(),
-      view: ViewConfig,
+      credentialId: z.string(),
+      scopes: ScopeSet,
     }),
     handler: async (input) => {
-      const lookupResult = await deps.sessionManager.lookup(input.sessionId);
+      const lookupResult = await deps.credentialManager.lookup(
+        input.credentialId,
+      );
       if (Result.isError(lookupResult)) {
         return lookupResult;
       }
 
-      const session = lookupResult.value;
-      if (session.state !== "active") {
+      const credential = lookupResult.value;
+      if (credential.status !== "active") {
         return Result.err(
-          AuthError.create("Session is not active", {
-            sessionId: input.sessionId,
-            state: session.state,
+          AuthError.create("Credential is not active", {
+            credentialId: input.credentialId,
+            status: credential.status,
           }),
         );
       }
 
       const materialityResult = deps.internalManager.checkMateriality(
-        input.sessionId,
-        input.view,
-        session.grant,
+        input.credentialId,
+        input.scopes,
       );
       if (Result.isError(materialityResult)) {
         return materialityResult;
@@ -77,11 +75,14 @@ export function createUpdateActions(
 
       const check = materialityResult.value;
 
-      if (check.isMaterial) {
-        deps.internalManager.setSessionState(
-          input.sessionId,
+      if (check.requiresReauthorization) {
+        const revokeResult = deps.internalManager.revokeCredential(
+          input.credentialId,
           "reauthorization-required",
         );
+        if (Result.isError(revokeResult)) {
+          return revokeResult;
+        }
         return Result.ok({
           updated: false,
           material: true,
@@ -89,98 +90,25 @@ export function createUpdateActions(
         });
       }
 
-      const updateResult = deps.internalManager.updateSessionPolicy(
-        input.sessionId,
-        input.view,
-        session.grant,
+      const updateResult = deps.internalManager.updateCredentialScopes(
+        input.credentialId,
+        input.scopes,
       );
       if (Result.isError(updateResult)) {
         return updateResult;
       }
 
-      return Result.ok({ updated: true, material: false, reason: null });
+      return Result.ok({
+        updated: true,
+        material: check.isMaterial,
+        reason: check.reason,
+      });
     },
     cli: {
-      command: "session:update-view",
-      rpcMethod: "session.updateView",
-    },
-    mcp: {
-      toolName: "signet/session/update-view",
-      description: "Update a session's view configuration",
-      readOnly: false,
+      command: "credential:update-scopes",
+      rpcMethod: "credential.updateScopes",
     },
   };
 
-  const updateGrant: ActionSpec<
-    { sessionId: string; grant: GrantConfigType },
-    UpdateResult,
-    SignetError
-  > = {
-    id: "session.updateGrant",
-    input: z.object({
-      sessionId: z.string(),
-      grant: GrantConfig,
-    }),
-    handler: async (input) => {
-      const lookupResult = await deps.sessionManager.lookup(input.sessionId);
-      if (Result.isError(lookupResult)) {
-        return lookupResult;
-      }
-
-      const session = lookupResult.value;
-      if (session.state !== "active") {
-        return Result.err(
-          AuthError.create("Session is not active", {
-            sessionId: input.sessionId,
-            state: session.state,
-          }),
-        );
-      }
-
-      const materialityResult = deps.internalManager.checkMateriality(
-        input.sessionId,
-        session.view,
-        input.grant,
-      );
-      if (Result.isError(materialityResult)) {
-        return materialityResult;
-      }
-
-      const check = materialityResult.value;
-
-      if (check.isMaterial) {
-        deps.internalManager.setSessionState(
-          input.sessionId,
-          "reauthorization-required",
-        );
-        return Result.ok({
-          updated: false,
-          material: true,
-          reason: check.reason,
-        });
-      }
-
-      const updateResult = deps.internalManager.updateSessionPolicy(
-        input.sessionId,
-        session.view,
-        input.grant,
-      );
-      if (Result.isError(updateResult)) {
-        return updateResult;
-      }
-
-      return Result.ok({ updated: true, material: false, reason: null });
-    },
-    cli: {
-      command: "session:update-grant",
-      rpcMethod: "session.updateGrant",
-    },
-    mcp: {
-      toolName: "signet/session/update-grant",
-      description: "Update a session's grant configuration",
-      readOnly: false,
-    },
-  };
-
-  return [widenActionSpec(updateView), widenActionSpec(updateGrant)];
+  return [widenActionSpec(updateScopes)];
 }

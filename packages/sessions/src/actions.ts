@@ -1,16 +1,24 @@
+/**
+ * Credential lifecycle actions for CLI and MCP surfaces.
+ */
+
 import { Result } from "better-result";
 import { z } from "zod";
-import type { ActionSpec, SessionManager } from "@xmtp/signet-contracts";
+import type { ActionSpec } from "@xmtp/signet-contracts";
 import type {
   SignetError,
-  SessionConfig as SessionConfigType,
-  SessionRevocationReason as SessionRevocationReasonType,
+  CredentialConfigType,
+  CredentialRevocationReason as CredentialRevocationReasonType,
 } from "@xmtp/signet-schemas";
-import { SessionConfig, SessionRevocationReason } from "@xmtp/signet-schemas";
+import type { CredentialManager } from "@xmtp/signet-contracts";
+import {
+  CredentialConfig,
+  CredentialRevocationReason,
+} from "@xmtp/signet-schemas";
 
-/** Dependencies for session action registration. */
-export interface SessionActionDeps {
-  readonly sessionManager: SessionManager;
+/** Dependencies for credential action registration. */
+export interface CredentialActionDeps {
+  readonly credentialManager: CredentialManager;
 }
 
 function widenActionSpec<TInput, TOutput>(
@@ -20,76 +28,70 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
-/** Create CLI and MCP actions for session lifecycle operations. */
-export function createSessionActions(
-  deps: SessionActionDeps,
+/** Create CLI and MCP actions for credential lifecycle operations. */
+export function createCredentialActions(
+  deps: CredentialActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {
-  const issue: ActionSpec<SessionConfigType, unknown, SignetError> = {
-    id: "session.issue",
-    input: SessionConfig,
-    handler: async (input) => deps.sessionManager.issue(input),
-    cli: {
-      command: "session:issue",
-      rpcMethod: "session.issue",
+  const issue: ActionSpec<CredentialConfigType, unknown, SignetError> = {
+    id: "credential.issue",
+    input: CredentialConfig,
+    handler: async (input, ctx) => {
+      const issuedBy = ctx.adminAuth !== undefined ? "owner" : ctx.operatorId;
+      return deps.credentialManager.issue(
+        input,
+        issuedBy !== undefined ? { issuedBy } : undefined,
+      );
     },
-    mcp: {
-      toolName: "signet/session/issue",
-      description: "Issue a new session",
-      readOnly: false,
+    cli: {
+      command: "credential:issue",
+      rpcMethod: "credential.issue",
     },
   };
 
   const list: ActionSpec<
-    { agentInboxId?: string | undefined },
+    { operatorId?: string | undefined },
     unknown,
     SignetError
   > = {
-    id: "session.list",
+    id: "credential.list",
     input: z.object({
-      agentInboxId: z.string().optional(),
+      operatorId: z.string().optional(),
     }),
-    handler: async (input) => deps.sessionManager.list(input.agentInboxId),
+    handler: async (input) => deps.credentialManager.list(input.operatorId),
     cli: {
-      command: "session:list",
-      rpcMethod: "session.list",
-    },
-    mcp: {
-      toolName: "signet/session/list",
-      description: "List active sessions",
-      readOnly: true,
+      command: "credential:list",
+      rpcMethod: "credential.list",
     },
   };
 
-  const inspect: ActionSpec<{ sessionId: string }, unknown, SignetError> = {
-    id: "session.inspect",
+  const inspect: ActionSpec<{ credentialId: string }, unknown, SignetError> = {
+    id: "credential.lookup",
     input: z.object({
-      sessionId: z.string(),
+      credentialId: z.string(),
     }),
-    handler: async (input) => deps.sessionManager.lookup(input.sessionId),
+    handler: async (input) => deps.credentialManager.lookup(input.credentialId),
     cli: {
-      command: "session:inspect",
-      rpcMethod: "session.inspect",
-    },
-    mcp: {
-      toolName: "signet/session/inspect",
-      description: "Inspect a session",
-      readOnly: true,
+      command: "credential:inspect",
+      rpcMethod: "credential.lookup",
     },
   };
 
   const revoke: ActionSpec<
-    { sessionId: string; reason?: SessionRevocationReasonType | undefined },
+    {
+      credentialId: string;
+      reason?: CredentialRevocationReasonType | undefined;
+    },
     { revoked: true },
     SignetError
   > = {
-    id: "session.revoke",
+    id: "credential.revoke",
     input: z.object({
-      sessionId: z.string(),
-      reason: SessionRevocationReason.default("owner-initiated"),
+      credentialId: z.string(),
+      reason: CredentialRevocationReason.default("owner-initiated"),
     }),
     handler: async (input) => {
-      const result = await deps.sessionManager.revoke(
-        input.sessionId,
+      const result = await deps.credentialManager.revoke(
+        input.credentialId,
         input.reason ?? "owner-initiated",
       );
       if (Result.isError(result)) {
@@ -98,14 +100,8 @@ export function createSessionActions(
       return Result.ok({ revoked: true as const });
     },
     cli: {
-      command: "session:revoke",
-      rpcMethod: "session.revoke",
-    },
-    mcp: {
-      toolName: "signet/session/revoke",
-      description: "Revoke a session",
-      readOnly: false,
-      destructive: true,
+      command: "credential:revoke",
+      rpcMethod: "credential.revoke",
     },
   };
 

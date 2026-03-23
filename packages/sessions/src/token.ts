@@ -1,25 +1,22 @@
 /**
- * Cryptographic token and session ID generation.
+ * Cryptographic token and credential ID generation.
  *
  * Tokens are 32 random bytes, base64url-encoded (no padding) = 43 chars.
- * Session IDs are "ses_" + 16 random bytes, hex-encoded = 36 chars.
+ * Credential IDs use `createResourceId("credential")` from schemas.
  */
 
-/** Generate a cryptographically random session bearer token. */
+import { createResourceId } from "@xmtp/signet-schemas";
+
+/** Generate a cryptographically random bearer token. */
 export function generateToken(byteLength: number = 32): string {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
   return base64UrlEncode(bytes);
 }
 
-/** Generate a unique session ID with "ses_" prefix. */
-export function generateSessionId(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
-  return `ses_${hex}`;
+/** Generate a unique credential ID with "cred_" prefix. */
+export function generateCredentialId(): string {
+  return createResourceId("credential");
 }
 
 /** Encode bytes as base64url without padding. */

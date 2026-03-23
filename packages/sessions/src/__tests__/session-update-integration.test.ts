@@ -1,62 +1,52 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { Result } from "better-result";
-import type { SessionManager } from "@xmtp/signet-contracts";
-import { createSessionManager } from "../session-manager.js";
-import { createSessionService } from "../service.js";
+import type { PermissionScopeType } from "@xmtp/signet-schemas";
+import type { CredentialManager } from "@xmtp/signet-contracts";
+import { createCredentialManager } from "../session-manager.js";
+import { createCredentialService } from "../service.js";
 import { createUpdateActions } from "../update-actions.js";
 import type { UpdateActionDeps } from "../update-actions.js";
-import type { InternalSessionManager } from "../session-manager.js";
-import { createTestSessionConfig, createTestView } from "./fixtures.js";
+import type { InternalCredentialManager } from "../session-manager.js";
+import { createTestCredentialConfig, createTestScopes } from "./fixtures.js";
 
 // ---------------------------------------------------------------------------
-// Integration: session update with materiality enforcement
+// Integration: credential scope update with materiality enforcement
 // ---------------------------------------------------------------------------
 
-let manager: InternalSessionManager;
-let sessionService: SessionManager;
+let manager: InternalCredentialManager;
+let credentialService: CredentialManager;
 let deps: UpdateActionDeps;
-let sessionId: string;
+let credentialId: string;
 
 beforeEach(async () => {
-  manager = createSessionManager({
+  manager = createCredentialManager({
     defaultTtlSeconds: 60,
-    maxConcurrentPerAgent: 3,
+    maxConcurrentPerOperator: 3,
     renewalWindowSeconds: 10,
     heartbeatGracePeriod: 3,
   });
 
-  sessionService = createSessionService({
-    manager,
-    keyManager: {
-      async issueSessionKey(sid) {
-        return Result.ok({ fingerprint: `fp_${sid}` });
-      },
-    },
-  });
+  credentialService = createCredentialService({ manager });
 
-  deps = { sessionManager: sessionService, internalManager: manager };
+  deps = {
+    credentialManager: credentialService,
+    internalManager: manager,
+  };
 
-  // Issue a session with mode: "full" and wide scope
-  const config = createTestSessionConfig({
-    view: {
-      mode: "full",
-      threadScopes: [
-        { groupId: "group-1", threadId: null },
-        { groupId: "group-2", threadId: null },
-      ],
-      contentTypes: ["text", "reaction"],
-    },
+  // Issue a credential with wide scope
+  const config = createTestCredentialConfig({
+    allow: [
+      "read-messages",
+      "list-conversations",
+      "send",
+      "reply",
+    ] as PermissionScopeType[],
+    chatIds: ["conv_group1", "conv_group2"],
   });
-  const issued = await sessionService.issue(config);
+  const issued = await credentialService.issue(config);
   expect(issued.isOk()).toBe(true);
-  if (!issued.isOk()) throw new Error("Failed to create session");
+  if (!issued.isOk()) throw new Error("Failed to create credential");
 
-  const sessions = await sessionService.list();
-  expect(sessions.isOk()).toBe(true);
-  if (!sessions.isOk()) throw new Error("Failed to list sessions");
-  const session = sessions.value[0];
-  if (!session) throw new Error("No session found");
-  sessionId = session.sessionId;
+  credentialId = issued.value.credential.id;
 });
 
 function stubContext() {
@@ -66,22 +56,64 @@ function stubContext() {
   };
 }
 
-describe("session update integration", () => {
-  test("non-material view narrowing applies immediately", async () => {
+describe("credential update integration", () => {
+  test("scope narrowing applies immediately without revoking", async () => {
     const actions = createUpdateActions(deps);
-    const updateView = actions.find((a) => a.id === "session.updateView");
-    expect(updateView).toBeDefined();
-    if (!updateView) return;
+    const updateScopes = actions.find(
+      (a) => a.id === "credential.updateScopes",
+    );
+    expect(updateScopes).toBeDefined();
+    if (!updateScopes) return;
 
-    // Narrow: remove group-2 from scope (same mode, fewer scopes)
-    const narrowerView = createTestView({
-      mode: "full",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["text"],
+    const narrowerScopes = createTestScopes({
+      allow: ["read-messages", "list-conversations"] as PermissionScopeType[],
     });
 
-    const result = await updateView.handler(
-      { sessionId, view: narrowerView },
+    const result = await updateScopes.handler(
+      { credentialId, scopes: narrowerScopes },
+      stubContext(),
+    );
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    const output = result.value as {
+      updated: boolean;
+      material: boolean;
+    };
+    expect(output.updated).toBe(true);
+    expect(output.material).toBe(true);
+    expect(output.reason).toContain("removed:");
+
+    const internal = manager.getCredentialById(credentialId);
+    expect(internal.isOk()).toBe(true);
+    if (!internal.isOk()) return;
+    expect(internal.value.status).toBe("active");
+    expect(internal.value.effectiveScopes.allow).toEqual([
+      "read-messages",
+      "list-conversations",
+    ]);
+    expect(internal.value.revocationReason).toBeNull();
+  });
+
+  test("identical scopes apply as non-material update", async () => {
+    const actions = createUpdateActions(deps);
+    const updateScopes = actions.find(
+      (a) => a.id === "credential.updateScopes",
+    );
+    expect(updateScopes).toBeDefined();
+    if (!updateScopes) return;
+
+    const sameScopes = createTestScopes({
+      allow: [
+        "read-messages",
+        "list-conversations",
+        "send",
+        "reply",
+      ] as PermissionScopeType[],
+    });
+
+    const result = await updateScopes.handler(
+      { credentialId, scopes: sameScopes },
       stubContext(),
     );
     expect(result.isOk()).toBe(true);
@@ -93,41 +125,29 @@ describe("session update integration", () => {
     };
     expect(output.updated).toBe(true);
     expect(output.material).toBe(false);
-
-    // Verify the session was actually updated
-    const lookupResult = await sessionService.lookup(sessionId);
-    expect(lookupResult.isOk()).toBe(true);
-    if (!lookupResult.isOk()) return;
-    expect(lookupResult.value.view.threadScopes).toHaveLength(1);
   });
 
-  test("material mode escalation triggers reauthorization", async () => {
-    // First narrow mode so escalation is detectable
+  test("material scope escalation triggers revocation", async () => {
     const actions = createUpdateActions(deps);
-    const updateView = actions.find((a) => a.id === "session.updateView");
-    expect(updateView).toBeDefined();
-    if (!updateView) return;
-
-    // Narrow to redacted first
-    const narrowed = createTestView({
-      mode: "redacted",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["text"],
-    });
-    const narrowResult = await updateView.handler(
-      { sessionId, view: narrowed },
-      stubContext(),
+    const updateScopes = actions.find(
+      (a) => a.id === "credential.updateScopes",
     );
-    expect(narrowResult.isOk()).toBe(true);
+    expect(updateScopes).toBeDefined();
+    if (!updateScopes) return;
 
-    // Now escalate back to full -- this is material
-    const escalated = createTestView({
-      mode: "full",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["text"],
+    // Escalate: add "react" scope
+    const escalated = createTestScopes({
+      allow: [
+        "read-messages",
+        "list-conversations",
+        "send",
+        "reply",
+        "react",
+      ] as PermissionScopeType[],
     });
-    const result = await updateView.handler(
-      { sessionId, view: escalated },
+
+    const result = await updateScopes.handler(
+      { credentialId, scopes: escalated },
       stubContext(),
     );
     expect(result.isOk()).toBe(true);
@@ -142,10 +162,10 @@ describe("session update integration", () => {
     expect(output.material).toBe(true);
     expect(output.reason).toBeTypeOf("string");
 
-    // Session should now be in reauthorization-required state
-    const internal = manager.getSessionById(sessionId);
+    // Credential should now be revoked
+    const internal = manager.getCredentialById(credentialId);
     expect(internal.isOk()).toBe(true);
     if (!internal.isOk()) return;
-    expect(internal.value.state).toBe("reauthorization-required");
+    expect(internal.value.status).toBe("revoked");
   });
 });

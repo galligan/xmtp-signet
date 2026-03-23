@@ -1,19 +1,20 @@
 /**
- * Deterministic policy hashing for session deduplication.
+ * Deterministic policy hashing for credential deduplication.
  *
  * Computes a hash from the canonical JSON representation of a
- * view + grant configuration. Two sessions with the same policy
- * hash have identical effective policies.
+ * scope set (allow/deny lists) and chat IDs. Two credentials
+ * with the same policy hash have identical effective policies
+ * and conversation scope.
  */
 
-import type { ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
+import type { ScopeSetType } from "@xmtp/signet-schemas";
 
-/** Compute a deterministic hash of the view + grant policy. */
+/** Compute a deterministic hash of the scope set + chatIds. */
 export function computePolicyHash(
-  view: ViewConfig,
-  grant: GrantConfig,
+  scopes: ScopeSetType,
+  chatIds?: readonly string[],
 ): string {
-  const canonical = canonicalize({ view, grant });
+  const canonical = canonicalize({ scopes, chatIds: chatIds ?? [] });
   // Bun.hash returns a bigint; convert to hex string
   return Bun.hash(canonical).toString(16);
 }
