@@ -53,7 +53,7 @@ export type { KeyManager } from "./key-manager.js";
 
 // Vault
 export { createVault } from "./vault.js";
-export type { Vault } from "./vault.js";
+export type { Vault, WalletFileInfo, AccountEntry } from "./vault.js";
 
 // Signer provider
 export { createSignerProvider } from "./signer-provider.js";
