@@ -1,3 +1,32 @@
+// Resource IDs
+export {
+  RESOURCE_PREFIXES,
+  ResourceType,
+  OperatorId,
+  type OperatorIdType,
+  InboxId,
+  type InboxIdType,
+  ConversationId,
+  type ConversationIdType,
+  PolicyId,
+  type PolicyIdType,
+  CredentialId,
+  type CredentialIdType,
+  SealId,
+  type SealIdType,
+  KeyId,
+  type KeyIdType,
+  MessageId,
+  type MessageIdType,
+  NetworkId,
+  type NetworkIdType,
+  AnyResourceId,
+  type ParsedResourceId,
+  createResourceId,
+  parseResourceId,
+  resolveShortId,
+} from "./resource-id.js";
+
 // Content types
 export {
   ContentTypeId,
