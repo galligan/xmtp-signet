@@ -109,14 +109,18 @@ export {
 
 // Seal
 export {
-  InferenceMode,
-  ContentEgressScope,
-  RetentionAtProvider,
-  HostingMode,
-  TrustTier,
-  RevocationRules,
-  SealSchema,
-  type Seal,
+  SealPayload,
+  type SealPayloadType,
+  SealDelta,
+  type SealDeltaType,
+  SealChain,
+  type SealChainType,
+  MessageSealBinding,
+  type MessageSealBindingType,
+  SealVerificationStatus,
+  type SealVerificationStatusType,
+  SealEnvelope,
+  type SealEnvelopeType,
 } from "./seal.js";
 
 // Session
@@ -154,7 +158,7 @@ export {
 // Revocation
 export {
   AgentRevocationReason,
-  SessionRevocationReason,
+  CredentialRevocationReason,
   RevocationSeal,
 } from "./revocation.js";
 
@@ -163,13 +167,12 @@ export {
   MessageVisibility,
   MessageEvent,
   SealStampedEvent,
-  SessionStartedEvent,
-  SessionExpiredEvent,
-  SessionReauthRequiredEvent,
+  CredentialIssuedEvent,
+  CredentialExpiredEvent,
+  CredentialReauthRequiredEvent,
   HeartbeatEvent,
   RevealEvent,
-  ViewUpdatedEvent,
-  GrantUpdatedEvent,
+  ScopesUpdatedEvent,
   AgentRevokedEvent,
   ActionConfirmationEvent,
   SignetRecoveryEvent,
@@ -181,7 +184,7 @@ export {
   SendMessageRequest,
   SendReactionRequest,
   SendReplyRequest,
-  UpdateViewRequest,
+  UpdateScopesRequest,
   RevealContentRequest,
   ConfirmActionRequest,
   HeartbeatRequest,

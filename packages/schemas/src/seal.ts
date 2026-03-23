@@ -1,197 +1,173 @@
 import { z } from "zod";
-import { ContentTypeId } from "./content-types.js";
-import { ViewMode } from "./view.js";
+import {
+  SealId,
+  CredentialId,
+  OperatorId,
+  ConversationId,
+  KeyId,
+} from "./resource-id.js";
+import { ScopeMode } from "./operator.js";
+import { ScopeSet, PermissionScope } from "./permission-scopes.js";
+import type { PermissionScopeType, ScopeSetType } from "./permission-scopes.js";
+import type { ScopeModeType } from "./operator.js";
 
-/** Where the agent performs inference. */
-export const InferenceMode: z.ZodEnum<
-  ["local", "external", "hybrid", "unknown"]
-> = z
-  .enum(["local", "external", "hybrid", "unknown"])
-  .describe("How the agent performs inference");
+// -- Types (declared first for isolatedDeclarations) -----------------------
 
-/** Where the agent performs inference. */
-export type InferenceMode = z.infer<typeof InferenceMode>;
-
-/** Which content may leave the signet boundary. */
-export const ContentEgressScope: z.ZodEnum<
-  ["full-messages", "summaries-only", "tool-calls-only", "none", "unknown"]
-> = z
-  .enum([
-    "full-messages",
-    "summaries-only",
-    "tool-calls-only",
-    "none",
-    "unknown",
-  ])
-  .describe("What content leaves the signet boundary");
-
-/** Which content may leave the signet boundary. */
-export type ContentEgressScope = z.infer<typeof ContentEgressScope>;
-
-/** How long the provider retains content. */
-/** Zod schema for provider-side retention scope. */
-export const RetentionAtProvider: z.ZodEnum<
-  ["none", "session", "persistent", "unknown"]
-> = z
-  .enum(["none", "session", "persistent", "unknown"])
-  .describe("How long the inference provider retains content");
-
-/** How long the provider retains content. */
-export type RetentionAtProvider = z.infer<typeof RetentionAtProvider>;
-
-/** Where the signet is hosted. */
-/** Zod schema for how the signet is hosted. */
-export const HostingMode: z.ZodEnum<["local", "self-hosted", "managed"]> = z
-  .enum(["local", "self-hosted", "managed"])
-  .describe("Where the signet runs");
-
-/** Where the signet is hosted. */
-export type HostingMode = z.infer<typeof HostingMode>;
-
-/** Highest trust tier the signet can demonstrate. */
-/** Zod schema for the highest trust tier demonstrated by a seal. */
-export const TrustTier: z.ZodEnum<
-  ["unverified", "source-verified", "reproducibly-verified", "runtime-attested"]
-> = z
-  .enum([
-    "unverified",
-    "source-verified",
-    "reproducibly-verified",
-    "runtime-attested",
-  ])
-  .describe("Highest trust tier the signet can demonstrate");
-
-/** Highest trust tier the signet can demonstrate. */
-export type TrustTier = z.infer<typeof TrustTier>;
-
-/** Rules governing how a seal can be revoked. */
-export type RevocationRules = {
-  maxTtlSeconds: number;
-  requireHeartbeat: boolean;
-  ownerCanRevoke: boolean;
-  adminCanRemove: boolean;
-};
-
-/** Zod schema for seal revocation rules. */
-export const RevocationRules: z.ZodType<RevocationRules> = z
-  .object({
-    maxTtlSeconds: z
-      .number()
-      .int()
-      .positive()
-      .describe("Maximum seal lifetime in seconds"),
-    requireHeartbeat: z
-      .boolean()
-      .describe("Whether missed heartbeats trigger auto-revocation"),
-    ownerCanRevoke: z
-      .boolean()
-      .describe("Whether the owner can revoke at any time"),
-    adminCanRemove: z
-      .boolean()
-      .describe("Whether group admins can remove the agent"),
-  })
-  .describe("Rules governing how this seal can be revoked");
-
-/** Group-visible capability seal for an agent. */
-export type Seal = {
+/** Core payload of a capability seal. */
+export type SealPayloadType = {
   sealId: string;
-  previousSealId: string | null;
-  agentInboxId: string;
-  ownerInboxId: string;
-  groupId: string;
-  threadScope: string | null;
-  viewMode: ViewMode;
-  contentTypes: string[];
-  grantedOps: string[];
-  toolScopes: string[];
-  inferenceMode: InferenceMode;
-  inferenceProviders: string[];
-  contentEgressScope: ContentEgressScope;
-  retentionAtProvider: RetentionAtProvider;
-  hostingMode: HostingMode;
-  trustTier: TrustTier;
-  buildProvenanceRef: string | null;
-  verifierStatementRef: string | null;
-  sessionKeyFingerprint: string | null;
-  policyHash: string;
-  heartbeatInterval?: number | undefined;
+  credentialId: string;
+  operatorId: string;
+  chatId: string;
+  scopeMode: ScopeModeType;
+  permissions: ScopeSetType;
+  adminAccess?: { operatorId: string; expiresAt: string } | undefined;
   issuedAt: string;
-  expiresAt: string;
-  revocationRules: RevocationRules;
-  issuer: string;
 };
 
-/** Zod schema for a group-visible capability seal. */
-export const SealSchema: z.ZodType<Seal> = z
+/** Convenience diff between current and previous seal payloads. */
+export type SealDeltaType = {
+  added: PermissionScopeType[];
+  removed: PermissionScopeType[];
+  changed: {
+    scope: PermissionScopeType;
+    from: "allow" | "deny";
+    to: "allow" | "deny";
+  }[];
+};
+
+/** Seal chain linking current to predecessor. */
+export type SealChainType = {
+  current: SealPayloadType;
+  previous?: SealPayloadType | undefined;
+  delta: SealDeltaType;
+};
+
+/** Binding between a message and a seal. */
+export type MessageSealBindingType = {
+  sealRef: string;
+  sealSignature: string;
+};
+
+/** Verification status of a seal. */
+export type SealVerificationStatusType =
+  | "valid"
+  | "superseded"
+  | "revoked"
+  | "missing";
+
+/** Signed envelope wrapping a seal chain. */
+export type SealEnvelopeType = {
+  chain: SealChainType;
+  signature: string;
+  keyId: string;
+  algorithm: "Ed25519";
+};
+
+// -- Schemas ---------------------------------------------------------------
+
+/**
+ * Core payload of a capability seal, binding an operator credential
+ * to a conversation with resolved permission scopes.
+ */
+export const SealPayload: z.ZodType<SealPayloadType> = z
   .object({
-    sealId: z.string().describe("Unique identifier for this seal"),
-    previousSealId: z
-      .string()
-      .nullable()
-      .describe("ID of the seal this supersedes, null for initial"),
-    agentInboxId: z.string().describe("XMTP inbox ID of the agent"),
-    ownerInboxId: z.string().describe("XMTP inbox ID of the agent's owner"),
-    groupId: z.string().describe("Group this seal applies to"),
-    threadScope: z
-      .string()
-      .nullable()
-      .describe(
-        "Thread scope if narrower than full group, null for group-wide",
-      ),
-    viewMode: ViewMode.describe("Current view mode"),
-    contentTypes: z
-      .array(ContentTypeId)
-      .describe("Content types the agent can see"),
-    grantedOps: z.array(z.string()).describe("Granted operation identifiers"),
-    toolScopes: z
-      .array(z.string())
-      .describe("Tool scope identifiers the agent may use"),
-    inferenceMode: InferenceMode.describe("How the agent performs inference"),
-    inferenceProviders: z
-      .array(z.string())
-      .describe("Envelope of inference providers the agent may use"),
-    contentEgressScope: ContentEgressScope.describe(
-      "What content leaves the signet boundary",
-    ),
-    retentionAtProvider: RetentionAtProvider.describe(
-      "Provider-side retention policy",
-    ),
-    hostingMode: HostingMode.describe("Where the signet runs"),
-    trustTier: TrustTier.describe("Highest demonstrated trust tier"),
-    buildProvenanceRef: z
-      .string()
-      .nullable()
-      .describe("Reference to build provenance bundle, null if unavailable"),
-    verifierStatementRef: z
-      .string()
-      .nullable()
-      .describe("Reference to verifier statement, null if unavailable"),
-    sessionKeyFingerprint: z
-      .string()
-      .nullable()
-      .describe("Fingerprint of the current session key, null if not bound"),
-    policyHash: z
-      .string()
-      .describe("Hash of the full policy config for integrity checking"),
-    heartbeatInterval: z
-      .number()
-      .int()
-      .positive()
-      .default(30)
-      .describe("Expected heartbeat cadence in seconds"),
-    issuedAt: z
-      .string()
-      .datetime()
-      .describe("ISO 8601 timestamp when this seal was issued"),
-    expiresAt: z
-      .string()
-      .datetime()
-      .describe("ISO 8601 timestamp when this seal expires"),
-    revocationRules: RevocationRules.describe(
-      "Rules governing revocation of this seal",
-    ),
-    issuer: z
-      .string()
-      .describe("Identity of the seal issuer (signet's signing identity)"),
+    /** Unique seal identifier. */
+    sealId: SealId,
+    /** Credential this seal was issued under. */
+    credentialId: CredentialId,
+    /** Operator this seal belongs to. */
+    operatorId: OperatorId,
+    /** Conversation this seal applies to. */
+    chatId: ConversationId,
+    /** Whether scopes are per-chat or shared across conversations. */
+    scopeMode: ScopeMode,
+    /** Effective allowed/denied permission scopes. */
+    permissions: ScopeSet,
+    /** Disclosed admin read access, if any. */
+    adminAccess: z
+      .object({
+        /** Admin operator who has read access. */
+        operatorId: OperatorId,
+        /** When the admin access expires. */
+        expiresAt: z.string().datetime(),
+      })
+      .optional(),
+    /** When this seal was issued. */
+    issuedAt: z.string().datetime(),
   })
-  .describe("Group-visible capability seal for an agent");
+  .describe("Core payload of a capability seal");
+
+/**
+ * Convenience diff between a current and previous seal payload,
+ * showing which scopes were added, removed, or changed.
+ */
+export const SealDelta: z.ZodType<SealDeltaType> = z
+  .object({
+    /** Scopes newly allowed in the current seal. */
+    added: z.array(PermissionScope),
+    /** Scopes removed or newly denied in the current seal. */
+    removed: z.array(PermissionScope),
+    /** Scopes whose allow/deny status changed. */
+    changed: z.array(
+      z.object({
+        /** The scope that changed. */
+        scope: PermissionScope,
+        /** Previous state. */
+        from: z.enum(["allow", "deny"]),
+        /** New state. */
+        to: z.enum(["allow", "deny"]),
+      }),
+    ),
+  })
+  .describe("Diff between current and previous seal payloads");
+
+/**
+ * A seal chain linking the current seal payload to its predecessor.
+ * The first seal in a chain has no `previous`.
+ */
+export const SealChain: z.ZodType<SealChainType> = z
+  .object({
+    /** The current seal payload. */
+    current: SealPayload,
+    /** Full inline previous payload. Absent for the first seal. */
+    previous: SealPayload.optional(),
+    /** Convenience diff between current and previous. */
+    delta: SealDelta,
+  })
+  .describe("Seal chain with current, previous, and delta");
+
+/**
+ * Binds a message to a seal via a cryptographic signature
+ * over the message ID and seal ID.
+ */
+export const MessageSealBinding: z.ZodType<MessageSealBindingType> = z
+  .object({
+    /** Reference to the seal this message is bound to. */
+    sealRef: SealId,
+    /** Signature over messageId + sealId. */
+    sealSignature: z.string(),
+  })
+  .describe("Binding between a message and a seal");
+
+/** Verification status of a seal. */
+export const SealVerificationStatus: z.ZodEnum<
+  ["valid", "superseded", "revoked", "missing"]
+> = z.enum(["valid", "superseded", "revoked", "missing"]);
+
+/**
+ * Signed envelope wrapping a seal chain with a cryptographic
+ * signature for integrity verification.
+ */
+export const SealEnvelope: z.ZodType<SealEnvelopeType> = z
+  .object({
+    /** The seal chain. */
+    chain: SealChain,
+    /** Cryptographic signature over the chain. */
+    signature: z.string(),
+    /** Key used to produce the signature. */
+    keyId: KeyId,
+    /** Signature algorithm. */
+    algorithm: z.literal("Ed25519"),
+  })
+  .describe("Signed seal envelope for integrity verification");

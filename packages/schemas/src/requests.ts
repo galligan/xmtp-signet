@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ContentTypeId } from "./content-types.js";
-import { ViewConfig } from "./view.js";
+import { PermissionScope } from "./permission-scopes.js";
 import { RevealRequest } from "./reveal.js";
 
 /** Request to send a message to a group. */
@@ -77,24 +77,30 @@ const _SendReplyRequest = z
 /** Request to send a reply in a thread. */
 export const SendReplyRequest: z.ZodType<SendReplyRequest> = _SendReplyRequest;
 
-/** Request to update the current session view. */
-export type UpdateViewRequest = {
-  type: "update_view";
+/** Request to update permission scopes for the current credential. */
+export type UpdateScopesRequest = {
+  type: "update_scopes";
   requestId: string;
-  view: z.infer<typeof ViewConfig>;
+  allow?: z.infer<typeof PermissionScope>[] | undefined;
+  deny?: z.infer<typeof PermissionScope>[] | undefined;
 };
 
-const _UpdateViewRequest = z
+const _UpdateScopesRequest = z
   .object({
-    type: z.literal("update_view").describe("Request type discriminator"),
+    type: z.literal("update_scopes").describe("Request type discriminator"),
     requestId: z.string().describe("Client-generated request ID"),
-    view: ViewConfig.describe("Requested view update"),
+    /** Inline scopes to allow. */
+    allow: z.array(PermissionScope).optional(),
+    /** Inline scopes to deny. */
+    deny: z.array(PermissionScope).optional(),
   })
-  .describe("Request a view update (signet may reject if material escalation)");
+  .describe(
+    "Request a scope update (signet may reject if material escalation)",
+  );
 
-/** Request to update the current session view. */
-export const UpdateViewRequest: z.ZodType<UpdateViewRequest> =
-  _UpdateViewRequest;
+/** Request to update permission scopes. */
+export const UpdateScopesRequest: z.ZodType<UpdateScopesRequest> =
+  _UpdateScopesRequest;
 
 /** Request to reveal previously hidden content. */
 export type RevealContentRequest = {
@@ -159,7 +165,7 @@ export type HarnessRequest =
   | SendMessageRequest
   | SendReactionRequest
   | SendReplyRequest
-  | UpdateViewRequest
+  | UpdateScopesRequest
   | RevealContentRequest
   | ConfirmActionRequest
   | HeartbeatRequest;
@@ -170,7 +176,7 @@ export const HarnessRequest: z.ZodType<HarnessRequest> = z
     _SendMessageRequest,
     _SendReactionRequest,
     _SendReplyRequest,
-    _UpdateViewRequest,
+    _UpdateScopesRequest,
     _RevealContentRequest,
     _ConfirmActionRequest,
     _HeartbeatRequest,

@@ -1,195 +1,239 @@
 import { describe, expect, it } from "bun:test";
 import {
-  InferenceMode,
-  ContentEgressScope,
-  RetentionAtProvider,
-  HostingMode,
-  TrustTier,
-  RevocationRules,
-  SealSchema,
+  SealPayload,
+  SealDelta,
+  SealChain,
+  MessageSealBinding,
+  SealVerificationStatus,
+  SealEnvelope,
 } from "../seal.js";
 
-describe("InferenceMode", () => {
-  it("accepts all valid modes", () => {
-    for (const m of ["local", "external", "hybrid", "unknown"]) {
-      expect(InferenceMode.safeParse(m).success).toBe(true);
-    }
-  });
-
-  it("rejects invalid mode", () => {
-    expect(InferenceMode.safeParse("other").success).toBe(false);
-  });
-});
-
-describe("ContentEgressScope", () => {
-  it("accepts all valid scopes", () => {
-    for (const s of [
-      "full-messages",
-      "summaries-only",
-      "tool-calls-only",
-      "none",
-      "unknown",
-    ]) {
-      expect(ContentEgressScope.safeParse(s).success).toBe(true);
-    }
-  });
-});
-
-describe("RetentionAtProvider", () => {
-  it("accepts all valid retention values", () => {
-    for (const r of ["none", "session", "persistent", "unknown"]) {
-      expect(RetentionAtProvider.safeParse(r).success).toBe(true);
-    }
-  });
-});
-
-describe("HostingMode", () => {
-  it("accepts all valid hosting modes", () => {
-    for (const h of ["local", "self-hosted", "managed"]) {
-      expect(HostingMode.safeParse(h).success).toBe(true);
-    }
-  });
-});
-
-describe("TrustTier", () => {
-  it("accepts all valid trust tiers", () => {
-    for (const t of [
-      "unverified",
-      "source-verified",
-      "reproducibly-verified",
-      "runtime-attested",
-    ]) {
-      expect(TrustTier.safeParse(t).success).toBe(true);
-    }
-  });
-});
-
-describe("RevocationRules", () => {
-  it("accepts valid revocation rules", () => {
-    const valid = {
-      maxTtlSeconds: 3600,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: false,
-    };
-    expect(RevocationRules.safeParse(valid).success).toBe(true);
-  });
-
-  it("rejects non-positive maxTtlSeconds", () => {
-    const invalid = {
-      maxTtlSeconds: 0,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: false,
-    };
-    expect(RevocationRules.safeParse(invalid).success).toBe(false);
-  });
-
-  it("rejects non-integer maxTtlSeconds", () => {
-    const invalid = {
-      maxTtlSeconds: 3600.5,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: false,
-    };
-    expect(RevocationRules.safeParse(invalid).success).toBe(false);
-  });
-});
-
-function createValidSeal(
-  overrides?: Record<string, unknown>,
-): Record<string, unknown> {
-  return {
-    sealId: "att-001",
-    previousSealId: null,
-    agentInboxId: "agent-inbox-1",
-    ownerInboxId: "owner-inbox-1",
-    groupId: "group-1",
-    threadScope: null,
-    viewMode: "full",
-    contentTypes: ["xmtp.org/text:1.0"],
-    grantedOps: ["send", "reply"],
-    toolScopes: [],
-    inferenceMode: "external",
-    inferenceProviders: ["openai"],
-    contentEgressScope: "full-messages",
-    retentionAtProvider: "session",
-    hostingMode: "managed",
-    trustTier: "unverified",
-    buildProvenanceRef: null,
-    verifierStatementRef: null,
-    sessionKeyFingerprint: null,
-    policyHash: "abc123",
-    heartbeatInterval: 30,
-    issuedAt: "2024-01-01T00:00:00Z",
-    expiresAt: "2024-01-01T01:00:00Z",
-    revocationRules: {
-      maxTtlSeconds: 3600,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: false,
+describe("SealPayload", () => {
+  const valid = {
+    sealId: "seal_abc12345feedbabe",
+    credentialId: "cred_abc12345feedbabe",
+    operatorId: "op_abc12345feedbabe",
+    chatId: "conv_abc12345feedbabe",
+    scopeMode: "per-chat",
+    permissions: {
+      allow: ["send", "reply"],
+      deny: ["add-member"],
     },
-    issuer: "signet-identity-1",
-    ...overrides,
+    issuedAt: "2024-01-01T00:00:00Z",
   };
-}
 
-describe("SealSchema", () => {
-  it("accepts a valid full seal", () => {
-    const result = SealSchema.safeParse(createValidSeal());
+  it("accepts a valid seal payload", () => {
+    expect(SealPayload.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts payload with adminAccess", () => {
+    const withAdmin = {
+      ...valid,
+      adminAccess: {
+        operatorId: "op_adcd1234feedbabe",
+        expiresAt: "2024-01-02T00:00:00Z",
+      },
+    };
+    expect(SealPayload.safeParse(withAdmin).success).toBe(true);
+  });
+
+  it("accepts payload without adminAccess", () => {
+    const result = SealPayload.safeParse(valid);
     expect(result.success).toBe(true);
   });
 
-  it("has exactly 25 fields", () => {
-    const keys = Object.keys(SealSchema.shape);
-    expect(keys).toHaveLength(25);
+  it("rejects invalid sealId prefix", () => {
+    expect(SealPayload.safeParse({ ...valid, sealId: "bad_id" }).success).toBe(
+      false,
+    );
   });
 
-  it("defaults heartbeatInterval to 30", () => {
-    const input = createValidSeal();
-    delete input["heartbeatInterval"];
-    const result = SealSchema.safeParse(input);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.heartbeatInterval).toBe(30);
+  it("rejects invalid credentialId prefix", () => {
+    expect(
+      SealPayload.safeParse({ ...valid, credentialId: "bad_id" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid operatorId prefix", () => {
+    expect(
+      SealPayload.safeParse({ ...valid, operatorId: "bad_id" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid chatId prefix", () => {
+    expect(SealPayload.safeParse({ ...valid, chatId: "bad_id" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects invalid scopeMode", () => {
+    expect(
+      SealPayload.safeParse({ ...valid, scopeMode: "invalid" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid datetime for issuedAt", () => {
+    expect(
+      SealPayload.safeParse({ ...valid, issuedAt: "not-a-date" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid permission scope in permissions.allow", () => {
+    expect(
+      SealPayload.safeParse({
+        ...valid,
+        permissions: { allow: ["invalid-scope"], deny: [] },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("SealDelta", () => {
+  it("accepts valid delta with all fields", () => {
+    const valid = {
+      added: ["send", "reply"],
+      removed: ["add-member"],
+      changed: [{ scope: "react", from: "deny", to: "allow" }],
+    };
+    expect(SealDelta.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts delta with empty arrays", () => {
+    const valid = { added: [], removed: [], changed: [] };
+    expect(SealDelta.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects invalid scope in added", () => {
+    expect(
+      SealDelta.safeParse({
+        added: ["invalid"],
+        removed: [],
+        changed: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid from/to in changed", () => {
+    expect(
+      SealDelta.safeParse({
+        added: [],
+        removed: [],
+        changed: [{ scope: "send", from: "invalid", to: "allow" }],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("SealChain", () => {
+  const payload = {
+    sealId: "seal_abc12345feedbabe",
+    credentialId: "cred_abc12345feedbabe",
+    operatorId: "op_abc12345feedbabe",
+    chatId: "conv_abc12345feedbabe",
+    scopeMode: "per-chat",
+    permissions: { allow: ["send"], deny: [] },
+    issuedAt: "2024-01-01T00:00:00Z",
+  };
+
+  it("accepts valid chain with no previous seal", () => {
+    const valid = {
+      current: payload,
+      delta: { added: ["send"], removed: [], changed: [] },
+    };
+    expect(SealChain.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts valid chain with previous seal", () => {
+    const previous = {
+      ...payload,
+      sealId: "seal_beef1234feedbabe",
+      permissions: { allow: [], deny: [] },
+    };
+    const valid = {
+      current: payload,
+      previous,
+      delta: { added: ["send"], removed: [], changed: [] },
+    };
+    expect(SealChain.safeParse(valid).success).toBe(true);
+  });
+});
+
+describe("MessageSealBinding", () => {
+  it("accepts valid binding", () => {
+    const valid = {
+      sealRef: "seal_abc12345feedbabe",
+      sealSignature: "sig_abc123",
+    };
+    expect(MessageSealBinding.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects invalid sealRef prefix", () => {
+    expect(
+      MessageSealBinding.safeParse({
+        sealRef: "bad_id",
+        sealSignature: "sig",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("SealVerificationStatus", () => {
+  it("accepts all valid statuses", () => {
+    for (const s of ["valid", "superseded", "revoked", "missing"]) {
+      expect(SealVerificationStatus.safeParse(s).success).toBe(true);
     }
   });
 
-  it("rejects undefined for nullable fields (must be explicit null)", () => {
-    const input = createValidSeal();
-    delete input["buildProvenanceRef"];
-    expect(SealSchema.safeParse(input).success).toBe(false);
+  it("rejects invalid status", () => {
+    expect(SealVerificationStatus.safeParse("invalid").success).toBe(false);
+  });
+});
+
+describe("SealEnvelope", () => {
+  const payload = {
+    sealId: "seal_abc12345feedbabe",
+    credentialId: "cred_abc12345feedbabe",
+    operatorId: "op_abc12345feedbabe",
+    chatId: "conv_abc12345feedbabe",
+    scopeMode: "per-chat",
+    permissions: { allow: ["send"], deny: [] },
+    issuedAt: "2024-01-01T00:00:00Z",
+  };
+
+  const chain = {
+    current: payload,
+    delta: { added: ["send"], removed: [], changed: [] },
+  };
+
+  it("accepts valid envelope", () => {
+    const valid = {
+      chain,
+      signature: "sig_hex",
+      keyId: "key_abc12345feedbabe",
+      algorithm: "Ed25519",
+    };
+    expect(SealEnvelope.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts null for all nullable fields", () => {
-    const result = SealSchema.safeParse(
-      createValidSeal({
-        previousSealId: null,
-        threadScope: null,
-        buildProvenanceRef: null,
-        verifierStatementRef: null,
-        sessionKeyFingerprint: null,
-      }),
-    );
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects invalid datetime format", () => {
+  it("rejects invalid algorithm", () => {
     expect(
-      SealSchema.safeParse(createValidSeal({ issuedAt: "not-a-date" })).success,
+      SealEnvelope.safeParse({
+        chain,
+        signature: "sig",
+        keyId: "key_abc12345feedbabe",
+        algorithm: "RSA",
+      }).success,
     ).toBe(false);
   });
 
-  it("rejects invalid viewMode", () => {
+  it("rejects invalid keyId prefix", () => {
     expect(
-      SealSchema.safeParse(createValidSeal({ viewMode: "bad" })).success,
-    ).toBe(false);
-  });
-
-  it("rejects invalid content type in contentTypes array", () => {
-    expect(
-      SealSchema.safeParse(createValidSeal({ contentTypes: ["invalid"] }))
-        .success,
+      SealEnvelope.safeParse({
+        chain,
+        signature: "sig",
+        keyId: "bad_id",
+        algorithm: "Ed25519",
+      }).success,
     ).toBe(false);
   });
 });

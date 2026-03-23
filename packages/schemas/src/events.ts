@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { ContentTypeId } from "./content-types.js";
-import { SealSchema } from "./seal.js";
-import type { Seal } from "./seal.js";
-import { SessionToken } from "./session.js";
-import { ViewConfig } from "./view.js";
-import { GrantConfig } from "./grant.js";
+import { SealEnvelope } from "./seal.js";
+import type { SealEnvelopeType } from "./seal.js";
+import { ScopeSet } from "./permission-scopes.js";
+import type { ScopeSetType } from "./permission-scopes.js";
 import { RevocationSeal } from "./revocation.js";
 
 /** Projection modes the signet may use when surfacing a message. */
@@ -28,7 +27,7 @@ export type MessageEvent = {
   visibility: MessageVisibility;
   sentAt: string;
   sealId: string | null;
-  /** Thread anchor ID — derived from Reply referenceId. Null for non-reply messages. */
+  /** Thread anchor ID -- derived from Reply referenceId. Null for non-reply messages. */
   threadId: string | null;
 };
 
@@ -50,7 +49,7 @@ const _MessageEvent = z
       .string()
       .nullable()
       .describe(
-        "Thread anchor ID — derived from Reply referenceId. Null for non-reply messages",
+        "Thread anchor ID -- derived from Reply referenceId. Null for non-reply messages",
       ),
   })
   .describe("A message projected to the agent according to its view");
@@ -58,94 +57,92 @@ const _MessageEvent = z
 /** Zod schema for `message.visible` events. */
 export const MessageEvent: z.ZodType<MessageEvent> = _MessageEvent;
 
-/** Event emitted when a seal or revocation is stamped. */
+/** Event emitted when a seal envelope is stamped. */
 export type SealStampedEvent = {
   type: "seal.stamped";
-  seal: Seal;
+  seal: SealEnvelopeType;
 };
 
 const _SealStampedEvent = z
   .object({
     type: z.literal("seal.stamped").describe("Event type discriminator"),
-    seal: SealSchema.describe("The stamped seal"),
+    seal: SealEnvelope.describe("The stamped seal envelope"),
   })
   .describe("Seal was stamped or updated");
 
 /** Zod schema for `seal.stamped` events. */
 export const SealStampedEvent: z.ZodType<SealStampedEvent> = _SealStampedEvent;
 
-/** Event emitted when a new session is established. */
-export type SessionStartedEvent = {
-  type: "session.started";
-  session: z.infer<typeof SessionToken>;
-  view: z.infer<typeof ViewConfig>;
-  grant: z.infer<typeof GrantConfig>;
+/** Event emitted when a new credential is issued. */
+export type CredentialIssuedEvent = {
+  type: "credential.issued";
+  credentialId: string;
+  operatorId: string;
 };
 
-const _SessionStartedEvent = z
+const _CredentialIssuedEvent = z
   .object({
-    type: z.literal("session.started").describe("Event type discriminator"),
-    session: SessionToken.describe("The issued session token"),
-    view: ViewConfig.describe("Active view for this session"),
-    grant: GrantConfig.describe("Active grant for this session"),
+    type: z.literal("credential.issued").describe("Event type discriminator"),
+    credentialId: z.string().describe("Issued credential ID"),
+    operatorId: z.string().describe("Operator the credential was issued to"),
   })
-  .describe("Session successfully established");
+  .describe("Credential successfully issued");
 
-/** Zod schema for `session.started` events. */
-export const SessionStartedEvent: z.ZodType<SessionStartedEvent> =
-  _SessionStartedEvent;
+/** Zod schema for `credential.issued` events. */
+export const CredentialIssuedEvent: z.ZodType<CredentialIssuedEvent> =
+  _CredentialIssuedEvent;
 
-/** Event emitted when a session is no longer usable. */
-export type SessionExpiredEvent = {
-  type: "session.expired";
-  sessionId: string;
+/** Event emitted when a credential is no longer usable. */
+export type CredentialExpiredEvent = {
+  type: "credential.expired";
+  credentialId: string;
   reason: string;
 };
 
-const _SessionExpiredEvent = z
+const _CredentialExpiredEvent = z
   .object({
-    type: z.literal("session.expired").describe("Event type discriminator"),
-    sessionId: z.string().describe("Expired session ID"),
-    reason: z.string().describe("Why the session expired"),
+    type: z.literal("credential.expired").describe("Event type discriminator"),
+    credentialId: z.string().describe("Expired credential ID"),
+    reason: z.string().describe("Why the credential expired"),
   })
-  .describe("Session has expired");
+  .describe("Credential has expired");
 
-/** Zod schema for `session.expired` events. */
-export const SessionExpiredEvent: z.ZodType<SessionExpiredEvent> =
-  _SessionExpiredEvent;
+/** Zod schema for `credential.expired` events. */
+export const CredentialExpiredEvent: z.ZodType<CredentialExpiredEvent> =
+  _CredentialExpiredEvent;
 
-/** Event emitted when a session must be reauthorized after a material change. */
-export type SessionReauthRequiredEvent = {
-  type: "session.reauthorization_required";
-  sessionId: string;
+/** Event emitted when a credential must be reauthorized after a material change. */
+export type CredentialReauthRequiredEvent = {
+  type: "credential.reauthorization_required";
+  credentialId: string;
   reason: string;
 };
 
-const _SessionReauthRequiredEvent = z
+const _CredentialReauthRequiredEvent = z
   .object({
     type: z
-      .literal("session.reauthorization_required")
+      .literal("credential.reauthorization_required")
       .describe("Event type discriminator"),
-    sessionId: z.string().describe("Session requiring reauthorization"),
+    credentialId: z.string().describe("Credential requiring reauthorization"),
     reason: z.string().describe("What policy change triggered reauthorization"),
   })
-  .describe("Session must be reauthorized due to material policy change");
+  .describe("Credential must be reauthorized due to material policy change");
 
-/** Zod schema for `session.reauthorization_required` events. */
-export const SessionReauthRequiredEvent: z.ZodType<SessionReauthRequiredEvent> =
-  _SessionReauthRequiredEvent;
+/** Zod schema for `credential.reauthorization_required` events. */
+export const CredentialReauthRequiredEvent: z.ZodType<CredentialReauthRequiredEvent> =
+  _CredentialReauthRequiredEvent;
 
 /** Liveness event emitted by the signet over active sockets. */
 export type HeartbeatEvent = {
   type: "heartbeat";
-  sessionId: string;
+  credentialId: string;
   timestamp: string;
 };
 
 const _HeartbeatEvent = z
   .object({
     type: z.literal("heartbeat").describe("Event type discriminator"),
-    sessionId: z.string().describe("Session this heartbeat is for"),
+    credentialId: z.string().describe("Credential this heartbeat is for"),
     timestamp: z.string().datetime().describe("Heartbeat timestamp"),
   })
   .describe("Liveness signal from the signet");
@@ -177,38 +174,24 @@ const _RevealEvent = z
 /** Zod schema for `message.revealed` events. */
 export const RevealEvent: z.ZodType<RevealEvent> = _RevealEvent;
 
-/** Event emitted when the session view changes in place. */
-export type ViewUpdatedEvent = {
-  type: "view.updated";
-  view: z.infer<typeof ViewConfig>;
+/** Event emitted when permission scopes are updated for a credential. */
+export type ScopesUpdatedEvent = {
+  type: "scopes.updated";
+  credentialId: string;
+  permissions: ScopeSetType;
 };
 
-const _ViewUpdatedEvent = z
+const _ScopesUpdatedEvent = z
   .object({
-    type: z.literal("view.updated").describe("Event type discriminator"),
-    view: ViewConfig.describe("Updated view configuration"),
+    type: z.literal("scopes.updated").describe("Event type discriminator"),
+    credentialId: z.string().describe("Credential whose scopes changed"),
+    permissions: ScopeSet.describe("Updated permission scope set"),
   })
-  .describe("View configuration changed within the current session");
+  .describe("Permission scopes updated for a credential");
 
-/** Zod schema for `view.updated` events. */
-export const ViewUpdatedEvent: z.ZodType<ViewUpdatedEvent> = _ViewUpdatedEvent;
-
-/** Event emitted when the session grant changes in place. */
-export type GrantUpdatedEvent = {
-  type: "grant.updated";
-  grant: z.infer<typeof GrantConfig>;
-};
-
-const _GrantUpdatedEvent = z
-  .object({
-    type: z.literal("grant.updated").describe("Event type discriminator"),
-    grant: GrantConfig.describe("Updated grant configuration"),
-  })
-  .describe("Grant configuration changed within the current session");
-
-/** Zod schema for `grant.updated` events. */
-export const GrantUpdatedEvent: z.ZodType<GrantUpdatedEvent> =
-  _GrantUpdatedEvent;
+/** Zod schema for `scopes.updated` events. */
+export const ScopesUpdatedEvent: z.ZodType<ScopesUpdatedEvent> =
+  _ScopesUpdatedEvent;
 
 /** Event emitted when an agent is revoked by a revocation seal. */
 export type AgentRevokedEvent = {
@@ -276,13 +259,12 @@ export const SignetRecoveryEvent: z.ZodType<SignetRecoveryEvent> =
 export type SignetEvent =
   | MessageEvent
   | SealStampedEvent
-  | SessionStartedEvent
-  | SessionExpiredEvent
-  | SessionReauthRequiredEvent
+  | CredentialIssuedEvent
+  | CredentialExpiredEvent
+  | CredentialReauthRequiredEvent
   | HeartbeatEvent
   | RevealEvent
-  | ViewUpdatedEvent
-  | GrantUpdatedEvent
+  | ScopesUpdatedEvent
   | AgentRevokedEvent
   | ActionConfirmationEvent
   | SignetRecoveryEvent;
@@ -292,13 +274,12 @@ export const SignetEvent: z.ZodType<SignetEvent> = z
   .discriminatedUnion("type", [
     _MessageEvent,
     _SealStampedEvent,
-    _SessionStartedEvent,
-    _SessionExpiredEvent,
-    _SessionReauthRequiredEvent,
+    _CredentialIssuedEvent,
+    _CredentialExpiredEvent,
+    _CredentialReauthRequiredEvent,
     _HeartbeatEvent,
     _RevealEvent,
-    _ViewUpdatedEvent,
-    _GrantUpdatedEvent,
+    _ScopesUpdatedEvent,
     _AgentRevokedEvent,
     _ActionConfirmationEvent,
     _SignetRecoveryEvent,

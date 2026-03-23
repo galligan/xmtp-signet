@@ -1,10 +1,16 @@
 import { z } from "zod";
+import {
+  SealId,
+  CredentialId,
+  OperatorId,
+  ConversationId,
+} from "./resource-id.js";
 
 /** Reason an agent was revoked from a group. */
 export const AgentRevocationReason: z.ZodEnum<
   [
     "owner-initiated",
-    "session-expired",
+    "credential-expired",
     "admin-removed",
     "heartbeat-timeout",
     "policy-violation",
@@ -12,7 +18,7 @@ export const AgentRevocationReason: z.ZodEnum<
 > = z
   .enum([
     "owner-initiated",
-    "session-expired",
+    "credential-expired",
     "admin-removed",
     "heartbeat-timeout",
     "policy-violation",
@@ -22,11 +28,11 @@ export const AgentRevocationReason: z.ZodEnum<
 /** Reason an agent was revoked from a group. */
 export type AgentRevocationReason = z.infer<typeof AgentRevocationReason>;
 
-/** Reason a session was revoked. */
-export const SessionRevocationReason: z.ZodEnum<
+/** Reason a credential was revoked. */
+export const CredentialRevocationReason: z.ZodEnum<
   [
     "owner-initiated",
-    "session-expired",
+    "credential-expired",
     "heartbeat-timeout",
     "policy-violation",
     "reauthorization-required",
@@ -34,22 +40,25 @@ export const SessionRevocationReason: z.ZodEnum<
 > = z
   .enum([
     "owner-initiated",
-    "session-expired",
+    "credential-expired",
     "heartbeat-timeout",
     "policy-violation",
     "reauthorization-required",
   ])
-  .describe("Why a session was revoked");
+  .describe("Why a credential was revoked");
 
-/** Reason a session was revoked. */
-export type SessionRevocationReason = z.infer<typeof SessionRevocationReason>;
+/** Reason a credential was revoked. */
+export type CredentialRevocationReason = z.infer<
+  typeof CredentialRevocationReason
+>;
 
 /** Seal that records revocation of an agent's group membership. */
 export type RevocationSeal = {
   sealId: string;
   previousSealId: string;
-  agentInboxId: string;
-  groupId: string;
+  operatorId: string;
+  credentialId: string;
+  chatId: string;
   reason: AgentRevocationReason;
   revokedAt: string;
   issuer: string;
@@ -58,15 +67,21 @@ export type RevocationSeal = {
 /** Zod schema for a revocation seal. */
 export const RevocationSeal: z.ZodType<RevocationSeal> = z
   .object({
-    sealId: z.string().describe("ID of this revocation seal"),
-    previousSealId: z.string().describe("ID of the seal being revoked"),
-    agentInboxId: z.string().describe("Agent being revoked"),
-    groupId: z.string().describe("Group the revocation applies to"),
-    reason: AgentRevocationReason.describe("Why the agent was revoked"),
-    revokedAt: z
-      .string()
-      .datetime()
-      .describe("When the revocation took effect"),
-    issuer: z.string().describe("Identity of the revocation issuer"),
+    /** ID of this revocation seal. */
+    sealId: SealId,
+    /** ID of the seal being revoked. */
+    previousSealId: SealId,
+    /** Operator being revoked. */
+    operatorId: OperatorId,
+    /** Credential associated with the revocation. */
+    credentialId: CredentialId,
+    /** Conversation the revocation applies to. */
+    chatId: ConversationId,
+    /** Why the agent was revoked. */
+    reason: AgentRevocationReason,
+    /** When the revocation took effect. */
+    revokedAt: z.string().datetime(),
+    /** Identity of the revocation issuer. */
+    issuer: z.string(),
   })
   .describe("Group-visible revocation of an agent's seal");

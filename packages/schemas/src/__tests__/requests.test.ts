@@ -3,7 +3,7 @@ import {
   SendMessageRequest,
   SendReactionRequest,
   SendReplyRequest,
-  UpdateViewRequest,
+  UpdateScopesRequest,
   RevealContentRequest,
   ConfirmActionRequest,
   HeartbeatRequest,
@@ -74,18 +74,60 @@ describe("SendReplyRequest", () => {
   });
 });
 
-describe("UpdateViewRequest", () => {
-  it("accepts valid update view request", () => {
+describe("UpdateScopesRequest", () => {
+  it("accepts valid update scopes request with allow", () => {
     const valid = {
-      type: "update_view",
+      type: "update_scopes",
       requestId: "req-1",
-      view: {
-        mode: "thread-only",
-        threadScopes: [{ groupId: "g1", threadId: "t1" }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      },
+      allow: ["send", "reply"],
     };
-    expect(UpdateViewRequest.safeParse(valid).success).toBe(true);
+    expect(UpdateScopesRequest.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts valid update scopes request with deny", () => {
+    const valid = {
+      type: "update_scopes",
+      requestId: "req-1",
+      deny: ["add-member"],
+    };
+    expect(UpdateScopesRequest.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts valid update scopes request with both allow and deny", () => {
+    const valid = {
+      type: "update_scopes",
+      requestId: "req-1",
+      allow: ["send"],
+      deny: ["add-member"],
+    };
+    expect(UpdateScopesRequest.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts update scopes request with neither allow nor deny", () => {
+    const valid = {
+      type: "update_scopes",
+      requestId: "req-1",
+    };
+    expect(UpdateScopesRequest.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects invalid scope in allow", () => {
+    expect(
+      UpdateScopesRequest.safeParse({
+        type: "update_scopes",
+        requestId: "req-1",
+        allow: ["invalid-scope"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects old update_view type", () => {
+    expect(
+      UpdateScopesRequest.safeParse({
+        type: "update_view",
+        requestId: "req-1",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -160,6 +202,22 @@ describe("HarnessRequest discriminated union", () => {
     ).toBe(false);
   });
 
+  it("includes update_scopes instead of update_view", () => {
+    const updateScopes = {
+      type: "update_scopes",
+      requestId: "r1",
+      allow: ["send"],
+    };
+    expect(HarnessRequest.safeParse(updateScopes).success).toBe(true);
+
+    const updateView = {
+      type: "update_view",
+      requestId: "r1",
+      view: {},
+    };
+    expect(HarnessRequest.safeParse(updateView).success).toBe(false);
+  });
+
   it("accepts all 7 request types", () => {
     const requests = [
       {
@@ -186,13 +244,10 @@ describe("HarnessRequest discriminated union", () => {
         content: {},
       },
       {
-        type: "update_view",
+        type: "update_scopes",
         requestId: "r4",
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
+        allow: ["send"],
+        deny: ["add-member"],
       },
       {
         type: "reveal_content",

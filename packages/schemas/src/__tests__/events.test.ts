@@ -2,8 +2,15 @@ import { describe, expect, it } from "bun:test";
 import {
   MessageVisibility,
   MessageEvent,
-  SessionStartedEvent,
+  SealStampedEvent,
+  CredentialIssuedEvent,
+  CredentialExpiredEvent,
+  CredentialReauthRequiredEvent,
   HeartbeatEvent,
+  RevealEvent,
+  ScopesUpdatedEvent,
+  AgentRevokedEvent,
+  ActionConfirmationEvent,
   SignetRecoveryEvent,
   SignetEvent,
 } from "../events.js";
@@ -53,53 +60,157 @@ describe("MessageEvent", () => {
   });
 });
 
-describe("SessionStartedEvent", () => {
-  const valid = {
-    type: "session.started",
-    session: {
-      sessionId: "sess-1",
-      agentInboxId: "agent-1",
-      sessionKeyFingerprint: "fp",
-      issuedAt: "2024-01-01T00:00:00Z",
-      expiresAt: "2024-01-01T01:00:00Z",
-    },
-    view: {
-      mode: "full",
-      threadScopes: [{ groupId: "g1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
-    },
-    grant: {
-      messaging: { send: true, reply: true, react: true, draftOnly: false },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
+describe("SealStampedEvent", () => {
+  const validEnvelope = {
+    chain: {
+      current: {
+        sealId: "seal_abc12345fedcba98",
+        credentialId: "cred_abc12345fedcba98",
+        operatorId: "op_abc12345fedcba98",
+        chatId: "conv_abc12345fedcba98",
+        scopeMode: "per-chat",
+        permissions: { allow: ["send"], deny: [] },
+        issuedAt: "2024-01-01T00:00:00Z",
       },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
+      delta: { added: ["send"], removed: [], changed: [] },
     },
+    signature: "sig_hex",
+    keyId: "key_abc12345feedbabe",
+    algorithm: "Ed25519",
   };
 
-  it("accepts valid session started event", () => {
-    expect(SessionStartedEvent.safeParse(valid).success).toBe(true);
+  it("accepts valid seal stamped event with SealEnvelope", () => {
+    const valid = { type: "seal.stamped", seal: validEnvelope };
+    expect(SealStampedEvent.safeParse(valid).success).toBe(true);
+  });
+});
+
+describe("CredentialIssuedEvent", () => {
+  it("accepts valid credential issued event", () => {
+    const valid = {
+      type: "credential.issued",
+      credentialId: "cred-1",
+      operatorId: "op-1",
+    };
+    expect(CredentialIssuedEvent.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects wrong type discriminator", () => {
+    expect(
+      CredentialIssuedEvent.safeParse({
+        type: "session.started",
+        credentialId: "c1",
+        operatorId: "o1",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("CredentialExpiredEvent", () => {
+  it("accepts valid credential expired event", () => {
+    const valid = {
+      type: "credential.expired",
+      credentialId: "cred-1",
+      reason: "ttl exceeded",
+    };
+    expect(CredentialExpiredEvent.safeParse(valid).success).toBe(true);
+  });
+});
+
+describe("CredentialReauthRequiredEvent", () => {
+  it("accepts valid credential reauth event", () => {
+    const valid = {
+      type: "credential.reauthorization_required",
+      credentialId: "cred-1",
+      reason: "policy changed",
+    };
+    expect(CredentialReauthRequiredEvent.safeParse(valid).success).toBe(true);
   });
 });
 
 describe("HeartbeatEvent", () => {
-  it("accepts valid heartbeat", () => {
+  it("accepts valid heartbeat with credentialId", () => {
     const valid = {
+      type: "heartbeat",
+      credentialId: "cred-1",
+      timestamp: "2024-01-01T00:00:00Z",
+    };
+    expect(HeartbeatEvent.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects heartbeat with sessionId instead of credentialId", () => {
+    const invalid = {
       type: "heartbeat",
       sessionId: "sess-1",
       timestamp: "2024-01-01T00:00:00Z",
     };
-    expect(HeartbeatEvent.safeParse(valid).success).toBe(true);
+    expect(HeartbeatEvent.safeParse(invalid).success).toBe(false);
+  });
+});
+
+describe("RevealEvent", () => {
+  it("accepts valid reveal event", () => {
+    const valid = {
+      type: "message.revealed",
+      messageId: "m1",
+      groupId: "g1",
+      contentType: "xmtp.org/text:1.0",
+      content: {},
+      revealId: "r1",
+    };
+    expect(RevealEvent.safeParse(valid).success).toBe(true);
+  });
+});
+
+describe("ScopesUpdatedEvent", () => {
+  it("accepts valid scopes updated event", () => {
+    const valid = {
+      type: "scopes.updated",
+      credentialId: "cred-1",
+      permissions: { allow: ["send", "reply"], deny: ["add-member"] },
+    };
+    expect(ScopesUpdatedEvent.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects invalid permission scope", () => {
+    expect(
+      ScopesUpdatedEvent.safeParse({
+        type: "scopes.updated",
+        credentialId: "cred-1",
+        permissions: { allow: ["invalid-scope"], deny: [] },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("AgentRevokedEvent", () => {
+  it("accepts valid agent revoked event with new revocation seal", () => {
+    const valid = {
+      type: "agent.revoked",
+      revocation: {
+        sealId: "seal_fedc1234deadbeef",
+        previousSealId: "seal_abc12345fedcba98",
+        operatorId: "op_abc12345fedcba98",
+        credentialId: "cred_abc12345fedcba98",
+        chatId: "conv_abc12345fedcba98",
+        reason: "owner-initiated",
+        revokedAt: "2024-01-01T00:00:00Z",
+        issuer: "signet-1",
+      },
+    };
+    expect(AgentRevokedEvent.safeParse(valid).success).toBe(true);
+  });
+});
+
+describe("ActionConfirmationEvent", () => {
+  it("accepts valid action confirmation event", () => {
+    const valid = {
+      type: "action.confirmation_required",
+      actionId: "act-1",
+      actionType: "send_message",
+      preview: { text: "hello" },
+    };
+    expect(ActionConfirmationEvent.safeParse(valid).success).toBe(true);
   });
 });
 
@@ -117,7 +228,7 @@ describe("SignetEvent discriminated union", () => {
   it("discriminates on type field", () => {
     const heartbeat = {
       type: "heartbeat",
-      sessionId: "sess-1",
+      credentialId: "cred-1",
       timestamp: "2024-01-01T00:00:00Z",
     };
     const result = SignetEvent.safeParse(heartbeat);
@@ -132,56 +243,48 @@ describe("SignetEvent discriminated union", () => {
     expect(SignetEvent.safeParse(invalid).success).toBe(false);
   });
 
-  it("accepts all 12 event types", () => {
-    const validSeal = {
-      sealId: "att-001",
-      previousSealId: null,
-      agentInboxId: "agent-1",
-      ownerInboxId: "owner-1",
-      groupId: "group-1",
-      threadScope: null,
-      viewMode: "full",
-      contentTypes: ["xmtp.org/text:1.0"],
-      grantedOps: [],
-      toolScopes: [],
-      inferenceMode: "external",
-      inferenceProviders: [],
-      contentEgressScope: "none",
-      retentionAtProvider: "none",
-      hostingMode: "managed",
-      trustTier: "unverified",
-      buildProvenanceRef: null,
-      verifierStatementRef: null,
-      sessionKeyFingerprint: null,
-      policyHash: "abc",
-      heartbeatInterval: 30,
-      issuedAt: "2024-01-01T00:00:00Z",
-      expiresAt: "2024-01-01T01:00:00Z",
-      revocationRules: {
-        maxTtlSeconds: 3600,
-        requireHeartbeat: true,
-        ownerCanRevoke: true,
-        adminCanRemove: false,
-      },
-      issuer: "signet-1",
-    };
+  it("rejects old session-based events", () => {
+    expect(
+      SignetEvent.safeParse({
+        type: "session.started",
+        session: {},
+        view: {},
+        grant: {},
+      }).success,
+    ).toBe(false);
 
-    const validGrant = {
-      messaging: { send: true, reply: true, react: true, draftOnly: false },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
+    expect(
+      SignetEvent.safeParse({
+        type: "view.updated",
+        view: {},
+      }).success,
+    ).toBe(false);
+
+    expect(
+      SignetEvent.safeParse({
+        type: "grant.updated",
+        grant: {},
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts all 11 event types", () => {
+    const validEnvelope = {
+      chain: {
+        current: {
+          sealId: "seal_abc12345fedcba98",
+          credentialId: "cred_abc12345fedcba98",
+          operatorId: "op_abc12345fedcba98",
+          chatId: "conv_abc12345fedcba98",
+          scopeMode: "per-chat",
+          permissions: { allow: ["send"], deny: [] },
+          issuedAt: "2024-01-01T00:00:00Z",
+        },
+        delta: { added: ["send"], removed: [], changed: [] },
       },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
+      signature: "sig_hex",
+      keyId: "key_abc12345feedbabe",
+      algorithm: "Ed25519",
     };
 
     const events = [
@@ -197,32 +300,25 @@ describe("SignetEvent discriminated union", () => {
         sealId: null,
         threadId: null,
       },
-      { type: "seal.stamped", seal: validSeal },
+      { type: "seal.stamped", seal: validEnvelope },
       {
-        type: "session.started",
-        session: {
-          sessionId: "s1",
-          agentInboxId: "a1",
-          sessionKeyFingerprint: "fp",
-          issuedAt: "2024-01-01T00:00:00Z",
-          expiresAt: "2024-01-01T01:00:00Z",
-        },
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-        grant: validGrant,
+        type: "credential.issued",
+        credentialId: "cred-1",
+        operatorId: "op-1",
       },
-      { type: "session.expired", sessionId: "s1", reason: "ttl" },
       {
-        type: "session.reauthorization_required",
-        sessionId: "s1",
+        type: "credential.expired",
+        credentialId: "cred-1",
+        reason: "ttl",
+      },
+      {
+        type: "credential.reauthorization_required",
+        credentialId: "cred-1",
         reason: "policy change",
       },
       {
         type: "heartbeat",
-        sessionId: "s1",
+        credentialId: "cred-1",
         timestamp: "2024-01-01T00:00:00Z",
       },
       {
@@ -234,21 +330,18 @@ describe("SignetEvent discriminated union", () => {
         revealId: "r1",
       },
       {
-        type: "view.updated",
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
+        type: "scopes.updated",
+        credentialId: "cred-1",
+        permissions: { allow: ["send"], deny: [] },
       },
-      { type: "grant.updated", grant: validGrant },
       {
         type: "agent.revoked",
         revocation: {
-          sealId: "rev-1",
-          previousSealId: "att-001",
-          agentInboxId: "a1",
-          groupId: "g1",
+          sealId: "seal_fedc1234deadbeef",
+          previousSealId: "seal_abc12345fedcba98",
+          operatorId: "op_abc12345fedcba98",
+          credentialId: "cred_abc12345fedcba98",
+          chatId: "conv_abc12345fedcba98",
           reason: "owner-initiated",
           revokedAt: "2024-01-01T00:00:00Z",
           issuer: "signet-1",
