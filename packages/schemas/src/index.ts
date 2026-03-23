@@ -131,6 +131,15 @@ export {
   SessionState,
 } from "./session.js";
 
+// ID Mapping
+export {
+  IdMappingResourceType,
+  type IdMappingResourceTypeType,
+  IdMapping,
+  type IdMappingType,
+  type IdMappingStore,
+} from "./id-mapping.js";
+
 // Credentials
 export {
   CredentialStatus,
