@@ -5,7 +5,7 @@ import { Command } from "commander";
  *
  * - inspect: Show full seal content
  * - verify: Run 6-check verification pipeline
- * - history: Show the seal chain for a session
+ * - history: Show the seal chain for a credential
  */
 export function createSealCommands(): Command {
   const cmd = new Command("seal").description("Seal lifecycle management");
@@ -31,9 +31,9 @@ export function createSealCommands(): Command {
   cmd
     .command("history")
     .description("Show seal chain history")
-    .argument("<sessionId>", "Session ID")
+    .argument("<credentialId>", "Credential ID")
     .option("--json", "JSON output")
-    .action(async (_sessionId, _options) => {
+    .action(async (_credentialId, _options) => {
       // Routed via AdminClient
     });
 

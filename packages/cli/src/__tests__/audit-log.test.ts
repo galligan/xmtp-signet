@@ -14,7 +14,7 @@ function makeTempDir(): string {
 function makeEntry(overrides?: Partial<AuditEntry>): AuditEntry {
   return {
     timestamp: new Date().toISOString(),
-    action: "session.issue",
+    action: "credential.issue",
     actor: "admin",
     success: true,
     ...overrides,
@@ -45,7 +45,7 @@ describe("AuditLog", () => {
     const lines = content.trim().split("\n");
     expect(lines).toHaveLength(1);
     const parsed = JSON.parse(lines[0] as string) as AuditEntry;
-    expect(parsed.action).toBe("session.issue");
+    expect(parsed.action).toBe("credential.issue");
     expect(parsed.actor).toBe("admin");
     expect(parsed.success).toBe(true);
   });
@@ -53,7 +53,7 @@ describe("AuditLog", () => {
   test("multiple appends produce multiple lines", async () => {
     const log = createAuditLog(logPath);
 
-    await log.append(makeEntry({ action: "session.issue" }));
+    await log.append(makeEntry({ action: "credential.issue" }));
     await log.append(makeEntry({ action: "session.revoke" }));
     await log.append(makeEntry({ action: "key.rotate" }));
 

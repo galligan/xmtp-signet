@@ -4,6 +4,7 @@ import {
   InternalError,
   NotFoundError,
   PermissionError,
+  resolveScopeSet,
 } from "@xmtp/signet-schemas";
 import type {
   SignetError,
@@ -11,20 +12,22 @@ import type {
   HarnessRequest,
   ConfirmActionRequest,
   SendMessageRequest,
-  UpdateViewRequest,
+  UpdateScopesRequest,
   RevealContentRequest,
   RevealGrant,
+  ScopeSetType,
+  MessageSealBindingType,
 } from "@xmtp/signet-schemas";
 import type {
-  SessionManager,
-  SessionRecord,
+  CredentialManager,
+  CredentialRecord,
   SealManager,
-  MessageProvenanceMetadata,
 } from "@xmtp/signet-contracts";
+import type { MessageProvenanceMetadata } from "@xmtp/signet-contracts";
 import { validateSendMessage, projectMessage } from "@xmtp/signet-policy";
 import type { RawMessage } from "@xmtp/signet-policy";
 import type { RequestHandler } from "@xmtp/signet-ws";
-import type { InternalSessionManager } from "@xmtp/signet-sessions";
+import type { InternalCredentialManager } from "@xmtp/signet-sessions";
 import type { PendingActionStore } from "@xmtp/signet-sessions";
 
 /** Minimal message shape needed for reveal replay. */
@@ -38,9 +41,6 @@ export interface ReplayMessage {
   readonly threadId: string | null;
 }
 
-/** Default expiry for pending actions: 5 minutes. */
-const DEFAULT_ACTION_EXPIRY_MS = 5 * 60 * 1000;
-
 /** Dependencies required to route harness requests through the WS transport. */
 export interface HarnessRequestHandlerDeps {
   readonly ensureCoreReady: () => Promise<Result<void, SignetError>>;
@@ -49,13 +49,13 @@ export interface HarnessRequestHandlerDeps {
     contentType: string,
     content: unknown,
   ) => Promise<Result<{ messageId: string }, SignetError>>;
-  readonly sessionManager: Pick<
-    SessionManager,
-    "heartbeat" | "lookup" | "getRevealState"
+  readonly credentialManager: Pick<
+    CredentialManager,
+    "lookup" | "lookupByToken"
   >;
-  readonly internalSessionManager?: InternalSessionManager;
+  readonly internalCredentialManager?: InternalCredentialManager;
   readonly pendingActions?: PendingActionStore;
-  readonly broadcast?: (sessionId: string, event: SignetEvent) => void;
+  readonly broadcast?: (credentialId: string, event: SignetEvent) => void;
   readonly listMessages?: (
     groupId: string,
     options?: {
@@ -67,12 +67,18 @@ export interface HarnessRequestHandlerDeps {
   ) => Promise<Result<readonly ReplayMessage[], SignetError>>;
   /** Seal manager for provenance lookup on outbound messages. */
   readonly sealManager?: Pick<SealManager, "current">;
+  /** Optional message binding creator for v1 seal provenance. */
+  readonly createMessageBinding?: (
+    messageId: string,
+    sealId: string,
+    credential: CredentialRecord,
+  ) => Promise<Result<MessageSealBindingType, SignetError>>;
   /** Action expiry TTL in milliseconds. Defaults to 5 minutes. */
   readonly actionExpiryMs?: number;
   /** Optional callback for logging expired actions. */
   readonly onActionExpired?: (action: {
     actionId: string;
-    sessionId: string;
+    credentialId: string;
     actionType: string;
     createdAt: string;
     expiresAt: string;
@@ -80,17 +86,29 @@ export interface HarnessRequestHandlerDeps {
 }
 
 /**
+ * Resolve a credential's effective scopes. Returns the resolved scope set.
+ */
+function resolveScopes(credential: CredentialRecord): ReadonlySet<string> {
+  return resolveScopeSet(credential.effectiveScopes);
+}
+
+/** Resolve the credential's scoped chat IDs from its persisted config. */
+function resolveChatIds(credential: CredentialRecord): readonly string[] {
+  return credential.config.chatIds;
+}
+
+/**
  * Create the WS harness request handler.
  *
  * The handler stays transport-only: it validates request shape,
- * delegates to session/core services, and returns typed results.
+ * delegates to credential/core services, and returns typed results.
  */
 export function createWsRequestHandler(
   deps: HarnessRequestHandlerDeps,
 ): RequestHandler {
   async function handleSendMessage(
     request: SendMessageRequest,
-    session: SessionRecord,
+    credential: CredentialRecord,
   ): Promise<
     Result<
       | {
@@ -101,66 +119,12 @@ export function createWsRequestHandler(
       SignetError
     >
   > {
-    if (!session.view.contentTypes.includes(request.contentType)) {
-      return Result.err(
-        PermissionError.create(
-          "Message content type is outside the session view",
-          {
-            sessionId: session.sessionId,
-            contentType: request.contentType,
-          },
-        ),
-      );
-    }
+    const scopes = resolveScopes(credential);
+    const chatIds = resolveChatIds(credential);
 
-    const validation = validateSendMessage(
-      request,
-      session.grant,
-      session.view,
-    );
+    const validation = validateSendMessage(request, scopes, chatIds);
     if (validation.isErr()) {
       return validation;
-    }
-
-    if (validation.value.draftOnly) {
-      if (deps.pendingActions && deps.broadcast) {
-        const actionId = crypto.randomUUID();
-        const now = new Date();
-        deps.pendingActions.add({
-          actionId,
-          sessionId: session.sessionId,
-          actionType: "send_message",
-          payload: {
-            groupId: request.groupId,
-            contentType: request.contentType,
-            content: request.content,
-          },
-          createdAt: now.toISOString(),
-          expiresAt: new Date(
-            now.getTime() + (deps.actionExpiryMs ?? DEFAULT_ACTION_EXPIRY_MS),
-          ).toISOString(),
-        });
-
-        deps.broadcast(session.sessionId, {
-          type: "action.confirmation_required",
-          actionId,
-          actionType: "send_message",
-          preview: {
-            groupId: request.groupId,
-            contentType: request.contentType,
-            content: request.content,
-          },
-        });
-
-        return Result.ok({ pending: true, actionId });
-      }
-
-      return Result.err(
-        PermissionError.create(
-          "Draft-only sessions cannot send live messages",
-          { sessionId: session.sessionId, requestType: request.type },
-        ),
-      );
     }
 
     const readyResult = await deps.ensureCoreReady();
@@ -168,16 +132,18 @@ export function createWsRequestHandler(
       return readyResult;
     }
 
-    // Fail-closed: re-check session state after core readiness.
-    // The session may have been revoked during the ensureCoreReady() await.
-    const freshResult = await deps.sessionManager.lookup(session.sessionId);
+    // Fail-closed: re-check credential state after core readiness.
+    // The credential may have been revoked during the ensureCoreReady() await.
+    const freshResult = await deps.credentialManager.lookup(
+      credential.credentialId,
+    );
     if (freshResult.isErr()) {
       return freshResult;
     }
-    if (freshResult.value.state !== "active") {
+    if (freshResult.value.status !== "active") {
       return Result.err(
         AuthError.create(
-          `Session is ${freshResult.value.state} — cannot send messages`,
+          `Credential is ${freshResult.value.status} -- cannot send messages`,
         ),
       );
     }
@@ -191,19 +157,28 @@ export function createWsRequestHandler(
       return sendResult;
     }
 
-    // Attach provenance metadata if a seal exists for this agent+group
+    // Attach provenance metadata if a credential-scoped seal exists and
+    // the runtime can bind the outbound message to that seal.
     let provenance: MessageProvenanceMetadata | null = null;
-    if (deps.sealManager) {
+    if (deps.sealManager && deps.createMessageBinding) {
       const sealResult = await deps.sealManager.current(
-        session.agentInboxId,
+        credential.credentialId,
         request.groupId,
       );
       if (sealResult.isOk() && sealResult.value !== null) {
-        const seal = sealResult.value.seal;
+        const envelope = sealResult.value;
+        const bindingResult = await deps.createMessageBinding(
+          sendResult.value.messageId,
+          envelope.chain.current.sealId,
+          credential,
+        );
+        if (bindingResult.isErr()) {
+          return bindingResult;
+        }
         provenance = {
-          sealId: seal.sealId,
-          sessionKeyFingerprint: seal.sessionKeyFingerprint ?? "",
-          policyHash: seal.policyHash,
+          credentialId: envelope.chain.current.credentialId,
+          operatorId: envelope.chain.current.operatorId,
+          ...bindingResult.value,
         };
       }
     }
@@ -216,21 +191,28 @@ export function createWsRequestHandler(
 
   async function handleHeartbeat(
     request: Extract<HarnessRequest, { type: "heartbeat" }>,
-    session: SessionRecord,
+    credential: CredentialRecord,
   ): Promise<Result<null, SignetError>> {
-    if (request.sessionId !== session.sessionId) {
+    if (request.credentialId !== credential.credentialId) {
       return Result.err(
         AuthError.create(
-          "Heartbeat session does not match authenticated session",
+          "Heartbeat credential does not match authenticated credential",
           {
-            authenticatedSessionId: session.sessionId,
-            requestedSessionId: request.sessionId,
+            authenticatedCredentialId: credential.credentialId,
+            requestedCredentialId: request.credentialId,
           },
         ),
       );
     }
 
-    const result = await deps.sessionManager.heartbeat(session.sessionId);
+    if (!deps.internalCredentialManager) {
+      // No heartbeat support without internal manager
+      return Result.ok(null);
+    }
+
+    const result = deps.internalCredentialManager.recordHeartbeat(
+      credential.credentialId,
+    );
     if (result.isErr()) {
       return result;
     }
@@ -240,44 +222,19 @@ export function createWsRequestHandler(
 
   async function handleRevealContent(
     request: RevealContentRequest,
-    session: SessionRecord,
+    credential: CredentialRecord,
   ): Promise<Result<RevealGrant, SignetError>> {
     const { reveal } = request;
 
-    // Validate groupId against session's threadScopes
-    const matchingScopes = session.view.threadScopes.filter(
-      (scope) => scope.groupId === reveal.groupId,
-    );
-    if (matchingScopes.length === 0) {
+    if (!deps.internalCredentialManager) {
       return Result.err(
-        PermissionError.create(
-          "Reveal group is not within the session's thread scopes",
-          { sessionId: session.sessionId, groupId: reveal.groupId },
-        ),
+        InternalError.create("Internal credential manager not available"),
       );
     }
 
-    // For thread-scoped reveals, verify the target thread is allowed
-    if (reveal.scope === "thread" && reveal.targetId) {
-      const threadAllowed = matchingScopes.some(
-        (scope) =>
-          scope.threadId === null || scope.threadId === reveal.targetId,
-      );
-      if (!threadAllowed) {
-        return Result.err(
-          PermissionError.create(
-            "Thread is not within the session's thread scopes",
-            {
-              sessionId: session.sessionId,
-              groupId: reveal.groupId,
-              threadId: reveal.targetId,
-            },
-          ),
-        );
-      }
-    }
-
-    const storeResult = deps.sessionManager.getRevealState(session.sessionId);
+    const storeResult = deps.internalCredentialManager.getRevealState(
+      credential.credentialId,
+    );
     if (Result.isError(storeResult)) {
       return storeResult;
     }
@@ -296,7 +253,9 @@ export function createWsRequestHandler(
     if (deps.listMessages && deps.broadcast) {
       const messagesResult = await deps.listMessages(reveal.groupId);
       if (messagesResult.isOk()) {
-        const allowlist = new Set(session.view.contentTypes);
+        const scopes = resolveScopes(credential);
+        const chatIds = resolveChatIds(credential);
+        // In v1, content types are not restricted at the credential level.
         for (const msg of messagesResult.value) {
           const isRevealed = store.isRevealed(
             msg.messageId,
@@ -308,8 +267,6 @@ export function createWsRequestHandler(
           );
           if (!isRevealed) continue;
 
-          // Run through the view projection pipeline to enforce
-          // scope and content-type filters before emitting.
           const rawMessage: RawMessage = {
             messageId: msg.messageId,
             groupId: msg.groupId,
@@ -319,22 +276,27 @@ export function createWsRequestHandler(
             sentAt: msg.sentAt,
             sealId: null,
             threadId: msg.threadId,
+            isHistorical: true,
           };
+          // Include the message's content type in the allowlist to pass
+          // the content-type filter (v1 doesn't restrict content types).
+          const msgAllowlist = new Set<string>([msg.contentType]);
           const projection = projectMessage(
             rawMessage,
-            session.view,
-            allowlist,
+            scopes,
+            chatIds,
+            msgAllowlist,
             true,
           );
           if (projection.action === "emit") {
-            deps.broadcast(session.sessionId, {
-              type: "message.revealed",
-              messageId: msg.messageId,
-              groupId: msg.groupId,
-              contentType: msg.contentType,
-              content: projection.event.content,
-              revealId: grant.revealId,
-            });
+              deps.broadcast(credential.credentialId, {
+                type: "message.revealed",
+                messageId: msg.messageId,
+                groupId: msg.groupId,
+                contentType: msg.contentType,
+                content: projection.event.content,
+                revealId: access.revealId,
+              });
           }
         }
       }
@@ -343,20 +305,24 @@ export function createWsRequestHandler(
     return Result.ok(grant);
   }
 
-  async function handleUpdateView(
-    request: UpdateViewRequest,
-    session: SessionRecord,
+  async function handleUpdateScopes(
+    request: UpdateScopesRequest,
+    credential: CredentialRecord,
   ): Promise<Result<unknown, SignetError>> {
-    if (!deps.internalSessionManager) {
+    if (!deps.internalCredentialManager) {
       return Result.err(
-        InternalError.create("Internal session manager not available"),
+        InternalError.create("Internal credential manager not available"),
       );
     }
 
-    const materialityResult = deps.internalSessionManager.checkMateriality(
-      session.sessionId,
-      request.view,
-      session.grant,
+    const newScopes: ScopeSetType = {
+      allow: request.allow ?? credential.effectiveScopes.allow,
+      deny: request.deny ?? credential.effectiveScopes.deny,
+    };
+
+    const materialityResult = deps.internalCredentialManager.checkMateriality(
+      credential.credentialId,
+      newScopes,
     );
     if (Result.isError(materialityResult)) {
       return materialityResult;
@@ -365,9 +331,9 @@ export function createWsRequestHandler(
     const check = materialityResult.value;
 
     if (check.isMaterial) {
-      deps.internalSessionManager.setSessionState(
-        session.sessionId,
-        "reauthorization-required",
+      deps.internalCredentialManager.setCredentialStatus(
+        credential.credentialId,
+        "pending",
       );
       return Result.ok({
         updated: false,
@@ -376,10 +342,9 @@ export function createWsRequestHandler(
       });
     }
 
-    const updateResult = deps.internalSessionManager.updateSessionPolicy(
-      session.sessionId,
-      request.view,
-      session.grant,
+    const updateResult = deps.internalCredentialManager.updateCredentialScopes(
+      credential.credentialId,
+      newScopes,
     );
     if (Result.isError(updateResult)) {
       return updateResult;
@@ -390,7 +355,7 @@ export function createWsRequestHandler(
 
   async function handleConfirmAction(
     request: ConfirmActionRequest,
-    session: SessionRecord,
+    credential: CredentialRecord,
   ): Promise<Result<unknown, SignetError>> {
     if (!deps.pendingActions) {
       return Result.err(
@@ -405,13 +370,13 @@ export function createWsRequestHandler(
       );
     }
 
-    if (pending.sessionId !== session.sessionId) {
+    if (pending.credentialId !== credential.credentialId) {
       return Result.err(
         PermissionError.create(
-          "Pending action does not belong to this session",
+          "Pending action does not belong to this credential",
           {
             actionId: request.actionId,
-            sessionId: session.sessionId,
+            credentialId: credential.credentialId,
           },
         ),
       );
@@ -425,7 +390,7 @@ export function createWsRequestHandler(
       deps.pendingActions.deny(request.actionId);
       deps.onActionExpired?.({
         actionId: pending.actionId,
-        sessionId: pending.sessionId,
+        credentialId: pending.credentialId,
         actionType: pending.actionType,
         createdAt: pending.createdAt,
         expiresAt: pending.expiresAt,
@@ -443,8 +408,7 @@ export function createWsRequestHandler(
       return Result.ok({ denied: true, actionId: request.actionId });
     }
 
-    // Re-validate queued send_message against current session policy
-    // (session may have been narrowed since the action was queued)
+    // Re-validate queued send_message against current credential policy
     if (pending.actionType === "send_message") {
       const payload = pending.payload as {
         groupId: string;
@@ -452,26 +416,12 @@ export function createWsRequestHandler(
         content: unknown;
       };
 
-      // Check content type still allowed
-      const allowedTypes = new Set(session.view.contentTypes);
-      if (!allowedTypes.has(payload.contentType)) {
-        deps.pendingActions.deny(request.actionId);
-        return Result.err(
-          PermissionError.create(
-            "Content type no longer allowed by session view",
-            {
-              contentType: payload.contentType,
-              sessionId: session.sessionId,
-            },
-          ),
-        );
-      }
-
-      // Re-run grant/view validation
+      // Re-run scope validation
+      const scopes = resolveScopes(credential);
       const revalidation = validateSendMessage(
-        { groupId: payload.groupId, contentType: payload.contentType },
-        session.grant,
-        session.view,
+        { groupId: payload.groupId },
+        scopes,
+        resolveChatIds(credential),
       );
       if (revalidation.isErr()) {
         deps.pendingActions.deny(request.actionId);
@@ -513,43 +463,43 @@ export function createWsRequestHandler(
 
   return async (
     request: HarnessRequest,
-    session: SessionRecord,
+    credential: CredentialRecord,
   ): Promise<Result<unknown, SignetError>> => {
-    // Guard: reject non-heartbeat requests when the session's heartbeat
-    // is stale. This enforces liveness — the harness must maintain its
+    // Guard: reject non-heartbeat requests when the credential's heartbeat
+    // is stale. This enforces liveness -- the harness must maintain its
     // heartbeat cadence to keep sending requests.
     if (
       request.type !== "heartbeat" &&
-      deps.internalSessionManager &&
-      typeof deps.internalSessionManager.isHeartbeatStale === "function"
+      deps.internalCredentialManager &&
+      typeof deps.internalCredentialManager.isHeartbeatStale === "function"
     ) {
       try {
-        const staleResult = deps.internalSessionManager.isHeartbeatStale(
-          session.sessionId,
+        const staleResult = deps.internalCredentialManager.isHeartbeatStale(
+          credential.credentialId,
         );
         if (staleResult.isOk() && staleResult.value) {
           return Result.err(
             AuthError.create(
-              "Session heartbeat is stale — send a heartbeat before making requests",
+              "Credential heartbeat is stale -- send a heartbeat before making requests",
             ),
           );
         }
       } catch {
-        // Staleness check failed — proceed rather than blocking the request
+        // Staleness check failed -- proceed rather than blocking the request
       }
     }
 
     switch (request.type) {
       case "send_message":
-        return handleSendMessage(request, session);
+        return handleSendMessage(request, credential);
       case "heartbeat":
-        return handleHeartbeat(request, session);
+        return handleHeartbeat(request, credential);
       case "reveal_content":
-        return handleRevealContent(request, session);
-      case "update_view":
-        return handleUpdateView(request, session);
+        return handleRevealContent(request, credential);
+      case "update_scopes":
+        return handleUpdateScopes(request, credential);
       case "confirm_action":
-        return handleConfirmAction(request, session);
+        return handleConfirmAction(request, credential);
       default:
         return Result.err(
           InternalError.create(

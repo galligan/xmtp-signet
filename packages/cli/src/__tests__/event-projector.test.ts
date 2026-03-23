@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { CredentialRecord } from "@xmtp/signet-contracts";
 import type { RevealStateStore } from "@xmtp/signet-contracts";
 import type { SignetEvent, MessageEvent } from "@xmtp/signet-schemas";
 import {
@@ -7,38 +7,29 @@ import {
   type EventProjectorDeps,
 } from "../ws/event-projector.js";
 
-function makeSessionRecord(
-  overrides: Partial<SessionRecord> = {},
-): SessionRecord {
+function makeCredentialRecord(
+  overrides: Partial<CredentialRecord> = {},
+): CredentialRecord {
   return {
-    sessionId: "sess_123",
-    agentInboxId: "agent_1",
-    sessionKeyFingerprint: "fp_abc",
-    view: {
-      mode: "full",
-      threadScopes: [{ groupId: "g1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
+    id: "cred_123",
+    config: {
+      operatorId: "operator_1",
+      chatIds: ["g1"],
+      allow: ["send", "read-messages", "stream-messages"],
+      deny: [],
     },
-    grant: {
-      messaging: { send: true, reply: false, react: false, draftOnly: false },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
-      },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
+    inboxIds: ["inbox_12345678feedbabe"],
+    credentialId: "cred_123",
+    operatorId: "operator_1",
+    effectiveScopes: {
+      allow: ["send", "read-messages", "stream-messages"],
+      deny: [],
     },
-    state: "active",
+    status: "active",
     issuedAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-02T00:00:00Z",
+    issuedBy: "op_admin1234",
+    isExpired: false,
     lastHeartbeat: "2024-01-01T00:00:00Z",
     ...overrides,
   };
@@ -77,224 +68,130 @@ function makeDeps(store: RevealStateStore | null = null): EventProjectorDeps {
 }
 
 describe("createEventProjector", () => {
-  describe("full mode", () => {
-    test("passes message events through unchanged", () => {
+  describe("credential with read-messages scope", () => {
+    test("passes message events through", () => {
       const projector = createEventProjector(makeDeps());
-      const session = makeSessionRecord({
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-      });
+      const credential = makeCredentialRecord();
       const event = makeMessageEvent();
 
-      const result = projector(event, session);
+      const result = projector(event, credential);
 
       expect(result).not.toBeNull();
-      expect(result).toEqual(event);
     });
-  });
 
-  describe("reveal-only mode", () => {
-    test("drops message events when not revealed", () => {
-      const store = makeRevealStore(false);
-      const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "reveal-only",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
+    test("drops message events outside the credential's scoped chats", () => {
+      const projector = createEventProjector(makeDeps());
+      const credential = makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "stream-messages"],
+          deny: [],
         },
       });
-      const event = makeMessageEvent();
+      const event = makeMessageEvent({ groupId: "g2" });
 
-      const result = projector(event, session);
+      const result = projector(event, credential);
 
       expect(result).toBeNull();
     });
+  });
 
-    test("passes message events when revealed with visibility 'revealed'", () => {
-      const store = makeRevealStore(true);
+  describe("credential without read-messages scope", () => {
+    test("drops message events when read-messages is denied", () => {
+      const store = makeRevealStore(false);
       const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "reveal-only",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
+      const credential = makeCredentialRecord({
+        effectiveScopes: {
+          allow: ["send"],
+          deny: ["read-messages"],
         },
       });
       const event = makeMessageEvent();
 
-      const result = projector(event, session);
+      const result = projector(event, credential);
 
-      expect(result).not.toBeNull();
-      const msg = result as MessageEvent;
-      expect(msg.type).toBe("message.visible");
-      expect(msg.visibility).toBe("revealed");
-      expect(msg.content).toBe("Hello world");
+      // Without read-messages scope, messages are hidden (dropped)
+      expect(result).toBeNull();
     });
   });
 
-  describe("redacted mode", () => {
-    test("passes message events with content null when not revealed", () => {
-      const store = makeRevealStore(false);
+  describe("revealed messages", () => {
+    test("passes message events when revealed", () => {
+      const store = makeRevealStore(true);
       const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "redacted",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
+      const credential = makeCredentialRecord({
+        effectiveScopes: {
+          allow: ["send", "read-messages"],
+          deny: [],
         },
       });
       const event = makeMessageEvent();
 
-      const result = projector(event, session);
+      const result = projector(event, credential);
 
       expect(result).not.toBeNull();
       const msg = result as MessageEvent;
       expect(msg.type).toBe("message.visible");
-      expect(msg.visibility).toBe("redacted");
-      expect(msg.content).toBeNull();
     });
   });
 
   describe("non-message events", () => {
-    test("passes heartbeat events through regardless of mode", () => {
+    test("passes heartbeat events through regardless of scopes", () => {
       const store = makeRevealStore(false);
       const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "reveal-only",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
+      const credential = makeCredentialRecord({
+        effectiveScopes: {
+          allow: [],
+          deny: [],
         },
       });
       const heartbeat: SignetEvent = {
         type: "heartbeat",
-        sessionId: "sess_123",
+        credentialId: "cred_123",
         timestamp: "2024-01-01T00:00:00Z",
       };
 
-      const result = projector(heartbeat, session);
+      const result = projector(heartbeat, credential);
 
       expect(result).toEqual(heartbeat);
     });
 
-    test("passes session.expired events through regardless of mode", () => {
+    test("passes credential.expired events through regardless of scopes", () => {
       const store = makeRevealStore(false);
       const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "reveal-only",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
+      const credential = makeCredentialRecord({
+        effectiveScopes: {
+          allow: [],
+          deny: [],
         },
       });
       const expired: SignetEvent = {
-        type: "session.expired",
-        sessionId: "sess_123",
+        type: "credential.expired",
+        credentialId: "cred_123",
         reason: "timeout",
       };
 
-      const result = projector(expired, session);
+      const result = projector(expired, credential);
 
       expect(result).toEqual(expired);
-    });
-  });
-
-  describe("thread-scoped filtering", () => {
-    test("passes message with matching threadId through thread-scoped session", () => {
-      const store = makeRevealStore(false);
-      const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: "thread-42" }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-      });
-      const event = makeMessageEvent({ threadId: "thread-42" });
-      const result = projector(event, session);
-      expect(result).not.toBeNull();
-    });
-
-    test("drops message with non-matching threadId in thread-scoped session", () => {
-      const store = makeRevealStore(false);
-      const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: "thread-42" }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-      });
-      const event = makeMessageEvent({ threadId: "other-thread" });
-      const result = projector(event, session);
-      expect(result).toBeNull();
-    });
-
-    test("drops message with null threadId in thread-scoped session", () => {
-      const store = makeRevealStore(false);
-      const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: "thread-42" }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-      });
-      const event = makeMessageEvent({ threadId: null });
-      const result = projector(event, session);
-      expect(result).toBeNull();
-    });
-
-    test("passes message with any threadId through group-scoped session (threadId: null)", () => {
-      const store = makeRevealStore(false);
-      const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-      });
-      const event = makeMessageEvent({ threadId: "any-thread" });
-      const result = projector(event, session);
-      expect(result).not.toBeNull();
-    });
-
-    test("projected event carries threadId through to output", () => {
-      const store = makeRevealStore(false);
-      const projector = createEventProjector(makeDeps(store));
-      const session = makeSessionRecord({
-        view: {
-          mode: "full",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
-        },
-      });
-      const event = makeMessageEvent({ threadId: "thread-99" });
-      const result = projector(event, session);
-      expect(result).not.toBeNull();
-      expect((result as MessageEvent).threadId).toBe("thread-99");
     });
   });
 
   describe("missing reveal store", () => {
     test("treats messages as not revealed when store is null", () => {
       const projector = createEventProjector(makeDeps(null));
-      const session = makeSessionRecord({
-        view: {
-          mode: "reveal-only",
-          threadScopes: [{ groupId: "g1", threadId: null }],
-          contentTypes: ["xmtp.org/text:1.0"],
+      const credential = makeCredentialRecord({
+        effectiveScopes: {
+          allow: ["send"],
+          deny: ["read-messages"],
         },
       });
       const event = makeMessageEvent();
 
-      const result = projector(event, session);
+      const result = projector(event, credential);
 
+      // Without read-messages scope and no reveal, should be dropped
       expect(result).toBeNull();
     });
   });

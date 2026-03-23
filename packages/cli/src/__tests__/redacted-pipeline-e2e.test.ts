@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { CredentialRecord } from "@xmtp/signet-contracts";
 import type { RevealStateStore } from "@xmtp/signet-contracts";
 import { createRevealStateStore } from "@xmtp/signet-policy";
 import type {
@@ -12,43 +12,29 @@ import {
   type EventProjectorDeps,
 } from "../ws/event-projector.js";
 
-function makeSessionRecord(
-  overrides: Partial<SessionRecord> = {},
-): SessionRecord {
+function makeCredentialRecord(
+  overrides: Partial<CredentialRecord> = {},
+): CredentialRecord {
   return {
-    sessionId: "sess_123",
-    agentInboxId: "agent_1",
-    sessionKeyFingerprint: "fp_abc",
-    view: {
-      mode: "redacted",
-      threadScopes: [{ groupId: "g1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
+    id: "cred_123",
+    config: {
+      operatorId: "operator_1",
+      chatIds: ["g1"],
+      allow: ["send", "read-messages", "stream-messages"],
+      deny: [],
     },
-    grant: {
-      messaging: {
-        send: true,
-        reply: false,
-        react: false,
-        draftOnly: false,
-      },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
-      },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
+    inboxIds: ["inbox_12345678feedbabe"],
+    credentialId: "cred_123",
+    operatorId: "operator_1",
+    effectiveScopes: {
+      allow: ["send", "read-messages", "stream-messages"],
+      deny: [],
     },
-    state: "active",
+    status: "active",
     issuedAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-02T00:00:00Z",
+    issuedBy: "op_admin1234",
+    isExpired: false,
     lastHeartbeat: "2024-01-01T00:00:00Z",
     ...overrides,
   };
@@ -87,27 +73,36 @@ function makeDeps(store: RevealStateStore | null = null): EventProjectorDeps {
 }
 
 describe("redacted pipeline e2e", () => {
-  test("redacted mode nulls content for unrevealed messages", () => {
+  test("credential with read-messages scope passes messages through", () => {
     const store = makeRevealStore(false);
     const projector = createEventProjector(makeDeps(store));
-    const session = makeSessionRecord({
-      view: {
-        mode: "redacted",
-        threadScopes: [{ groupId: "g1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
+    const credential = makeCredentialRecord();
+    const event = makeMessageEvent({ content: "Secret message" });
+
+    const result = projector(event, credential);
+
+    expect(result).not.toBeNull();
+    const msg = result as MessageEvent;
+    expect(msg.type).toBe("message.visible");
+  });
+
+  test("credential with denied read-messages drops messages", () => {
+    const store = makeRevealStore(false);
+    const projector = createEventProjector(makeDeps(store));
+    const credential = makeCredentialRecord({
+      effectiveScopes: {
+        allow: ["send"],
+        deny: ["read-messages"],
       },
     });
     const event = makeMessageEvent({ content: "Secret message" });
 
-    const result = projector(event, session);
+    const result = projector(event, credential);
 
-    expect(result).not.toBeNull();
-    const msg = result as MessageEvent;
-    expect(msg.visibility).toBe("redacted");
-    expect(msg.content).toBeNull();
+    expect(result).toBeNull();
   });
 
-  test("redacted mode preserves content for revealed messages", () => {
+  test("revealed messages pass through even with limited scopes", () => {
     const store = createRevealStateStore();
     const grant: RevealGrant = {
       revealId: "reveal_1",
@@ -126,56 +121,18 @@ describe("redacted pipeline e2e", () => {
     store.grant(grant, request);
 
     const projector = createEventProjector(makeDeps(store));
-    const session = makeSessionRecord({
-      view: {
-        mode: "redacted",
-        threadScopes: [{ groupId: "g1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
+    const credential = makeCredentialRecord({
+      effectiveScopes: {
+        allow: ["send", "read-messages"],
+        deny: [],
       },
     });
     const event = makeMessageEvent({ content: "Now visible" });
 
-    const result = projector(event, session);
+    const result = projector(event, credential);
 
     expect(result).not.toBeNull();
     const msg = result as MessageEvent;
-    expect(msg.visibility).toBe("revealed");
-    expect(msg.content).toBe("Now visible");
-  });
-
-  test("redacted mode drops messages outside thread scope", () => {
-    const store = makeRevealStore(false);
-    const projector = createEventProjector(makeDeps(store));
-    const session = makeSessionRecord({
-      view: {
-        mode: "redacted",
-        threadScopes: [{ groupId: "g1", threadId: "thread-42" }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      },
-    });
-    const event = makeMessageEvent({ threadId: "other-thread" });
-
-    const result = projector(event, session);
-
-    expect(result).toBeNull();
-  });
-
-  test("redacted mode drops disallowed content types", () => {
-    const store = makeRevealStore(false);
-    const projector = createEventProjector(makeDeps(store));
-    const session = makeSessionRecord({
-      view: {
-        mode: "redacted",
-        threadScopes: [{ groupId: "g1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      },
-    });
-    const event = makeMessageEvent({
-      contentType: "xmtp.org/reaction:1.0",
-    });
-
-    const result = projector(event, session);
-
-    expect(result).toBeNull();
+    expect(msg.type).toBe("message.visible");
   });
 });

@@ -117,7 +117,7 @@ function makeMockDeps(
         issueSessionKey: async () =>
           Result.ok({
             keyId: "sk",
-            sessionId: "s",
+            credentialId: "cred_1a2b3c4dfeedbabe",
             fingerprint: "fp",
             publicKeyHex: "pub",
             expiresAt: new Date().toISOString(),
@@ -167,18 +167,23 @@ function makeMockDeps(
           Result.err(InternalError.create("not implemented")),
       };
     },
-    createSessionManager: () => {
-      tracker.record("sessionManager.create");
+    createCredentialManager: () => {
+      tracker.record("credentialManager.create");
       return {
         issue: async () =>
           Result.ok({
             token: "token",
-            session: {
-              sessionId: "s1",
-              agentInboxId: "a1",
-              sessionKeyFingerprint: "fp",
+            credential: {
+              id: "cred_1",
+              config: {
+                operatorId: "op_1",
+                chatIds: [],
+              },
+              inboxIds: [],
+              status: "active",
               issuedAt: new Date().toISOString(),
               expiresAt: new Date().toISOString(),
+              issuedBy: "op_1",
             },
           }),
         list: async () => Result.ok([]),
@@ -186,9 +191,8 @@ function makeMockDeps(
         lookupByToken: async () =>
           Result.err(InternalError.create("not found")),
         revoke: async () => Result.ok(undefined),
-        heartbeat: async () => Result.ok(undefined),
-        isActive: async () => Result.ok(false),
-        getRevealState: () => Result.err(InternalError.create("not found")),
+        update: async () => Result.err(InternalError.create("not found")),
+        renew: async () => Result.err(InternalError.create("not found")),
       };
     },
     createSealManager: () => {

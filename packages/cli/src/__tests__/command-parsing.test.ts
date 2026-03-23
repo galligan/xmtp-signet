@@ -95,11 +95,11 @@ describe("session commands", () => {
     expect(names).toContain("issue");
   });
 
-  test("list has --config, --agent, and --json options", () => {
+  test("list has --config, --operator, and --json options", () => {
     const list = findSubcommand(cmd, "list");
     expect(list).toBeDefined();
     expect(hasOption(list!, "--config")).toBe(true);
-    expect(hasOption(list!, "--agent")).toBe(true);
+    expect(hasOption(list!, "--operator")).toBe(true);
     expect(hasOption(list!, "--json")).toBe(true);
   });
 
@@ -110,31 +110,13 @@ describe("session commands", () => {
     expect(hasOption(revoke!, "--reason")).toBe(true);
   });
 
-  test("issue has --config, --agent, --ttl, --view, --grant options", () => {
+  test("issue has --config, --operator, --ttl, --credential options", () => {
     const issue = findSubcommand(cmd, "issue");
     expect(issue).toBeDefined();
     expect(hasOption(issue!, "--config")).toBe(true);
-    expect(hasOption(issue!, "--agent")).toBe(true);
+    expect(hasOption(issue!, "--operator")).toBe(true);
     expect(hasOption(issue!, "--ttl")).toBe(true);
-    expect(hasOption(issue!, "--view")).toBe(true);
-    expect(hasOption(issue!, "--grant")).toBe(true);
-  });
-});
-
-describe("grant commands", () => {
-  const cmd = createGrantCommands();
-
-  test("registers all subcommands", () => {
-    const names = getSubcommandNames(cmd);
-    expect(names).toContain("list");
-    expect(names).toContain("inspect");
-    expect(names).toContain("revoke");
-  });
-
-  test("list has --session filter option", () => {
-    const list = findSubcommand(cmd, "list");
-    expect(list).toBeDefined();
-    expect(hasOption(list!, "--session")).toBe(true);
+    expect(hasOption(issue!, "--credential")).toBe(true);
   });
 });
 

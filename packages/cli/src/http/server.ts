@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import { InternalError } from "@xmtp/signet-schemas";
-import type { SessionManager } from "@xmtp/signet-contracts";
+import type { CredentialManager } from "@xmtp/signet-contracts";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ export interface HttpServerConfig {
 /** Dependencies required to serve HTTP admin and status routes. */
 export interface HttpServerDeps {
   readonly dispatcher: AdminDispatcher;
-  readonly sessionManager: SessionManager;
+  readonly credentialManager: CredentialManager;
   readonly verifyAdminJwt: (
     token: string,
   ) => Promise<Result<void, SignetError>>;
@@ -159,58 +159,48 @@ export function createHttpServer(
     );
   }
 
-  async function handleSessionRoute(
+  async function handleCredentialRoute(
     req: Request,
     method: string,
   ): Promise<Response> {
     const token = extractBearerToken(req);
     if (token === null) {
-      return errorResponse("auth", "Missing session token", null);
+      return errorResponse("auth", "Missing credential token", null);
     }
 
-    // Verify the session token is valid
-    const sessionResult = await deps.sessionManager.lookupByToken(token);
-    if (!sessionResult.isOk()) {
-      return errorResponse("auth", "Invalid session token", null);
+    // Verify the credential token is valid
+    const credentialResult = await deps.credentialManager.lookupByToken(token);
+    if (!credentialResult.isOk()) {
+      return errorResponse("auth", "Invalid credential token", null);
     }
 
-    const session = sessionResult.value;
+    const credential = credentialResult.value;
 
-    // Accept both "session.info" and "info" styles for compatibility
-    // with the dot-prefixed convention and the bare request-type convention
-    const bareMethod = method.startsWith("session.")
-      ? method.slice("session.".length)
+    // Accept both "credential.info" and bare "info" on the credential route.
+    const bareMethod = method.startsWith("credential.")
+      ? method.slice("credential.".length)
       : method;
 
     switch (bareMethod) {
       case "info": {
         return successResponse({
-          sessionId: session.sessionId,
-          agentInboxId: session.agentInboxId,
-          state: session.state,
-          view: session.view,
-          grant: session.grant,
-          issuedAt: session.issuedAt,
-          expiresAt: session.expiresAt,
+          credentialId: credential.id,
+          operatorId: credential.config.operatorId,
+          status: credential.status,
+          config: credential.config,
+          issuedAt: credential.issuedAt,
+          expiresAt: credential.expiresAt,
         });
-      }
-
-      case "heartbeat": {
-        const hbResult = await deps.sessionManager.heartbeat(session.sessionId);
-        if (!hbResult.isOk()) {
-          return errorResponse(
-            hbResult.error.category,
-            hbResult.error.message,
-            null,
-          );
-        }
-        return successResponse({ ok: true });
       }
 
       default:
-        return errorResponse("not_found", `Unknown session method: ${method}`, {
-          method,
-        });
+        return errorResponse(
+          "not_found",
+          `Unknown credential method: ${method}`,
+          {
+            method,
+          },
+        );
     }
   }
 
@@ -230,11 +220,11 @@ export function createHttpServer(
       return handleAdminRoute(req, adminMethod);
     }
 
-    // Session routes: POST /v1/session/:method
-    const sessionMatch = path.match(/^\/v1\/session\/(.+)$/);
-    const sessionMethod = sessionMatch?.[1];
-    if (sessionMethod !== undefined && req.method === "POST") {
-      return handleSessionRoute(req, sessionMethod);
+    // Credential routes: POST /v1/credential/:method
+    const credentialMatch = path.match(/^\/v1\/credential\/(.+)$/);
+    const credentialMethod = credentialMatch?.[1];
+    if (credentialMethod !== undefined && req.method === "POST") {
+      return handleCredentialRoute(req, credentialMethod);
     }
 
     return errorResponse(

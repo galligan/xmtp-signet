@@ -41,14 +41,14 @@ describe("JsonRpcRequestSchema", () => {
     const result = JsonRpcRequestSchema.safeParse({
       jsonrpc: "2.0",
       id: 1,
-      method: "session.list",
+      method: "credential.list",
       params: { limit: 10 },
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.jsonrpc).toBe("2.0");
       expect(result.data.id).toBe(1);
-      expect(result.data.method).toBe("session.list");
+      expect(result.data.method).toBe("credential.list");
       expect(result.data.params).toEqual({ limit: 10 });
     }
   });
@@ -57,7 +57,7 @@ describe("JsonRpcRequestSchema", () => {
     const result = JsonRpcRequestSchema.safeParse({
       jsonrpc: "2.0",
       id: "abc-123",
-      method: "session.list",
+      method: "credential.list",
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -69,7 +69,7 @@ describe("JsonRpcRequestSchema", () => {
     const result = JsonRpcRequestSchema.safeParse({
       jsonrpc: "2.0",
       id: 1,
-      method: "session.list",
+      method: "credential.list",
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -80,7 +80,7 @@ describe("JsonRpcRequestSchema", () => {
   test("rejects missing jsonrpc version", () => {
     const result = JsonRpcRequestSchema.safeParse({
       id: 1,
-      method: "session.list",
+      method: "credential.list",
     });
     expect(result.success).toBe(false);
   });
@@ -89,7 +89,7 @@ describe("JsonRpcRequestSchema", () => {
     const result = JsonRpcRequestSchema.safeParse({
       jsonrpc: "1.0",
       id: 1,
-      method: "session.list",
+      method: "credential.list",
     });
     expect(result.success).toBe(false);
   });

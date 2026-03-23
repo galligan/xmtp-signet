@@ -204,12 +204,12 @@ describe("AdminSocket round-trip", () => {
 
     let callCount = 0;
     const spec = makeTestSpec(
-      "session.list",
+      "credential.list",
       async () => {
         callCount++;
         return Result.ok({ count: callCount });
       },
-      "session.list",
+      "credential.list",
     );
     registry.register(spec);
     const dispatcher = createAdminDispatcher(registry);
@@ -228,13 +228,13 @@ describe("AdminSocket round-trip", () => {
     client = createAdminClient(socketPath);
     await client.connect("valid-jwt-token");
 
-    const r1 = await client.request<{ count: number }>("session.list");
+    const r1 = await client.request<{ count: number }>("credential.list");
     expect(r1.isOk()).toBe(true);
     if (r1.isOk()) {
       expect(r1.value.count).toBe(1);
     }
 
-    const r2 = await client.request<{ count: number }>("session.list");
+    const r2 = await client.request<{ count: number }>("credential.list");
     expect(r2.isOk()).toBe(true);
     if (r2.isOk()) {
       expect(r2.value.count).toBe(2);

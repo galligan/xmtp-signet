@@ -7,7 +7,7 @@ export type DaemonStatus = {
   coreState: CoreState;
   pid: number;
   uptime: number;
-  activeSessions: number;
+  activeCredentials: number;
   activeConnections: number;
   xmtpEnv: "local" | "dev" | "production";
   identityMode: "per-group" | "shared";
@@ -40,11 +40,11 @@ export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
       .describe("Current signet core state"),
     pid: z.number().int().positive().describe("Daemon process ID"),
     uptime: z.number().nonnegative().describe("Uptime in seconds"),
-    activeSessions: z
+    activeCredentials: z
       .number()
       .int()
       .nonnegative()
-      .describe("Number of active sessions"),
+      .describe("Number of active credentials"),
     activeConnections: z
       .number()
       .int()

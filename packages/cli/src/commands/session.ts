@@ -1,15 +1,13 @@
 import { Command } from "commander";
 import { Result } from "better-result";
-import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { CredentialRecordType } from "@xmtp/signet-schemas";
 import {
-  GrantConfig,
-  SessionConfig,
-  SessionRevocationReason,
+  CredentialConfig,
+  CredentialRevocationReason,
   ValidationError,
-  ViewConfig,
   type SignetError,
-  type IssuedSession,
-  type SessionRevocationReason as SessionRevocationReasonType,
+  type IssuedCredentialType,
+  type CredentialRevocationReason as CredentialRevocationReasonType,
 } from "@xmtp/signet-schemas";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
@@ -19,7 +17,7 @@ import {
   type WithDaemonClient,
 } from "./daemon-client.js";
 
-/** Dependencies for session management CLI commands. */
+/** Dependencies for credential management CLI commands. */
 export interface SessionCommandDeps {
   readonly withDaemonClient: WithDaemonClient;
   readonly writeStdout: (message: string) => void;
@@ -41,26 +39,26 @@ const defaultDeps: SessionCommandDeps = {
 };
 
 /**
- * Session lifecycle commands. All require daemon and admin auth.
+ * Credential lifecycle commands. All require daemon and admin auth.
  *
- * - list: Display active sessions
- * - inspect: Show full session details
- * - revoke: Immediately revoke a session
- * - issue: Create a new session with view/grant configuration
+ * - list: Display active credentials
+ * - inspect: Show full credential details
+ * - revoke: Immediately revoke a credential
+ * - issue: Create a new credential with scope configuration
  */
 export function createSessionCommands(
   deps: Partial<SessionCommandDeps> = {},
 ): Command {
   const resolvedDeps: SessionCommandDeps = { ...defaultDeps, ...deps };
   const cmd = new Command("session").description(
-    "Session lifecycle management",
+    "Credential lifecycle management",
   );
 
   cmd
     .command("list")
-    .description("List active sessions")
+    .description("List active credentials")
     .option("--config <path>", "Path to config file")
-    .option("--agent <inboxId>", "Filter sessions by agent inbox ID")
+    .option("--operator <operatorId>", "Filter credentials by operator ID")
     .option("--json", "JSON output")
     .action(async (options) => {
       const json = options.json === true;
@@ -70,10 +68,10 @@ export function createSessionCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<readonly SessionRecord[]>(
-            "session.list",
-            typeof options.agent === "string"
-              ? { agentInboxId: options.agent }
+          client.request<readonly CredentialRecordType[]>(
+            "credential.list",
+            typeof options.operator === "string"
+              ? { operatorId: options.operator }
               : undefined,
           ),
       );
@@ -83,14 +81,16 @@ export function createSessionCommands(
         return;
       }
 
-      const output = json ? result.value : result.value.map(summarizeSession);
+      const output = json
+        ? result.value
+        : result.value.map(summarizeCredential);
       resolvedDeps.writeStdout(formatOutput(output, { json }) + "\n");
     });
 
   cmd
     .command("inspect")
-    .description("Show full session details")
-    .argument("<id>", "Session ID")
+    .description("Show full credential details")
+    .argument("<id>", "Credential ID")
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(async (id, options) => {
@@ -100,7 +100,9 @@ export function createSessionCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<SessionRecord>("session.inspect", { sessionId: id }),
+          client.request<CredentialRecordType>("credential.lookup", {
+            credentialId: id,
+          }),
       );
 
       if (result.isErr()) {
@@ -115,8 +117,8 @@ export function createSessionCommands(
 
   cmd
     .command("revoke")
-    .description("Revoke a session")
-    .argument("<id>", "Session ID")
+    .description("Revoke a credential")
+    .argument("<id>", "Credential ID")
     .option("--config <path>", "Path to config file")
     .option("--reason <reason>", "Revocation reason", "owner-initiated")
     .option("--json", "JSON output")
@@ -133,8 +135,8 @@ export function createSessionCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<{ revoked: true }>("session.revoke", {
-            sessionId: id,
+          client.request<{ revoked: true }>("credential.revoke", {
+            credentialId: id,
             reason: reasonResult.value,
           }),
       );
@@ -147,7 +149,7 @@ export function createSessionCommands(
       resolvedDeps.writeStdout(
         formatOutput(
           {
-            sessionId: id,
+            credentialId: id,
             reason: reasonResult.value,
             ...result.value,
           },
@@ -158,20 +160,21 @@ export function createSessionCommands(
 
   cmd
     .command("issue")
-    .description("Issue a new session")
+    .description("Issue a new credential")
     .option("--config <path>", "Path to config file")
-    .requiredOption("--agent <inboxId>", "Target agent inbox ID")
-    .option("--ttl <seconds>", "Session TTL in seconds")
-    .requiredOption("--view <json>", "View configuration (JSON or @filepath)")
-    .requiredOption("--grant <json>", "Grant configuration (JSON or @filepath)")
+    .requiredOption("--operator <operatorId>", "Target operator ID")
+    .option("--ttl <seconds>", "Credential TTL in seconds")
+    .requiredOption(
+      "--credential <json>",
+      "Credential configuration (JSON or @filepath)",
+    )
     .option("--json", "JSON output")
     .action(async (options) => {
       const json = options.json === true;
-      const configResult = await buildSessionConfig({
-        agent: String(options.agent),
+      const configResult = await buildCredentialConfig({
+        operator: String(options.operator),
         ttl: typeof options.ttl === "string" ? options.ttl : undefined,
-        view: String(options.view),
-        grant: String(options.grant),
+        credential: String(options.credential),
       });
       if (configResult.isErr()) {
         writeError(resolvedDeps, configResult.error, json);
@@ -184,7 +187,10 @@ export function createSessionCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<IssuedSession>("session.issue", configResult.value),
+          client.request<IssuedCredentialType>(
+            "credential.issue",
+            configResult.value,
+          ),
       );
 
       if (result.isErr()) {
@@ -196,7 +202,7 @@ export function createSessionCommands(
         ? result.value
         : {
             token: result.value.token,
-            ...result.value.session,
+            ...result.value.credential,
           };
       resolvedDeps.writeStdout(formatOutput(output, { json }) + "\n");
     });
@@ -204,49 +210,54 @@ export function createSessionCommands(
   return cmd;
 }
 
-function summarizeSession(session: SessionRecord): Record<string, unknown> {
+function summarizeCredential(
+  credential: CredentialRecordType,
+): Record<string, unknown> {
   return {
-    sessionId: session.sessionId,
-    agentInboxId: session.agentInboxId,
-    state: session.state,
-    issuedAt: session.issuedAt,
-    expiresAt: session.expiresAt,
+    credentialId: credential.id,
+    operatorId: credential.config.operatorId,
+    status: credential.status,
+    issuedAt: credential.issuedAt,
+    expiresAt: credential.expiresAt,
   };
 }
 
-async function buildSessionConfig(options: {
-  agent: string;
+async function buildCredentialConfig(options: {
+  operator: string;
   ttl?: string | undefined;
-  view: string;
-  grant: string;
-}): Promise<Result<typeof SessionConfig._type, SignetError>> {
+  credential: string;
+}): Promise<Result<typeof CredentialConfig._type, SignetError>> {
   const ttlResult = parseTtl(options.ttl);
   if (ttlResult.isErr()) {
     return ttlResult;
   }
 
-  const [viewResult, grantResult] = await Promise.all([
-    parseJsonInput(options.view, "view", ViewConfig),
-    parseJsonInput(options.grant, "grant", GrantConfig),
-  ]);
-  if (viewResult.isErr()) {
-    return viewResult;
-  }
-  if (grantResult.isErr()) {
-    return grantResult;
+  const credResult = await parseJsonInput(
+    options.credential,
+    "credential",
+    CredentialConfig,
+  );
+  if (credResult.isErr()) {
+    return credResult;
   }
 
-  const parsedConfig = SessionConfig.safeParse({
-    agentInboxId: options.agent,
-    view: viewResult.value,
-    grant: grantResult.value,
+  const parsedConfig = CredentialConfig.safeParse({
+    operatorId: options.operator,
+    chatIds: credResult.value.chatIds,
+    policyId: credResult.value.policyId,
+    allow: credResult.value.allow,
+    deny: credResult.value.deny,
     ...(ttlResult.value !== undefined ? { ttlSeconds: ttlResult.value } : {}),
   });
   if (!parsedConfig.success) {
     return Result.err(
-      ValidationError.create("session", "Session config did not validate", {
-        issues: parsedConfig.error.issues,
-      }),
+      ValidationError.create(
+        "credential",
+        "Credential config did not validate",
+        {
+          issues: parsedConfig.error.issues,
+        },
+      ),
     );
   }
 
@@ -255,11 +266,11 @@ async function buildSessionConfig(options: {
 
 function parseReason(
   value: unknown,
-): Result<SessionRevocationReasonType, SignetError> {
-  const parsed = SessionRevocationReason.safeParse(value);
+): Result<CredentialRevocationReasonType, SignetError> {
+  const parsed = CredentialRevocationReason.safeParse(value);
   if (!parsed.success) {
     return Result.err(
-      ValidationError.create("reason", "Invalid session revocation reason", {
+      ValidationError.create("reason", "Invalid credential revocation reason", {
         issues: parsed.error.issues,
       }),
     );

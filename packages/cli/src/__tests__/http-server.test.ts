@@ -32,8 +32,9 @@ function makeDispatcher(overrides?: Partial<AdminDispatcher>): AdminDispatcher {
 function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   return {
     dispatcher: overrides?.dispatcher ?? makeDispatcher(),
-    sessionManager:
-      overrides?.sessionManager ?? ({} as HttpServerDeps["sessionManager"]),
+    credentialManager:
+      overrides?.credentialManager ??
+      ({} as HttpServerDeps["credentialManager"]),
     verifyAdminJwt:
       overrides?.verifyAdminJwt ?? (async () => Result.ok(undefined)),
     status: overrides?.status ?? (() => ({ state: "running", pid: 1 })),

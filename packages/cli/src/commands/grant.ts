@@ -1,19 +1,21 @@
 import { Command } from "commander";
 
 /**
- * Grant management commands. All require daemon and admin auth.
+ * Scope management commands. All require daemon and admin auth.
  *
- * - list: List grants across active sessions
- * - inspect: Show full grant details
- * - revoke: Revoke a specific grant
+ * In v1, grants are replaced by permission scopes on credentials.
+ * These commands will be restructured in Phase 6 (xs binary).
+ *
+ * - list: List scopes across active credentials
+ * - inspect: Show full scope details for a credential
  */
 export function createGrantCommands(): Command {
-  const cmd = new Command("grant").description("Grant management");
+  const cmd = new Command("grant").description("Scope management");
 
   cmd
     .command("list")
-    .description("List grants across active sessions")
-    .option("--session <id>", "Filter by session ID")
+    .description("List scopes across active credentials")
+    .option("--credential <id>", "Filter by credential ID")
     .option("--json", "JSON output")
     .action(async (_options) => {
       // Routed via AdminClient
@@ -21,17 +23,8 @@ export function createGrantCommands(): Command {
 
   cmd
     .command("inspect")
-    .description("Show full grant details")
-    .argument("<id>", "Grant ID")
-    .option("--json", "JSON output")
-    .action(async (_id, _options) => {
-      // Routed via AdminClient
-    });
-
-  cmd
-    .command("revoke")
-    .description("Revoke a grant")
-    .argument("<id>", "Grant ID")
+    .description("Show full scope details for a credential")
+    .argument("<id>", "Credential ID")
     .option("--json", "JSON output")
     .action(async (_id, _options) => {
       // Routed via AdminClient

@@ -110,7 +110,7 @@ function makeMockDeps(tracker: {
         issueSessionKey: async () =>
           Result.ok({
             keyId: "sk",
-            sessionId: "s",
+            credentialId: "cred_1a2b3c4dfeedbabe",
             fingerprint: "fp",
             publicKeyHex: "pub",
             expiresAt: new Date().toISOString(),
@@ -152,18 +152,23 @@ function makeMockDeps(tracker: {
           Result.err(InternalError.create("not implemented")),
       };
     },
-    createSessionManager: () => {
-      tracker.record("sessionManager.create");
+    createCredentialManager: () => {
+      tracker.record("credentialManager.create");
       return {
         issue: async () =>
           Result.ok({
             token: "token",
-            session: {
-              sessionId: "s1",
-              agentInboxId: "a1",
-              sessionKeyFingerprint: "fp",
+            credential: {
+              id: "cred_1",
+              config: {
+                operatorId: "op_1",
+                chatIds: [],
+              },
+              inboxIds: [],
+              status: "active",
               issuedAt: new Date().toISOString(),
               expiresAt: new Date().toISOString(),
+              issuedBy: "op_1",
             },
           }),
         list: async () => Result.ok([]),
@@ -171,9 +176,8 @@ function makeMockDeps(tracker: {
         lookupByToken: async () =>
           Result.err(InternalError.create("not found")),
         revoke: async () => Result.ok(undefined),
-        heartbeat: async () => Result.ok(undefined),
-        isActive: async () => Result.ok(false),
-        getRevealState: () => Result.err(InternalError.create("not found")),
+        update: async () => Result.err(InternalError.create("not found")),
+        renew: async () => Result.err(InternalError.create("not found")),
       };
     },
     createSealManager: () => {
@@ -250,7 +254,7 @@ describe("createSignetRuntime", () => {
     expect(runtime.state).toBe("created");
     expect(runtime.config).toBe(config);
     expect(runtime.core).toBeDefined();
-    expect(runtime.sessionManager).toBeDefined();
+    expect(runtime.credentialManager).toBeDefined();
     expect(runtime.sealManager).toBeDefined();
     expect(runtime.keyManager).toBeDefined();
     expect(runtime.wsServer).toBeDefined();
@@ -301,7 +305,7 @@ describe("createSignetRuntime", () => {
     expect(adminIdx).toBeGreaterThan(wsIdx);
   });
 
-  test("registers session and signet actions before admin server is created", async () => {
+  test("registers credential and signet actions before admin server is created", async () => {
     const tracker = createCallTracker();
     const config = makeConfig(tempDir);
     const deps = makeMockDeps(tracker);
@@ -312,10 +316,10 @@ describe("createSignetRuntime", () => {
 
     const dispatcher = deps._dispatcher();
     expect(dispatcher).toBeDefined();
-    expect(dispatcher?.hasMethod("session.issue")).toBe(true);
-    expect(dispatcher?.hasMethod("session.list")).toBe(true);
-    expect(dispatcher?.hasMethod("session.inspect")).toBe(true);
-    expect(dispatcher?.hasMethod("session.revoke")).toBe(true);
+    expect(dispatcher?.hasMethod("credential.issue")).toBe(true);
+    expect(dispatcher?.hasMethod("credential.list")).toBe(true);
+    expect(dispatcher?.hasMethod("credential.lookup")).toBe(true);
+    expect(dispatcher?.hasMethod("credential.revoke")).toBe(true);
     expect(dispatcher?.hasMethod("signet.status")).toBe(true);
     expect(dispatcher?.hasMethod("signet.stop")).toBe(true);
   });
