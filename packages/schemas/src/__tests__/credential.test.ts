@@ -63,7 +63,7 @@ describe("CredentialConfig", () => {
     expect(result.success).toBe(true);
   });
 
-  it("leaves ttlSeconds unset for runtime defaulting", () => {
+  it("accepts config without ttlSeconds for runtime defaulting", () => {
     const result = CredentialConfig.safeParse({
       operatorId: "op_abcd1234feedbabe",
       chatIds: ["conv_abcd1234feedbabe"],

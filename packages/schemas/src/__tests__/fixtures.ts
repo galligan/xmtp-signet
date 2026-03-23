@@ -1,102 +1,112 @@
-import type { Seal } from "../seal.js";
-import type { ViewConfig } from "../view.js";
-import type { GrantConfig } from "../grant.js";
-import type { IssuedSession, SessionToken } from "../session.js";
+import type {
+  CredentialConfigType,
+  CredentialRecordType,
+  CredentialTokenType,
+  IssuedCredentialType,
+} from "../credential.js";
+import type {
+  MessageSealBindingType,
+  SealEnvelopeType,
+  SealPayloadType,
+} from "../seal.js";
 
-/** Valid seal fixture for testing. */
-export function createTestSeal(overrides?: Partial<Seal>): Seal {
+/** Valid credential config fixture. */
+export function createTestCredentialConfig(
+  overrides: Partial<CredentialConfigType> = {},
+): CredentialConfigType {
   return {
-    sealId: "test-att-001",
-    previousSealId: null,
-    agentInboxId: "test-agent-inbox",
-    ownerInboxId: "test-owner-inbox",
-    groupId: "test-group-1",
-    threadScope: null,
-    viewMode: "full",
-    contentTypes: ["xmtp.org/text:1.0"],
-    grantedOps: ["send", "reply"],
-    toolScopes: [],
-    inferenceMode: "external",
-    inferenceProviders: ["openai"],
-    contentEgressScope: "full-messages",
-    retentionAtProvider: "session",
-    hostingMode: "managed",
-    trustTier: "unverified",
-    buildProvenanceRef: null,
-    verifierStatementRef: null,
-    sessionKeyFingerprint: null,
-    policyHash: "test-policy-hash",
-    heartbeatInterval: 30,
+    operatorId: "op_12345678feedbabe",
+    chatIds: ["conv_12345678feedbabe"],
+    allow: ["send", "reply"],
+    deny: [],
+    ttlSeconds: 3600,
+    ...overrides,
+  };
+}
+
+/** Valid persisted credential record fixture. */
+export function createTestCredentialRecord(
+  overrides: Partial<CredentialRecordType> = {},
+): CredentialRecordType {
+  return {
+    id: "cred_12345678feedbabe",
+    config: createTestCredentialConfig(),
+    inboxIds: ["inbox_12345678feedbabe"],
+    status: "active",
     issuedAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-01T01:00:00Z",
-    revocationRules: {
-      maxTtlSeconds: 3600,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: false,
-    },
-    issuer: "test-signet-identity",
+    issuedBy: "op_87654321feedbabe",
     ...overrides,
   };
 }
 
-/** Valid view config fixture. */
-export function createTestViewConfig(
-  overrides?: Partial<ViewConfig>,
-): ViewConfig {
+/** Valid credential token fixture. */
+export function createTestCredentialToken(
+  overrides: Partial<CredentialTokenType> = {},
+): CredentialTokenType {
   return {
-    mode: "full",
-    threadScopes: [{ groupId: "test-group-1", threadId: null }],
-    contentTypes: ["xmtp.org/text:1.0"],
-    ...overrides,
-  };
-}
-
-/** Valid grant config fixture. */
-export function createTestGrantConfig(
-  overrides?: Partial<GrantConfig>,
-): GrantConfig {
-  return {
-    messaging: { send: true, reply: true, react: true, draftOnly: false },
-    groupManagement: {
-      addMembers: false,
-      removeMembers: false,
-      updateMetadata: false,
-      inviteUsers: false,
-    },
-    tools: { scopes: [] },
-    egress: {
-      storeExcerpts: false,
-      useForMemory: false,
-      forwardToProviders: false,
-      quoteRevealed: false,
-      summarize: false,
-    },
-    ...overrides,
-  };
-}
-
-/** Valid session token fixture. */
-export function createTestSessionToken(
-  overrides?: Partial<SessionToken>,
-): SessionToken {
-  return {
-    sessionId: "test-session-001",
-    agentInboxId: "test-agent-inbox",
-    sessionKeyFingerprint: "test-fingerprint",
+    credentialId: "cred_12345678feedbabe",
+    operatorId: "op_12345678feedbabe",
+    fingerprint: "fp_test_credential",
     issuedAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-01T01:00:00Z",
     ...overrides,
   };
 }
 
-/** Valid issued session fixture. */
-export function createTestIssuedSession(
-  overrides?: Partial<IssuedSession>,
-): IssuedSession {
+/** Valid issued credential fixture. */
+export function createTestIssuedCredential(
+  overrides: Partial<IssuedCredentialType> = {},
+): IssuedCredentialType {
   return {
     token: "test-bearer-token",
-    session: createTestSessionToken(),
+    credential: createTestCredentialRecord(),
+    ...overrides,
+  };
+}
+
+/** Valid seal payload fixture. */
+export function createTestSealPayload(
+  overrides: Partial<SealPayloadType> = {},
+): SealPayloadType {
+  return {
+    sealId: "seal_12345678feedbabe",
+    credentialId: "cred_12345678feedbabe",
+    operatorId: "op_12345678feedbabe",
+    chatId: "conv_12345678feedbabe",
+    scopeMode: "per-chat",
+    permissions: {
+      allow: ["send", "reply"],
+      deny: [],
+    },
+    issuedAt: "2024-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** Valid message-seal binding fixture. */
+export function createTestMessageSealBinding(
+  overrides: Partial<MessageSealBindingType> = {},
+): MessageSealBindingType {
+  return {
+    sealRef: "seal_12345678feedbabe",
+    sealSignature: "dGVzdC1zaWduYXR1cmU=",
+    ...overrides,
+  };
+}
+
+/** Valid seal envelope fixture. */
+export function createTestSealEnvelope(
+  overrides: Partial<SealEnvelopeType> = {},
+): SealEnvelopeType {
+  return {
+    chain: {
+      current: createTestSealPayload(),
+      delta: { added: [], removed: [], changed: [] },
+    },
+    signature: "dGVzdC1zZWFsLXNpZw==",
+    keyId: "key_12345678feedbabe",
+    algorithm: "Ed25519",
     ...overrides,
   };
 }

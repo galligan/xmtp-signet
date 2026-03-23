@@ -97,7 +97,7 @@ export const CredentialRecord: z.ZodObject<{
   })
   .describe("Persisted credential record");
 
-/** Inferred type for {@link CredentialRecord}. */
+/** Inferred type for a persisted credential record. */
 export type CredentialRecordType = z.infer<typeof CredentialRecord>;
 
 /**
@@ -109,22 +109,20 @@ export const CredentialToken: z.ZodObject<{
   fingerprint: z.ZodString;
   issuedAt: z.ZodString;
   expiresAt: z.ZodString;
-}> = z
-  .object({
-    /** Credential this token belongs to. */
-    credentialId: CredentialId,
-    /** Operator this token was issued for. */
-    operatorId: OperatorId,
-    /** Token fingerprint for verification. */
-    fingerprint: z.string(),
-    /** ISO 8601 timestamp when the token was issued. */
-    issuedAt: z.string().datetime(),
-    /** ISO 8601 timestamp when the token expires. */
-    expiresAt: z.string().datetime(),
-  })
-  .describe("Credential token metadata for verification");
+}> = z.object({
+  /** Credential this token belongs to. */
+  credentialId: CredentialId,
+  /** Operator this token was issued for. */
+  operatorId: OperatorId,
+  /** Token fingerprint for verification. */
+  fingerprint: z.string(),
+  /** ISO 8601 timestamp when the token was issued. */
+  issuedAt: z.string().datetime(),
+  /** ISO 8601 timestamp when the token expires. */
+  expiresAt: z.string().datetime(),
+});
 
-/** Inferred type for {@link CredentialToken}. */
+/** Inferred type for credential token metadata. */
 export type CredentialTokenType = z.infer<typeof CredentialToken>;
 
 /**
@@ -134,14 +132,12 @@ export type CredentialTokenType = z.infer<typeof CredentialToken>;
 export const IssuedCredential: z.ZodObject<{
   token: z.ZodString;
   credential: typeof CredentialRecord;
-}> = z
-  .object({
-    /** The bearer token, shown only at issuance. */
-    token: z.string().min(1),
-    /** The credential record. */
-    credential: CredentialRecord,
-  })
-  .describe("Issued credential with bearer token");
+}> = z.object({
+  /** The bearer token, shown only at issuance. */
+  token: z.string().min(1),
+  /** The credential record. */
+  credential: CredentialRecord,
+});
 
-/** Inferred type for {@link IssuedCredential}. */
+/** Inferred type for an issued credential with bearer token. */
 export type IssuedCredentialType = z.infer<typeof IssuedCredential>;
