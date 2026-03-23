@@ -1,7 +1,11 @@
 import { describe, test, expect } from "bun:test";
 import { projectMessage } from "../pipeline/project-message.js";
-import type { ContentTypeId, ViewConfig } from "@xmtp/signet-schemas";
-import { createTestRawMessage, createPassthroughView } from "./fixtures.js";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
+import {
+  createTestRawMessage,
+  createFullScopes,
+  createChatIds,
+} from "./fixtures.js";
 
 describe("projectMessage", () => {
   const baseAllowlist = new Set([
@@ -9,10 +13,17 @@ describe("projectMessage", () => {
     "xmtp.org/reaction:1.0" as ContentTypeId,
   ]);
 
-  test("emits message when all stages pass with full mode", () => {
+  test("emits message when all stages pass with read-messages scope", () => {
     const message = createTestRawMessage();
-    const view = createPassthroughView("group-1");
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const scopes = createFullScopes();
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {
@@ -22,10 +33,17 @@ describe("projectMessage", () => {
     }
   });
 
-  test("drops message when group is out of scope", () => {
+  test("drops message when chat is out of scope", () => {
     const message = createTestRawMessage({ groupId: "group-other" });
-    const view = createPassthroughView("group-1");
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const scopes = createFullScopes();
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("drop");
   });
@@ -34,33 +52,44 @@ describe("projectMessage", () => {
     const message = createTestRawMessage({
       contentType: "xmtp.org/readReceipt:1.0" as ContentTypeId,
     });
-    const view = createPassthroughView("group-1");
     const allowlist = new Set(["xmtp.org/text:1.0" as ContentTypeId]);
-    const result = projectMessage(message, view, allowlist, false);
+    const result = projectMessage(
+      message,
+      createFullScopes(),
+      createChatIds("group-1"),
+      allowlist,
+      false,
+    );
 
     expect(result.action).toBe("drop");
   });
 
-  test("drops message when visibility resolves to hidden (reveal-only, no reveal)", () => {
+  test("drops message when visibility resolves to hidden (no read-messages, no reveal)", () => {
     const message = createTestRawMessage();
-    const view: ViewConfig = {
-      mode: "reveal-only",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const scopes = new Set<string>(); // no read-messages
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("drop");
   });
 
-  test("emits revealed message when reveal-only mode with reveal", () => {
+  test("emits revealed message when no read-messages but has reveal", () => {
     const message = createTestRawMessage();
-    const view: ViewConfig = {
-      mode: "reveal-only",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, true);
+    const scopes = new Set<string>(); // no read-messages
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      true,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {
@@ -69,30 +98,48 @@ describe("projectMessage", () => {
     }
   });
 
-  test("emits redacted message with null content in redacted mode", () => {
-    const message = createTestRawMessage();
-    const view: ViewConfig = {
-      mode: "redacted",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, false);
+  test("drops historical message when read-history scope is missing", () => {
+    const message = createTestRawMessage({ isHistorical: true });
+    const scopes = new Set(["read-messages"]); // has read-messages but NOT read-history
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
+
+    expect(result.action).toBe("drop");
+  });
+
+  test("emits historical message when read-history scope is present", () => {
+    const message = createTestRawMessage({ isHistorical: true });
+    const scopes = new Set(["read-messages", "read-history"]);
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {
-      expect(result.event.visibility).toBe("redacted");
-      expect(result.event.content).toBeNull();
+      expect(result.event.visibility).toBe("historical");
     }
   });
 
-  test("preserves metadata in redacted messages", () => {
+  test("preserves metadata in emitted events", () => {
     const message = createTestRawMessage();
-    const view: ViewConfig = {
-      mode: "redacted",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const result = projectMessage(
+      message,
+      createFullScopes(),
+      createChatIds("group-1"),
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {

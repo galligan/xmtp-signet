@@ -2,38 +2,38 @@ import { describe, test, expect } from "bun:test";
 import { validateSendReaction } from "../grant/validate-reaction.js";
 import { Result } from "better-result";
 import {
-  createFullGrant,
-  createDenyAllGrant,
-  createPassthroughView,
+  createFullScopes,
+  createEmptyScopes,
+  createChatIds,
 } from "./fixtures.js";
 
 describe("validateSendReaction", () => {
-  test("succeeds when messaging.react is true", () => {
+  test("succeeds when react scope is allowed and chat is in scope", () => {
     const result = validateSendReaction(
-      { groupId: "group-1", messageId: "msg-1" },
-      createFullGrant(),
-      createPassthroughView("group-1"),
+      { groupId: "group-1" },
+      createFullScopes(),
+      createChatIds("group-1"),
     );
     expect(Result.isOk(result)).toBe(true);
   });
 
-  test("returns GrantDeniedError when messaging.react is false", () => {
+  test("returns PermissionError when react scope is denied", () => {
     const result = validateSendReaction(
-      { groupId: "group-1", messageId: "msg-1" },
-      createDenyAllGrant(),
-      createPassthroughView("group-1"),
+      { groupId: "group-1" },
+      createEmptyScopes(),
+      createChatIds("group-1"),
     );
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error._tag).toBe("GrantDeniedError");
+      expect(result.error._tag).toBe("PermissionError");
     }
   });
 
-  test("returns PermissionError when group not in view", () => {
+  test("returns PermissionError when chat is not in scope", () => {
     const result = validateSendReaction(
-      { groupId: "group-other", messageId: "msg-1" },
-      createFullGrant(),
-      createPassthroughView("group-1"),
+      { groupId: "group-other" },
+      createFullScopes(),
+      createChatIds("group-1"),
     );
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {

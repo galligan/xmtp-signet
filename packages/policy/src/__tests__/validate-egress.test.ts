@@ -1,28 +1,28 @@
 import { describe, test, expect } from "bun:test";
 import { validateEgress } from "../grant/validate-egress.js";
 import { Result } from "better-result";
-import { createFullGrant, createDenyAllGrant } from "./fixtures.js";
+import { createFullScopes, createEmptyScopes } from "./fixtures.js";
 
 describe("validateEgress", () => {
-  const actions = [
-    "storeExcerpts",
-    "useForMemory",
-    "forwardToProviders",
-    "quoteRevealed",
+  const scopeNames = [
+    "store-excerpts",
+    "use-for-memory",
+    "forward-to-provider",
+    "quote-revealed",
     "summarize",
   ] as const;
 
-  for (const action of actions) {
-    test(`succeeds when egress.${action} is true`, () => {
-      const result = validateEgress(action, createFullGrant());
+  for (const scope of scopeNames) {
+    test(`succeeds when ${scope} scope is allowed`, () => {
+      const result = validateEgress(scope, createFullScopes());
       expect(Result.isOk(result)).toBe(true);
     });
 
-    test(`returns GrantDeniedError when egress.${action} is false`, () => {
-      const result = validateEgress(action, createDenyAllGrant());
+    test(`returns PermissionError when ${scope} scope is denied`, () => {
+      const result = validateEgress(scope, createEmptyScopes());
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
-        expect(result.error._tag).toBe("GrantDeniedError");
+        expect(result.error._tag).toBe("PermissionError");
       }
     });
   }

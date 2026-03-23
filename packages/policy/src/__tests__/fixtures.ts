@@ -1,8 +1,4 @@
-import type {
-  ContentTypeId,
-  ViewConfig,
-  GrantConfig,
-} from "@xmtp/signet-schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 import type { RevealStateSnapshot } from "../reveal-state.js";
 import type { RawMessage, SignetContentTypeConfig } from "../types.js";
 
@@ -23,75 +19,50 @@ export function createTestRawMessage(
   };
 }
 
-/** Creates a minimal ViewConfig that passes all messages. */
-export function createPassthroughView(groupId: string): ViewConfig {
-  return {
-    mode: "full",
-    threadScopes: [{ groupId, threadId: null }],
-    contentTypes: [
-      "xmtp.org/text:1.0" as ContentTypeId,
-      "xmtp.org/reaction:1.0" as ContentTypeId,
-      "xmtp.org/reply:1.0" as ContentTypeId,
-      "xmtp.org/readReceipt:1.0" as ContentTypeId,
-      "xmtp.org/groupUpdated:1.0" as ContentTypeId,
-    ],
-  };
+/** Creates a resolved scope set with all common scopes allowed. */
+export function createFullScopes(): ReadonlySet<string> {
+  return new Set([
+    "send",
+    "reply",
+    "react",
+    "read-receipt",
+    "attachment",
+    "add-member",
+    "remove-member",
+    "promote-admin",
+    "demote-admin",
+    "update-permission",
+    "update-name",
+    "update-description",
+    "update-image",
+    "invite",
+    "join",
+    "leave",
+    "create-group",
+    "create-dm",
+    "read-messages",
+    "read-history",
+    "list-members",
+    "list-conversations",
+    "read-permissions",
+    "stream-messages",
+    "stream-conversations",
+    "forward-to-provider",
+    "store-excerpts",
+    "use-for-memory",
+    "quote-revealed",
+    "summarize",
+  ]);
 }
 
-/** Creates a GrantConfig with all permissions enabled. */
-export function createFullGrant(): GrantConfig {
-  return {
-    messaging: {
-      send: true,
-      reply: true,
-      react: true,
-      draftOnly: false,
-    },
-    groupManagement: {
-      addMembers: true,
-      removeMembers: true,
-      updateMetadata: true,
-      inviteUsers: true,
-    },
-    tools: {
-      scopes: [],
-    },
-    egress: {
-      storeExcerpts: true,
-      useForMemory: true,
-      forwardToProviders: true,
-      quoteRevealed: true,
-      summarize: true,
-    },
-  };
+/** Creates a resolved scope set with no scopes allowed. */
+export function createEmptyScopes(): ReadonlySet<string> {
+  return new Set();
 }
 
-/** Creates a GrantConfig with all permissions denied. */
-export function createDenyAllGrant(): GrantConfig {
-  return {
-    messaging: {
-      send: false,
-      reply: false,
-      react: false,
-      draftOnly: false,
-    },
-    groupManagement: {
-      addMembers: false,
-      removeMembers: false,
-      updateMetadata: false,
-      inviteUsers: false,
-    },
-    tools: {
-      scopes: [],
-    },
-    egress: {
-      storeExcerpts: false,
-      useForMemory: false,
-      forwardToProviders: false,
-      quoteRevealed: false,
-      summarize: false,
-    },
-  };
+/** Creates a chatIds array containing the given chat IDs. */
+export function createChatIds(...chatIds: string[]): readonly string[] {
+  return chatIds;
 }
 
 /** Creates a signet content type config with all baseline types. */

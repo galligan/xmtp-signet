@@ -1,8 +1,4 @@
-import type {
-  ContentTypeId,
-  MessageEvent,
-  ViewConfig,
-} from "@xmtp/signet-schemas";
+import type { ContentTypeId, MessageEvent } from "@xmtp/signet-schemas";
 import type { RawMessage, ProjectionResult } from "../types.js";
 import { isInScope } from "./scope-filter.js";
 import { isContentTypeAllowed } from "./content-type-filter.js";
@@ -18,18 +14,20 @@ const DROP: ProjectionResult = { action: "drop" } as const;
  * Pure function. No side effects.
  *
  * @param message - The raw XMTP message, already decoded
- * @param view - The active view configuration
+ * @param scopes - The resolved permission scope set for the credential
+ * @param chatIds - The credential's scoped conversation IDs
  * @param effectiveAllowlist - Pre-computed content type allowlist
  * @param isRevealed - Whether this message has an active reveal grant
  */
 export function projectMessage(
   message: RawMessage,
-  view: ViewConfig,
+  scopes: ReadonlySet<string>,
+  chatIds: readonly string[],
   effectiveAllowlist: ReadonlySet<ContentTypeId>,
   isRevealed: boolean,
 ): ProjectionResult {
   // Stage 1: Scope filter
-  if (!isInScope(message, view.threadScopes)) {
+  if (!isInScope(message, chatIds)) {
     return DROP;
   }
 
@@ -39,18 +37,18 @@ export function projectMessage(
   }
 
   // Stage 3: Visibility resolver
-  const baseVisibility = resolveVisibility(view.mode, isRevealed);
+  const baseVisibility = resolveVisibility(scopes, isRevealed);
   if (baseVisibility === "hidden") {
     return DROP;
   }
 
-  // Stage 3b: Historical override — non-hidden messages during recovery
-  // are tagged as historical so the harness can treat them as context,
-  // not action triggers.
+  // Stage 3b: Historical override -- require read-history scope
+  if (message.isHistorical === true && !scopes.has("read-history")) {
+    return DROP;
+  }
+
   const visibility =
-    message.isHistorical === true &&
-    baseVisibility !== "redacted" &&
-    baseVisibility !== "revealed"
+    message.isHistorical === true && baseVisibility === "visible"
       ? ("historical" as const)
       : baseVisibility;
 

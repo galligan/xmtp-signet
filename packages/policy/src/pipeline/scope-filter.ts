@@ -1,27 +1,13 @@
-import type { ThreadScope } from "@xmtp/signet-schemas";
-
 /**
- * Stage 1: Scope filter. Returns true if the message falls within
- * any of the view's thread scopes.
+ * Stage 1: Scope filter. Returns true if the message's groupId
+ * is in the credential's scoped chat IDs.
  *
- * A scope with `threadId: null` matches all threads in that group.
- * A scope with a specific `threadId` matches only that thread.
+ * Thread-level scoping is removed in v1 -- scoping is per-chat
+ * via credentials.
  */
 export function isInScope(
-  message: Pick<
-    { groupId: string; threadId: string | null },
-    "groupId" | "threadId"
-  >,
-  scopes: readonly ThreadScope[],
+  message: { groupId: string },
+  chatIds: readonly string[],
 ): boolean {
-  return scopes.some((scope) => {
-    if (scope.groupId !== message.groupId) {
-      return false;
-    }
-    // null threadId in scope matches all threads in the group
-    if (scope.threadId === null) {
-      return true;
-    }
-    return scope.threadId === message.threadId;
-  });
+  return chatIds.includes(message.groupId);
 }

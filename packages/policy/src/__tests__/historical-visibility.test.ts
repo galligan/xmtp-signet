@@ -1,7 +1,11 @@
 import { describe, test, expect } from "bun:test";
 import { projectMessage } from "../pipeline/project-message.js";
-import type { ContentTypeId, ViewConfig } from "@xmtp/signet-schemas";
-import { createTestRawMessage, createPassthroughView } from "./fixtures.js";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
+import {
+  createTestRawMessage,
+  createFullScopes,
+  createChatIds,
+} from "./fixtures.js";
 
 describe("historical message visibility", () => {
   const baseAllowlist = new Set([
@@ -9,10 +13,17 @@ describe("historical message visibility", () => {
     "xmtp.org/reaction:1.0" as ContentTypeId,
   ]);
 
-  test("historical message gets visibility 'historical' in full mode", () => {
+  test("historical message gets visibility 'historical' with read-history", () => {
     const message = createTestRawMessage({ isHistorical: true });
-    const view = createPassthroughView("group-1");
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const scopes = new Set(["read-messages", "read-history"]);
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {
@@ -21,52 +32,30 @@ describe("historical message visibility", () => {
     }
   });
 
-  test("historical message gets visibility 'historical' in thread-only mode", () => {
+  test("historical message is dropped without read-history scope", () => {
     const message = createTestRawMessage({ isHistorical: true });
-    const view: ViewConfig = {
-      mode: "thread-only",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, false);
-
-    expect(result.action).toBe("emit");
-    if (result.action === "emit") {
-      expect(result.event.visibility).toBe("historical");
-    }
-  });
-
-  test("historical message in redacted mode keeps redacted visibility", () => {
-    const message = createTestRawMessage({ isHistorical: true });
-    const view: ViewConfig = {
-      mode: "redacted",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, false);
-
-    expect(result.action).toBe("emit");
-    if (result.action === "emit") {
-      expect(result.event.visibility).toBe("redacted");
-    }
-  });
-
-  test("historical message in reveal-only mode is still dropped without reveal", () => {
-    const message = createTestRawMessage({ isHistorical: true });
-    const view: ViewConfig = {
-      mode: "reveal-only",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0" as ContentTypeId],
-    };
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const scopes = new Set(["read-messages"]); // no read-history
+    const chatIds = createChatIds("group-1");
+    const result = projectMessage(
+      message,
+      scopes,
+      chatIds,
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("drop");
   });
 
   test("non-historical message preserves normal visibility", () => {
     const message = createTestRawMessage({ isHistorical: false });
-    const view = createPassthroughView("group-1");
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const result = projectMessage(
+      message,
+      createFullScopes(),
+      createChatIds("group-1"),
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {
@@ -76,8 +65,13 @@ describe("historical message visibility", () => {
 
   test("historical flag defaults to false when omitted", () => {
     const message = createTestRawMessage();
-    const view = createPassthroughView("group-1");
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const result = projectMessage(
+      message,
+      createFullScopes(),
+      createChatIds("group-1"),
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {
@@ -87,8 +81,14 @@ describe("historical message visibility", () => {
 
   test("historical message preserves metadata", () => {
     const message = createTestRawMessage({ isHistorical: true });
-    const view = createPassthroughView("group-1");
-    const result = projectMessage(message, view, baseAllowlist, false);
+    const scopes = new Set(["read-messages", "read-history"]);
+    const result = projectMessage(
+      message,
+      scopes,
+      createChatIds("group-1"),
+      baseAllowlist,
+      false,
+    );
 
     expect(result.action).toBe("emit");
     if (result.action === "emit") {

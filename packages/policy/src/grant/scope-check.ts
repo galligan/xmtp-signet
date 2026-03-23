@@ -1,20 +1,21 @@
 import { Result } from "better-result";
-import { type ViewConfig, PermissionError } from "@xmtp/signet-schemas";
+import { PermissionError } from "@xmtp/signet-schemas";
 
 /**
- * Checks that the request's groupId appears in at least one of the
- * view's threadScopes. An agent cannot act on groups it cannot see.
+ * Checks that the chat is in the credential's scoped conversations.
+ *
+ * Returns a PermissionError if the chatId is not found in the
+ * allowed chatIds list.
  */
-export function checkGroupInScope(
-  groupId: string,
-  view: ViewConfig,
+export function checkChatInScope(
+  chatId: string,
+  chatIds: readonly string[],
 ): Result<void, PermissionError> {
-  const inScope = view.threadScopes.some((scope) => scope.groupId === groupId);
-  if (!inScope) {
+  if (!chatIds.includes(chatId)) {
     return Result.err(
       PermissionError.create(
-        `Group '${groupId}' is not in the agent's view scopes`,
-        { groupId },
+        `Chat '${chatId}' is not in the credential's scoped conversations`,
+        { chatId },
       ),
     );
   }

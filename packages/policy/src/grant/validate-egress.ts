@@ -1,24 +1,20 @@
 import { Result } from "better-result";
-import { type GrantConfig, GrantDeniedError } from "@xmtp/signet-schemas";
-import type { GrantError } from "@xmtp/signet-contracts";
-
-type EgressAction =
-  | "storeExcerpts"
-  | "useForMemory"
-  | "forwardToProviders"
-  | "quoteRevealed"
-  | "summarize";
+import { PermissionError } from "@xmtp/signet-schemas";
 
 /**
- * Validates an egress action against the active grant.
+ * Validates an egress action against the resolved scope set.
+ *
+ * The scope parameter should be the v1 permission scope name (e.g.,
+ * "store-excerpts", "use-for-memory", "forward-to-provider").
  */
 export function validateEgress(
-  action: EgressAction,
-  grant: GrantConfig,
-): Result<void, GrantError> {
-  if (!grant.egress[action]) {
-    return Result.err(GrantDeniedError.create(action, `egress.${action}`));
+  scope: string,
+  scopes: ReadonlySet<string>,
+): Result<void, PermissionError> {
+  if (!scopes.has(scope)) {
+    return Result.err(
+      PermissionError.create(`Permission denied: ${scope}`, { scope }),
+    );
   }
-
   return Result.ok();
 }

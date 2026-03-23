@@ -1,37 +1,26 @@
 import { Result } from "better-result";
-import {
-  type GrantConfig,
-  type ViewConfig,
-  GrantDeniedError,
-} from "@xmtp/signet-schemas";
-import type { GrantError } from "@xmtp/signet-contracts";
-import { checkGroupInScope } from "./scope-check.js";
-
-type GroupManagementAction =
-  | "addMembers"
-  | "removeMembers"
-  | "updateMetadata"
-  | "inviteUsers";
+import { PermissionError } from "@xmtp/signet-schemas";
+import { checkChatInScope } from "./scope-check.js";
 
 /**
- * Validates a group management action against the active grant.
+ * Validates a group management action against the resolved scope set.
+ *
+ * The scope parameter should be the v1 permission scope name (e.g.,
+ * "add-member", "remove-member", "update-name", "invite").
  */
 export function validateGroupManagement(
-  action: GroupManagementAction,
+  scope: string,
   request: { groupId: string },
-  grant: GrantConfig,
-  view: ViewConfig,
-): Result<void, GrantError> {
-  const scopeResult = checkGroupInScope(request.groupId, view);
-  if (scopeResult.isErr()) {
-    return Result.err(scopeResult.error);
-  }
+  scopes: ReadonlySet<string>,
+  chatIds: readonly string[],
+): Result<void, PermissionError> {
+  const scopeResult = checkChatInScope(request.groupId, chatIds);
+  if (scopeResult.isErr()) return Result.err(scopeResult.error);
 
-  if (!grant.groupManagement[action]) {
+  if (!scopes.has(scope)) {
     return Result.err(
-      GrantDeniedError.create(action, `groupManagement.${action}`),
+      PermissionError.create(`Permission denied: ${scope}`, { scope }),
     );
   }
-
   return Result.ok();
 }

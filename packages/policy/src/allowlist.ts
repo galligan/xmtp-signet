@@ -1,26 +1,12 @@
 import { Result } from "better-result";
-import {
-  type ContentTypeId,
-  type ViewMode,
-  ValidationError,
-} from "@xmtp/signet-schemas";
+import { type ContentTypeId, ValidationError } from "@xmtp/signet-schemas";
 import type { SignetContentTypeConfig } from "./types.js";
-
-/**
- * Validates that a view mode is supported in the current version.
- * Removed modes are rejected by the schema before reaching policy code.
- */
-export function validateViewMode(
-  _mode: ViewMode,
-): Result<void, ValidationError> {
-  return Result.ok(undefined);
-}
 
 /**
  * Computes the effective allowlist as the intersection of
  * baseline, signet-level, and agent view-level allowlists.
  *
- * effectiveAllowlist = baseline ∩ signet ∩ agent
+ * effectiveAllowlist = baseline intersection signet intersection credential
  *
  * Returns ValidationError if the intersection is empty.
  */

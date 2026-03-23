@@ -1,27 +1,19 @@
-import type { MessageVisibility, ViewMode } from "@xmtp/signet-schemas";
+import type { MessageVisibility } from "@xmtp/signet-schemas";
 
 /**
  * Stage 3: Visibility resolver. Determines the MessageVisibility
- * for a message given the view mode and whether the message is revealed.
+ * for a message based on scopes and reveal state.
  *
- * | View Mode      | Default Visibility | With Active Reveal |
- * |----------------|--------------------|--------------------|
- * | full           | visible            | visible            |
- * | thread-only    | visible            | visible            |
- * | redacted       | redacted           | revealed           |
- * | reveal-only    | hidden             | revealed           |
+ * - Has "read-messages" scope -> "visible"
+ * - No "read-messages" + revealed -> "revealed"
+ * - No "read-messages" + not revealed -> "hidden" (dropped by caller)
  */
 export function resolveVisibility(
-  mode: ViewMode,
+  scopes: ReadonlySet<string>,
   isRevealed: boolean,
 ): MessageVisibility {
-  switch (mode) {
-    case "full":
-    case "thread-only":
-      return "visible";
-    case "redacted":
-      return isRevealed ? "revealed" : "redacted";
-    case "reveal-only":
-      return isRevealed ? "revealed" : "hidden";
+  if (scopes.has("read-messages")) {
+    return "visible";
   }
+  return isRevealed ? "revealed" : "hidden";
 }
