@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import type {
   AgentRevocationReason,
-  Seal,
+  SealPayloadType,
+  SealEnvelopeType,
   SignetError,
 } from "@xmtp/signet-schemas";
 import {
@@ -13,26 +14,31 @@ import type {
   SealManager,
   SealPublisher,
   SealStamper,
-  SealEnvelope,
+  PolicyDelta,
 } from "@xmtp/signet-contracts";
 import { isMaterialChange } from "@xmtp/signet-policy";
 import { buildSeal } from "./build.js";
 import type { SealInput } from "./build.js";
 import { generateSealId } from "./seal-id.js";
-import { computeInputDelta } from "./compute-delta.js";
-import { canonicalize } from "./canonicalize.js";
+import { computePayloadDelta } from "./compute-delta.js";
 
 /** Renewal threshold: renew when 75% of TTL has elapsed. */
 const RENEWAL_THRESHOLD = 0.75;
 
 /**
- * Resolves the seal input for a session+group pair.
- * The signet runtime provides this, translating session policy
+ * Default seal validity period: 24 hours in milliseconds.
+ * Used for needsRenewal when no expiresAt is available on the payload.
+ */
+const DEFAULT_TTL_MS = 86400 * 1000;
+
+/**
+ * Resolves the seal input for a credential+chat pair.
+ * The signet runtime provides this, translating credential policy
  * into the flat SealInput structure.
  */
 export type InputResolver = (
-  sessionId: string,
-  groupId: string,
+  credentialId: string,
+  chatId: string,
 ) => Promise<Result<SealInput, SignetError>>;
 
 /** Dependencies for the seal manager. */
@@ -44,12 +50,13 @@ export interface SealManagerDeps {
 
 /** SealManager that satisfies the contracts interface plus renewal check. */
 export interface SealManagerImpl extends SealManager {
-  needsRenewal(seal: Seal): boolean;
+  /** Check if a seal payload needs renewal based on issuedAt age. */
+  needsRenewal(payload: SealPayloadType): boolean;
 }
 
-/** Composite key for agent+group tracking. */
-function chainKey(agentInboxId: string, groupId: string): string {
-  return `${agentInboxId}:${groupId}`;
+/** Composite key for credential+chat tracking. */
+function chainKey(credentialId: string, chatId: string): string {
+  return `${credentialId}:${chatId}`;
 }
 
 /**
@@ -57,84 +64,100 @@ function chainKey(agentInboxId: string, groupId: string): string {
  * creation, signing, publishing, chaining, renewal, and revocation.
  */
 export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
-  // In-memory tracking of current seal per agent+group.
-  const currentSeals = new Map<string, SealEnvelope>();
+  // In-memory tracking of current seal per credential+chat.
+  const currentSeals = new Map<string, SealEnvelopeType>();
   // Track seals by ID for refresh/revoke lookups.
-  const sealsById = new Map<string, SealEnvelope>();
+  const sealsById = new Map<string, SealEnvelopeType>();
   // Track which inputs produced which seals (for refresh).
   const inputsBySealId = new Map<string, SealInput>();
-  // Track revoked agent+group pairs
+  // Track revoked credential+chat pairs
   const revokedPairs = new Set<string>();
 
   return {
     async issue(
-      sessionId: string,
-      groupId: string,
-    ): Promise<Result<SealEnvelope, SignetError>> {
-      // Resolve input from session+group
-      const inputResult = await deps.resolveInput(sessionId, groupId);
+      credentialId: string,
+      chatId: string,
+    ): Promise<Result<SealEnvelopeType, SignetError>> {
+      // Resolve input from credential+chat
+      const inputResult = await deps.resolveInput(credentialId, chatId);
       if (inputResult.isErr()) {
         return Result.err(inputResult.error);
       }
       const input = inputResult.value;
 
-      const key = chainKey(input.agentInboxId, groupId);
+      const key = chainKey(input.credentialId, chatId);
 
-      // Check if this agent+group is revoked
+      // Check if this credential+chat is revoked
       if (revokedPairs.has(key)) {
         return Result.err(
-          SealError.create("", "Cannot issue seal for revoked agent+group"),
+          SealError.create("", "Cannot issue seal for revoked credential+chat"),
         );
       }
 
       // Materiality check: skip if no material change from previous
       const previous = currentSeals.get(key);
       if (previous) {
-        const previousInput = inputsBySealId.get(previous.seal.sealId);
+        const previousInput = inputsBySealId.get(previous.chain.current.sealId);
         if (previousInput) {
-          const delta = computeInputDelta(previousInput, input);
+          const delta = computePayloadDelta(previous.chain.current, {
+            ...previous.chain.current,
+            permissions: input.permissions,
+            scopeMode: input.scopeMode,
+            adminAccess: input.adminAccess,
+          });
+          const policyDelta: PolicyDelta = {
+            added: [...delta.added],
+            removed: [...delta.removed],
+            changed: delta.changed.map((c) => ({ ...c })),
+          };
           if (
-            !isMaterialChange([delta]) &&
-            !hasSignedPayloadChanges(previousInput, input)
+            !isMaterialChange(policyDelta) &&
+            !hasInputChanges(previousInput, input)
           ) {
             return Result.ok(previous);
           }
         }
       }
 
-      const previousId = previous?.seal.sealId ?? null;
+      const previousPayload = previous?.chain.current;
 
-      // Build the seal
-      const buildResult = buildSeal(input, previousId);
+      // Build the seal chain
+      const buildResult = buildSeal(input, previousPayload);
       if (buildResult.isErr()) {
         return Result.err(buildResult.error);
       }
 
-      // Sign
-      const signResult = await deps.signer.sign(buildResult.value.seal);
+      // Sign the current payload
+      const signResult = await deps.signer.sign(
+        buildResult.value.chain.current,
+      );
       if (signResult.isErr()) {
         return signResult;
       }
 
+      // Replace the chain on the signed envelope with the full chain
+      const envelope: SealEnvelopeType = {
+        ...signResult.value,
+        chain: buildResult.value.chain,
+      };
+
       // Publish
-      const publishResult = await deps.publisher.publish(
-        groupId,
-        signResult.value,
-      );
+      const publishResult = await deps.publisher.publish(chatId, envelope);
       if (publishResult.isErr()) {
         return publishResult;
       }
 
       // Track
-      const signed = signResult.value;
-      currentSeals.set(key, signed);
-      sealsById.set(signed.seal.sealId, signed);
-      inputsBySealId.set(signed.seal.sealId, input);
+      currentSeals.set(key, envelope);
+      sealsById.set(envelope.chain.current.sealId, envelope);
+      inputsBySealId.set(envelope.chain.current.sealId, input);
 
-      return Result.ok(signed);
+      return Result.ok(envelope);
     },
 
-    async refresh(sealId: string): Promise<Result<SealEnvelope, SignetError>> {
+    async refresh(
+      sealId: string,
+    ): Promise<Result<SealEnvelopeType, SignetError>> {
       const existing = sealsById.get(sealId);
       if (!existing) {
         return Result.err(SealError.create(sealId, "Seal not found"));
@@ -145,9 +168,10 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
         return Result.err(SealError.create(sealId, "Input not found for seal"));
       }
 
-      const key = chainKey(existing.seal.agentInboxId, existing.seal.groupId);
-      const current = currentSeals.get(key);
-      if (current?.seal.sealId !== sealId) {
+      const current = existing.chain.current;
+      const key = chainKey(current.credentialId, current.chatId);
+      const head = currentSeals.get(key);
+      if (head?.chain.current.sealId !== sealId) {
         return Result.err(
           SealError.create(
             sealId,
@@ -156,44 +180,50 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
         );
       }
 
-      // Check if this agent+group is revoked
+      // Check if this credential+chat is revoked
       if (revokedPairs.has(key)) {
         return Result.err(
           SealError.create(
             sealId,
-            "Cannot refresh: agent+group pair has been revoked",
+            "Cannot refresh: credential+chat pair has been revoked",
           ),
         );
       }
 
       // Build a new seal with the same fields and new timestamps.
-      const buildResult = buildSeal(input, sealId);
+      const buildResult = buildSeal(input, current);
       if (buildResult.isErr()) {
         return Result.err(buildResult.error);
       }
 
       // Sign
-      const signResult = await deps.signer.sign(buildResult.value.seal);
+      const signResult = await deps.signer.sign(
+        buildResult.value.chain.current,
+      );
       if (signResult.isErr()) {
         return signResult;
       }
 
+      const envelope: SealEnvelopeType = {
+        ...signResult.value,
+        chain: buildResult.value.chain,
+      };
+
       // Publish
       const publishResult = await deps.publisher.publish(
-        existing.seal.groupId,
-        signResult.value,
+        current.chatId,
+        envelope,
       );
       if (publishResult.isErr()) {
         return publishResult;
       }
 
       // Track
-      const signed = signResult.value;
-      currentSeals.set(key, signed);
-      sealsById.set(signed.seal.sealId, signed);
-      inputsBySealId.set(signed.seal.sealId, input);
+      currentSeals.set(key, envelope);
+      sealsById.set(envelope.chain.current.sealId, envelope);
+      inputsBySealId.set(envelope.chain.current.sealId, input);
 
-      return Result.ok(signed);
+      return Result.ok(envelope);
     },
 
     async revoke(
@@ -205,11 +235,12 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
         return Result.err(SealError.create(sealId, "Seal not found"));
       }
 
-      const key = chainKey(existing.seal.agentInboxId, existing.seal.groupId);
+      const current = existing.chain.current;
+      const key = chainKey(current.credentialId, current.chatId);
 
       if (revokedPairs.has(key)) {
         return Result.err(
-          SealError.create(sealId, "Agent+group already revoked"),
+          SealError.create(sealId, "Credential+chat already revoked"),
         );
       }
 
@@ -218,11 +249,12 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
       const revocation = {
         sealId: generateSealId(),
         previousSealId: sealId,
-        agentInboxId: existing.seal.agentInboxId,
-        groupId: existing.seal.groupId,
+        operatorId: current.operatorId,
+        credentialId: current.credentialId,
+        chatId: current.chatId,
         reason,
         revokedAt: now.toISOString(),
-        issuer: existing.seal.issuer,
+        issuer: "signet",
       };
 
       // Validate revocation against schema
@@ -241,7 +273,7 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
 
       // Publish revocation
       const publishResult = await deps.publisher.publishRevocation(
-        existing.seal.groupId,
+        current.chatId,
         signResult.value,
       );
       if (publishResult.isErr()) {
@@ -256,52 +288,30 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
     },
 
     async current(
-      agentInboxId: string,
-      groupId: string,
-    ): Promise<Result<SealEnvelope | null, SignetError>> {
-      const key = chainKey(agentInboxId, groupId);
+      credentialId: string,
+      chatId: string,
+    ): Promise<Result<SealEnvelopeType | null, SignetError>> {
+      const key = chainKey(credentialId, chatId);
       const current = currentSeals.get(key) ?? null;
       return Result.ok(current);
     },
 
-    needsRenewal(seal: Seal): boolean {
-      const issuedAt = new Date(seal.issuedAt).getTime();
-      const expiresAt = new Date(seal.expiresAt).getTime();
-      const ttl = expiresAt - issuedAt;
-      const threshold = issuedAt + ttl * RENEWAL_THRESHOLD;
-      return Date.now() >= threshold;
+    needsRenewal(payload: SealPayloadType): boolean {
+      const issuedAt = new Date(payload.issuedAt).getTime();
+      const now = Date.now();
+      const threshold = issuedAt + DEFAULT_TTL_MS * RENEWAL_THRESHOLD;
+      return now >= threshold;
     },
   };
 }
 
-function hasSignedPayloadChanges(
-  previous: SealInput,
-  next: SealInput,
-): boolean {
-  return toComparablePayload(previous) !== toComparablePayload(next);
-}
-
-function toComparablePayload(input: SealInput): string {
-  const payload = {
-    agentInboxId: input.agentInboxId,
-    ownerInboxId: input.ownerInboxId,
-    groupId: input.groupId,
-    threadScope: input.threadScope,
-    view: input.view,
-    grant: input.grant,
-    inferenceMode: input.inferenceMode,
-    inferenceProviders: input.inferenceProviders,
-    contentEgressScope: input.contentEgressScope,
-    retentionAtProvider: input.retentionAtProvider,
-    hostingMode: input.hostingMode,
-    trustTier: input.trustTier,
-    buildProvenanceRef: input.buildProvenanceRef,
-    verifierStatementRef: input.verifierStatementRef,
-    sessionKeyFingerprint: input.sessionKeyFingerprint,
-    policyHash: input.policyHash,
-    heartbeatInterval: input.heartbeatInterval,
-    revocationRules: input.revocationRules,
-    issuer: input.issuer,
-  };
-  return new TextDecoder().decode(canonicalize(payload));
+/** Check if non-permission fields changed between inputs. */
+function hasInputChanges(previous: SealInput, next: SealInput): boolean {
+  return (
+    previous.credentialId !== next.credentialId ||
+    previous.operatorId !== next.operatorId ||
+    previous.chatId !== next.chatId ||
+    previous.scopeMode !== next.scopeMode ||
+    JSON.stringify(previous.adminAccess) !== JSON.stringify(next.adminAccess)
+  );
 }
