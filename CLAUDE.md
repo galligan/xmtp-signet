@@ -1,10 +1,10 @@
 # CLAUDE.md -- xmtp-signet
 
-An agent signet for XMTP. The signet is the real XMTP client; agent harnesses connect through a controlled interface with scoped views and grants. See [README.md](README.md) for an overview and [.agents/docs/init/xmtp-signet.md](.agents/docs/init/xmtp-signet.md) for the full PRD.
+An agent signet for XMTP. The signet is the real XMTP client; agent harnesses connect through a controlled interface with scoped credentials and permission scopes. See [README.md](README.md) for an overview and [.agents/docs/init/xmtp-signet.md](.agents/docs/init/xmtp-signet.md) for the full PRD.
 
 ## Status
 
-Active development. Phase 1 and Phase 2 feature-complete across 54 stacked PRs. All review feedback addressed. Secure Enclave key binding implemented (macOS). CLI daemon with real XMTP network connectivity (devnet), Convos invite protocol, conversation management, session permission editing, action confirmations, HTTP API, and build provenance verification. Pending merge to main.
+Active development. v1 architecture implemented across 37 stacked PRs. Identity model: owner -> admin -> operator -> credential -> seal. Permission system: 30 scopes across 6 categories with deny-wins resolution. Key management: BIP-39/44 derivation with OWS-compatible encrypted vault. CLI: `xs` with operator/cred/chat/msg/policy/seal/wallet/key commands.
 
 ## Project Structure
 
@@ -132,23 +132,22 @@ Handlers receive pre-validated input and a context object. They return `Result`,
 
 **Foundation** — Stable types and contracts:
 
-- Schemas (views, grants, seals, sessions, events)
+- Schemas (resource IDs, permission scopes, operators, policies, credentials, seals, ID mapping)
 - Result/Error types and error taxonomy
 - Shared type utilities
 
 **Runtime** — Core signet functionality:
 
-- XMTP client management (raw plane)
-- Policy engine (view filtering, grant enforcement)
-- Session management (with push-based WS invalidation via `onSessionMutated`)
+- Operator manager, policy manager, credential manager
+- Scope guard (deny-wins permission resolution)
 - Seal lifecycle
-- Key management (SE bridge on macOS, software vault elsewhere)
+- Key management (KeyBackend, BIP-39/44 derivation, encrypted vault)
 
 **Transport** — Protocol adapters:
 
 - WebSocket (primary harness transport)
 - MCP (Model Context Protocol for LLM harnesses)
-- CLI (composition root, daemon, admin socket)
+- CLI (composition root, `xs` binary)
 - HTTP (non-streaming admin/session/health API)
 
 ### Error Taxonomy
@@ -166,6 +165,46 @@ Errors are categorized for consistent handling across transports:
 | cancelled  | Cancelled by signal or user           |
 
 Each category maps to exit codes (CLI), status codes (HTTP), and JSON-RPC codes (MCP). Only `timeout` errors are retryable.
+
+### Identity Model
+
+Owner -> Admin -> Operator -> Credential -> Seal
+
+- **Owner**: holds root keys, runs `xs init`, approves privilege elevations
+- **Admin**: orchestrates operators, issues credentials
+- **Operator**: purpose-built agent profile with scope mode (per-chat/shared)
+- **Credential**: time-bound, scoped pass for specific chats with permission scopes
+- **Seal**: public proof published to chats declaring operator capabilities
+
+### Permission Scopes
+
+30 scopes across 6 categories. Deny-wins resolution.
+
+| Category         | Scopes                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| messaging        | send, reply, react, read-receipt, attachment                                                                    |
+| group-management | add-member, remove-member, promote-admin, demote-admin, update-permission                                       |
+| metadata         | update-name, update-description, update-image                                                                   |
+| access           | invite, join, leave, create-group, create-dm                                                                    |
+| observation      | read-messages, read-history, list-members, list-conversations, view-permissions, stream-messages, stream-conversations |
+| egress           | forward-to-provider, store-excerpts, use-for-memory, quote-revealed, summarize                                  |
+
+### Resource IDs
+
+All resources use prefixed UUIDs: `op_`, `inbox_`, `conv_`, `policy_`, `cred_`, `seal_`, `key_`, `msg_`, `xmtp_`. Short IDs accepted everywhere.
+
+### CLI
+
+The CLI binary is `xs`. Key command groups:
+
+- `xs operator create/list/info/rename/rm`
+- `xs cred issue/list/info/revoke/update`
+- `xs chat create/list/info/update/sync/join/invite/leave`
+- `xs msg send/reply/react/read/list/info`
+- `xs policy create/list/info/update/rm`
+- `xs seal list/info/verify/history`
+- `xs wallet list/info/provider`
+- `xs key init/rotate/list/info`
 
 ## Code Style
 
