@@ -29,6 +29,9 @@ export type { SigningKeyHandle, StamperDeps } from "./stamper.js";
 export { createSealPublisher } from "./publisher.js";
 export type { PublisherDeps } from "./publisher.js";
 
+// Chain validation
+export { validateSealChain, verifyChainDelta } from "./chain-validator.js";
+
 // Seal manager
 export { createSealManager } from "./manager.js";
 export type {
