@@ -35,3 +35,7 @@ export type {
 
 // Materiality classifier
 export { isMaterialChange, requiresReauthorization } from "./materiality.js";
+
+// Scope guard
+export { createScopeGuard } from "./scope-guard.js";
+export type { CredentialScopeLookup } from "./scope-guard.js";
