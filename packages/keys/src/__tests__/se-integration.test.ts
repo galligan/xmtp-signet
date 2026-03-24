@@ -1,8 +1,5 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { p256 } from "@noble/curves/nist.js";
 import {
   detectPlatform,
@@ -12,15 +9,12 @@ import {
   seInfo,
   seDelete,
 } from "../index.js";
-import { createVault } from "../vault.js";
-import { initializeRootKey, signWithRootKey } from "../root-key.js";
-import { createKeyManager } from "../key-manager.js";
 import { secureEnclaveTestCapability } from "./se-test-capability.js";
 
 /**
  * Secure Enclave integration tests.
  * Gated on macOS + signer binary availability.
- * These hit the real Secure Enclave — no mocks.
+ * These hit the real Secure Enclave -- no mocks.
  */
 
 const signerPath =
@@ -106,73 +100,6 @@ describe.skipIf(!isRealSE)("Secure Enclave integration", () => {
   test("platform detection returns secure-enclave on macOS with signer", () => {
     resetPlatformCache();
     expect(detectPlatform()).toBe("secure-enclave");
-  });
-
-  test("key manager initializes with SE root key", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "se-km-test-"));
-    try {
-      resetPlatformCache();
-
-      const kmResult = await createKeyManager({
-        dataDir,
-        rootKeyPolicy: "open",
-      });
-      expect(Result.isOk(kmResult)).toBe(true);
-      if (Result.isError(kmResult))
-        throw new Error(`km create failed: ${kmResult.error.message}`);
-
-      const km = kmResult.value;
-      expect(km.platform).toBe("secure-enclave");
-      expect(km.trustTier).toBe("source-verified");
-
-      const initResult = await km.initialize();
-      expect(Result.isOk(initResult)).toBe(true);
-      if (Result.isError(initResult))
-        throw new Error(`init failed: ${initResult.error.message}`);
-
-      expect(initResult.value.platform).toBe("secure-enclave");
-      expect(initResult.value.publicKey).toMatch(/^04[0-9a-f]+$/);
-
-      // Track for cleanup
-      createdKeyRefs.push(initResult.value.keyRef);
-
-      km.close();
-    } finally {
-      rmSync(dataDir, { recursive: true, force: true });
-    }
-  });
-
-  test("root key round-trip: init + sign + verify", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "se-rootkey-test-"));
-    try {
-      const vaultResult = await createVault(dataDir);
-      if (Result.isError(vaultResult)) throw new Error("vault failed");
-      const vault = vaultResult.value;
-
-      const initResult = await initializeRootKey(
-        vault,
-        "open",
-        "secure-enclave",
-      );
-      expect(Result.isOk(initResult)).toBe(true);
-      if (Result.isError(initResult))
-        throw new Error(`init failed: ${initResult.error.message}`);
-
-      createdKeyRefs.push(initResult.value.keyRef);
-
-      // Sign test data
-      const testData = new Uint8Array([1, 2, 3, 4, 5]);
-      const sigResult = await signWithRootKey(vault, testData);
-      expect(Result.isOk(sigResult)).toBe(true);
-      if (Result.isError(sigResult))
-        throw new Error(`sign failed: ${sigResult.error.message}`);
-
-      expect(sigResult.value.byteLength).toBeGreaterThan(0);
-
-      vault.close();
-    } finally {
-      rmSync(dataDir, { recursive: true, force: true });
-    }
   });
 });
 

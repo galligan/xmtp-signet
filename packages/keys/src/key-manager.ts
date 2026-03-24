@@ -1,334 +1,297 @@
 import { Result } from "better-result";
+import { NotFoundError, type SignetError } from "@xmtp/signet-schemas";
+import type { KeyBackend, AccountInfo, SigningResult } from "./key-backend.js";
+import type { Vault, AccountEntry } from "./vault.js";
 import {
-  InternalError,
-  NotFoundError,
-  type AuthError,
-} from "@xmtp/signet-schemas";
-import {
-  KeyManagerConfigSchema,
-  type KeyManagerConfig,
-  type PlatformCapability,
-} from "./config.js";
-import {
-  detectPlatform,
-  platformToTrustTier,
-  type KeyTrustTier,
-} from "./platform.js";
-import { createVault } from "./vault.js";
-import {
-  createOperationalKeyManager,
-  type OperationalKeyManager,
-} from "./operational-key.js";
-import {
-  createSessionKeyManager,
-  type SessionKeyManager,
-} from "./session-key.js";
-import { createAdminKeyManager, type AdminKeyManager } from "./admin-key.js";
-import { initializeRootKey } from "./root-key.js";
-import type { RootKeyHandle, OperationalKey, SessionKey } from "./types.js";
+  generateMnemonic,
+  mnemonicToSeed,
+  deriveEvmKey,
+  deriveEd25519Key,
+} from "./derivation.js";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { sha256 } from "@noble/hashes/sha256";
 
-/** High-level key manager facade for all key tiers and vault access. */
-export interface KeyManager {
-  /** Initialize the root key material and any dependent key tiers. */
-  initialize(): Promise<Result<RootKeyHandle, InternalError | AuthError>>;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-  /** Detected platform capability for key storage and signing. */
-  readonly platform: PlatformCapability;
-  /** Trust tier inferred from the detected platform. */
-  readonly trustTier: KeyTrustTier;
+/** Convert bytes to lowercase hex string. */
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
-  /** Access admin key operations. */
-  readonly admin: AdminKeyManager;
-
-  createOperationalKey(
-    identityId: string,
-    groupId: string | null,
-  ): Promise<Result<OperationalKey, InternalError>>;
-
-  getOperationalKey(identityId: string): Result<OperationalKey, NotFoundError>;
-
-  getOperationalKeyByGroupId(
-    groupId: string,
-  ): Result<OperationalKey, NotFoundError>;
-
-  rotateOperationalKey(
-    identityId: string,
-  ): Promise<Result<OperationalKey, InternalError | NotFoundError>>;
-
-  listOperationalKeys(): readonly OperationalKey[];
-
-  issueSessionKey(
-    sessionId: string,
-    ttlSeconds: number,
-  ): Promise<Result<SessionKey, InternalError>>;
-
-  revokeSessionKey(keyId: string): Result<void, NotFoundError>;
-
-  signWithOperationalKey(
-    identityId: string,
-    data: Uint8Array,
-  ): Promise<Result<Uint8Array, InternalError | NotFoundError>>;
-
-  signWithSessionKey(
-    keyId: string,
-    data: Uint8Array,
-  ): Promise<Result<Uint8Array, InternalError | NotFoundError>>;
-
-  getOrCreateDbKey(
-    identityId: string,
-  ): Promise<Result<Uint8Array, InternalError>>;
-
-  /**
-   * Retrieve or generate a secp256k1 private key for XMTP identity
-   * registration. The key is persisted in the vault so the same key
-   * is returned across restarts.
-   */
-  getOrCreateXmtpIdentityKey(
-    identityId: string,
-  ): Promise<Result<`0x${string}`, InternalError>>;
-
-  vaultSet(
-    name: string,
-    value: Uint8Array,
-  ): Promise<Result<void, InternalError>>;
-
-  vaultGet(
-    name: string,
-  ): Promise<Result<Uint8Array, NotFoundError | InternalError>>;
-
-  vaultDelete(name: string): Promise<Result<void, NotFoundError>>;
-
-  vaultList(): readonly string[];
-
-  /** Start periodic auto-rotation of operational keys. No-op if interval is 0. */
-  startAutoRotation(): void;
-
-  /** Stop the auto-rotation timer. */
-  stopAutoRotation(): void;
-
-  close(): void;
+/** Generate a random hex token for API keys. */
+function generateToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return bytesToHex(bytes);
 }
 
 /**
- * Create a key manager backed by the configured vault and detected
- * platform capability.
+ * Sign data using a derived key at the given index and chain.
+ * Dispatches to secp256k1 (EVM) or Ed25519 based on chain type.
  */
-export async function createKeyManager(
-  rawConfig: Partial<KeyManagerConfig> & { dataDir: string },
-): Promise<Result<KeyManager, InternalError>> {
-  const parsed = KeyManagerConfigSchema.safeParse(rawConfig);
-  if (!parsed.success) {
-    return Result.err(
-      InternalError.create("Invalid key manager config", {
-        issues: parsed.error.issues,
-      }),
-    );
+function signWithSeed(
+  seed: Uint8Array,
+  accountIndex: number,
+  chain: "evm" | "ed25519",
+  data: Uint8Array,
+): SigningResult {
+  if (chain === "evm") {
+    const derived = deriveEvmKey(seed, accountIndex);
+    const hash = sha256(data);
+    const sig = secp256k1.sign(hash, derived.privateKey);
+    const publicKey = secp256k1.getPublicKey(derived.privateKey, false);
+    return {
+      signature: new Uint8Array(sig),
+      publicKey: new Uint8Array(publicKey),
+      algorithm: "secp256k1",
+    };
   }
-  const config = parsed.data;
+  const derived = deriveEd25519Key(seed, accountIndex);
+  const signature = ed25519.sign(data, derived.privateKey);
+  const publicKey = ed25519.getPublicKey(derived.privateKey);
+  return {
+    signature: new Uint8Array(signature),
+    publicKey: new Uint8Array(publicKey),
+    algorithm: "ed25519",
+  };
+}
 
-  let activePlatform = detectPlatform();
-  let activeTrustTier = platformToTrustTier(activePlatform);
+// ---------------------------------------------------------------------------
+// Per-wallet state
+// ---------------------------------------------------------------------------
 
-  const vaultResult = await createVault(config.dataDir);
-  if (Result.isError(vaultResult)) return vaultResult;
-  const vault = vaultResult.value;
+/**
+ * Per-wallet metadata tracked in memory alongside the vault.
+ * Mirrors the vault's account list and tracks the next derivation index.
+ */
+interface WalletState {
+  readonly id: string;
+  readonly label: string;
+  readonly createdAt: string;
+  /** Next derivation index (across all chains). */
+  nextIndex: number;
+  /** Derived accounts in order. */
+  accounts: readonly AccountEntry[];
+}
 
-  const opKeys: OperationalKeyManager = createOperationalKeyManager(vault);
-  const sessionKeys: SessionKeyManager = createSessionKeyManager();
-  const adminKeys: AdminKeyManager = createAdminKeyManager(vault);
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
 
-  let rootKeyHandle: RootKeyHandle | null = null;
-  let rotationTimer: ReturnType<typeof setInterval> | null = null;
+/**
+ * Create a `KeyBackend` backed by the internal signet vault.
+ *
+ * The backend generates BIP-39 mnemonics, encrypts them in the vault
+ * with the owner passphrase, and derives BIP-44 accounts for
+ * secp256k1 (EVM) and SLIP-0010 Ed25519 signing.
+ *
+ * @param vault - Encrypted vault for mnemonic storage
+ * @param passphrase - Owner passphrase for vault encryption
+ */
+export function createInternalKeyBackend(
+  vault: Vault,
+  passphrase: string,
+): KeyBackend {
+  const walletStates = new Map<string, WalletState>();
 
-  const manager: KeyManager = {
-    get platform(): PlatformCapability {
-      return activePlatform;
-    },
+  /** Decrypt the mnemonic for a wallet and derive the BIP-39 seed. */
+  async function getSeed(
+    walletId: string,
+  ): Promise<Result<{ mnemonic: string; seed: Uint8Array }, SignetError>> {
+    const result = await vault.readWallet(walletId, passphrase);
+    if (Result.isError(result)) return result;
+    return Result.ok({
+      mnemonic: result.value,
+      seed: mnemonicToSeed(result.value),
+    });
+  }
 
-    get trustTier(): KeyTrustTier {
-      return activeTrustTier;
-    },
+  /** Look up the chain for an account at a given index. */
+  function chainAt(
+    walletId: string,
+    index: number,
+  ): "evm" | "ed25519" | undefined {
+    return walletStates.get(walletId)?.accounts.find((a) => a.index === index)
+      ?.chain;
+  }
 
-    get admin(): AdminKeyManager {
-      return adminKeys;
-    },
-
-    async initialize(): Promise<
-      Result<RootKeyHandle, InternalError | AuthError>
-    > {
-      if (rootKeyHandle) {
-        return Result.ok(rootKeyHandle);
-      }
-      const result = await initializeRootKey(
-        vault,
-        config.rootKeyPolicy,
-        activePlatform,
+  /** Resolve chain + seed, then sign. Shared by sign() and signWithApiKey(). */
+  async function resolveAndSign(
+    walletId: string,
+    seed: Uint8Array,
+    accountIndex: number,
+    data: Uint8Array,
+  ): Promise<Result<SigningResult, SignetError>> {
+    const chain = chainAt(walletId, accountIndex);
+    if (chain === undefined) {
+      return Result.err(
+        NotFoundError.create("Account", `${walletId}/${String(accountIndex)}`),
       );
-      if (Result.isError(result)) return result;
-      rootKeyHandle = result.value;
-      // Use the stored handle's platform as authoritative — a persisted
-      // software-vault root on a machine that now detects SE must not
-      // advertise secure-enclave trust tier.
-      activePlatform = rootKeyHandle.platform;
-      activeTrustTier = platformToTrustTier(activePlatform);
-      return Result.ok(rootKeyHandle);
+    }
+    return Result.ok(signWithSeed(seed, accountIndex, chain, data));
+  }
+
+  return {
+    provider: "internal",
+
+    // -- Wallet operations -------------------------------------------------
+
+    async createWallet(label, _passphrase) {
+      const id = crypto.randomUUID();
+      const mnemonic = generateMnemonic();
+      const r = await vault.createWallet(id, label, mnemonic, passphrase);
+      if (Result.isError(r)) return r;
+
+      const now = new Date().toISOString();
+      walletStates.set(id, {
+        id,
+        label,
+        createdAt: now,
+        nextIndex: 0,
+        accounts: [],
+      });
+      return Result.ok({
+        id,
+        label,
+        provider: "internal",
+        accountCount: 0,
+        createdAt: now,
+      });
     },
 
-    async createOperationalKey(
-      identityId: string,
-      groupId: string | null,
-    ): Promise<Result<OperationalKey, InternalError>> {
-      return opKeys.create(identityId, groupId);
+    async deleteWallet(walletId) {
+      const r = await vault.deleteWallet(walletId);
+      if (Result.isOk(r)) walletStates.delete(walletId);
+      return r;
     },
 
-    getOperationalKey(
-      identityId: string,
-    ): Result<OperationalKey, NotFoundError> {
-      return opKeys.get(identityId);
+    async listWallets() {
+      const r = await vault.listWallets();
+      if (Result.isError(r)) return r;
+      return Result.ok(
+        r.value.map((w) => ({
+          id: w.id,
+          label: w.label,
+          provider: "internal" as const,
+          accountCount: w.accountCount,
+          createdAt: w.createdAt,
+        })),
+      );
     },
 
-    getOperationalKeyByGroupId(
-      groupId: string,
-    ): Result<OperationalKey, NotFoundError> {
-      return opKeys.getByGroupId(groupId);
+    async getWallet(walletId) {
+      const r = await vault.listWallets();
+      if (Result.isError(r)) return r;
+      const found = r.value.find((w) => w.id === walletId);
+      if (!found) return Result.err(NotFoundError.create("Wallet", walletId));
+      return Result.ok({
+        id: found.id,
+        label: found.label,
+        provider: "internal" as const,
+        accountCount: found.accountCount,
+        createdAt: found.createdAt,
+      });
     },
 
-    async rotateOperationalKey(
-      identityId: string,
-    ): Promise<Result<OperationalKey, InternalError | NotFoundError>> {
-      return opKeys.rotate(identityId);
-    },
+    // -- Account derivation ------------------------------------------------
 
-    listOperationalKeys(): readonly OperationalKey[] {
-      return opKeys.list();
-    },
+    async deriveAccount(walletId, chain) {
+      const walletState = await ensureWalletState(walletId);
+      if (Result.isError(walletState)) return walletState;
 
-    async issueSessionKey(
-      sessionId: string,
-      ttlSeconds: number,
-    ): Promise<Result<SessionKey, InternalError>> {
-      return sessionKeys.issue(sessionId, ttlSeconds);
-    },
+      const { state, seed } = walletState.value;
 
-    revokeSessionKey(keyId: string): Result<void, NotFoundError> {
-      return sessionKeys.revoke(keyId);
-    },
+      const index = state.nextIndex;
+      let address: string;
+      let publicKeyHex: string;
 
-    async signWithOperationalKey(
-      identityId: string,
-      data: Uint8Array,
-    ): Promise<Result<Uint8Array, InternalError | NotFoundError>> {
-      return opKeys.sign(identityId, data);
-    },
-
-    async signWithSessionKey(
-      keyId: string,
-      data: Uint8Array,
-    ): Promise<Result<Uint8Array, InternalError | NotFoundError>> {
-      return sessionKeys.sign(keyId, data);
-    },
-
-    async getOrCreateDbKey(
-      identityId: string,
-    ): Promise<Result<Uint8Array, InternalError>> {
-      const vaultKey = `db-key:${identityId}`;
-      const existing = await vault.get(vaultKey);
-      if (Result.isOk(existing)) {
-        return Result.ok(existing.value);
+      if (chain === "evm") {
+        const d = deriveEvmKey(seed, index);
+        address = d.address;
+        publicKeyHex = bytesToHex(d.publicKey);
+      } else {
+        const d = deriveEd25519Key(seed, index);
+        publicKeyHex = bytesToHex(d.publicKey);
+        address = publicKeyHex;
       }
-      // Propagate internal errors; NotFoundError means key doesn't exist yet
-      if (existing.error._tag !== "NotFoundError") {
-        return existing as Result<Uint8Array, InternalError>;
-      }
-      // Generate and persist a new random 32-byte key
-      const newKey = crypto.getRandomValues(new Uint8Array(32));
-      const setResult = await vault.set(vaultKey, newKey);
-      if (Result.isError(setResult)) return setResult;
-      return Result.ok(newKey);
+
+      const entry: AccountEntry = { index, chain, address };
+      const newAccounts = [...state.accounts, entry];
+      const ur = await vault.updateWalletAccounts(walletId, newAccounts);
+      if (Result.isError(ur)) return ur;
+
+      state.nextIndex = index + 1;
+      (state as { accounts: readonly AccountEntry[] }).accounts = newAccounts;
+      return Result.ok({ index, address, chain, publicKey: publicKeyHex });
     },
 
-    async getOrCreateXmtpIdentityKey(
-      identityId: string,
-    ): Promise<Result<`0x${string}`, InternalError>> {
-      const vaultKey = `xmtp-identity-key:${identityId}`;
-      const existing = await vault.get(vaultKey);
-      if (Result.isOk(existing)) {
-        // Decode stored bytes back to hex
-        const hex = Array.from(existing.value)
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-        return Result.ok(`0x${hex}` as `0x${string}`);
-      }
-      // Propagate internal errors; NotFoundError means key doesn't exist yet
-      if (existing.error._tag !== "NotFoundError") {
-        return existing as Result<`0x${string}`, InternalError>;
-      }
-      // Generate a new random 32-byte secp256k1 private key
-      const newKey = crypto.getRandomValues(new Uint8Array(32));
-      const setResult = await vault.set(vaultKey, newKey);
-      if (Result.isError(setResult)) return setResult;
-      const hex = Array.from(newKey)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      return Result.ok(`0x${hex}` as `0x${string}`);
-    },
+    async listAccounts(walletId) {
+      const walletState = await ensureWalletState(walletId);
+      if (Result.isError(walletState)) return walletState;
 
-    async vaultSet(
-      name: string,
-      value: Uint8Array,
-    ): Promise<Result<void, InternalError>> {
-      return vault.set(name, value);
-    },
+      const { state, seed } = walletState.value;
 
-    async vaultGet(
-      name: string,
-    ): Promise<Result<Uint8Array, NotFoundError | InternalError>> {
-      return vault.get(name);
-    },
-
-    async vaultDelete(name: string): Promise<Result<void, NotFoundError>> {
-      return vault.delete(name);
-    },
-
-    vaultList(): readonly string[] {
-      return vault.list();
-    },
-
-    startAutoRotation(): void {
-      if (config.rotationIntervalSeconds <= 0) return;
-      if (rotationTimer !== null) return; // already running
-
-      const intervalMs = config.rotationIntervalSeconds * 1000;
-      rotationTimer = setInterval(() => {
-        void (async () => {
-          const keys = opKeys.list();
-          for (const key of keys) {
-            const result = await opKeys.rotate(key.identityId);
-            if (Result.isError(result)) {
-              // eslint-disable-next-line no-console
-              console.warn(
-                "[keys] auto-rotation failed for %s: %s",
-                key.identityId,
-                result.error.message,
+      const infos: AccountInfo[] = state.accounts.map((e) => {
+        const publicKeyHex =
+          e.chain === "evm"
+            ? bytesToHex(deriveEvmKey(seed, e.index).publicKey)
+            : bytesToHex(
+                deriveEd25519Key(seed, e.index).publicKey,
               );
-            }
-          }
-        })();
-      }, intervalMs);
+        return {
+          index: e.index,
+          address: e.address,
+          chain: e.chain,
+          publicKey: publicKeyHex,
+        };
+      });
+      return Result.ok(infos);
     },
 
-    stopAutoRotation(): void {
-      if (rotationTimer !== null) {
-        clearInterval(rotationTimer);
-        rotationTimer = null;
-      }
+    // -- Signing -----------------------------------------------------------
+
+    async sign(walletId, accountIndex, data) {
+      const seedResult = await getSeed(walletId);
+      if (Result.isError(seedResult)) return seedResult;
+      return resolveAndSign(
+        walletId,
+        seedResult.value.seed,
+        accountIndex,
+        data,
+      );
     },
 
-    close(): void {
-      manager.stopAutoRotation();
-      vault.close();
+    // -- API key management ------------------------------------------------
+
+    async createApiKey(walletId, credentialId, _passphrase, expiresAt) {
+      const r = await vault.readWallet(walletId, passphrase);
+      if (Result.isError(r)) return r;
+
+      const token = generateToken();
+      const cr = await vault.createApiKey(
+        credentialId,
+        walletId,
+        r.value,
+        token,
+        expiresAt,
+      );
+      if (Result.isError(cr)) return cr;
+      return Result.ok({ id: credentialId, walletId, token, expiresAt });
+    },
+
+    async revokeApiKey(keyId) {
+      return vault.revokeApiKey(keyId);
+    },
+
+    async signWithApiKey(token, accountIndex, data) {
+      const r = await vault.readApiKey(token);
+      if (Result.isError(r)) return r;
+      const seed = mnemonicToSeed(r.value.mnemonic);
+      return resolveAndSign(r.value.walletId, seed, accountIndex, data);
     },
   };
-
-  return Result.ok(manager);
 }

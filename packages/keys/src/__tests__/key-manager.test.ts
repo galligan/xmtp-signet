@@ -1,211 +1,341 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { Result } from "better-result";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { createKeyManager, type KeyManager } from "../key-manager.js";
-import { detectPlatform } from "../platform.js";
-import { shouldSkipBlockedSECreate } from "./se-test-capability.js";
+import { createVault, type Vault } from "../vault.js";
+import type { KeyBackend } from "../key-backend.js";
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+// Will be implemented in key-manager.ts
+import { createInternalKeyBackend } from "../key-manager.js";
 
-describe("KeyManager", () => {
-  let dataDir: string;
-  let manager: KeyManager;
+const PASSPHRASE = "test-passphrase-secure";
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+describe("createInternalKeyBackend", () => {
+  let vault: Vault;
+  let backend: KeyBackend;
 
   beforeEach(async () => {
-    dataDir = mkdtempSync(join(tmpdir(), "km-test-"));
-    const result = await createKeyManager({ dataDir });
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isError(result)) throw new Error("setup failed");
-    manager = result.value;
+    const vaultResult = await createVault(":memory:");
+    if (Result.isError(vaultResult)) throw new Error("vault setup failed");
+    vault = vaultResult.value;
+    backend = createInternalKeyBackend(vault, PASSPHRASE);
   });
 
   afterEach(() => {
-    manager.close();
-    rmSync(dataDir, { recursive: true, force: true });
+    vault.close();
   });
 
-  describe("initialize", () => {
-    test("detects platform matching detectPlatform()", () => {
-      const expected = detectPlatform();
-      expect(manager.platform).toBe(expected);
-    });
-
-    test("trust tier matches platform", () => {
-      if (manager.platform === "secure-enclave") {
-        expect(manager.trustTier).toBe("source-verified");
-      } else {
-        expect(manager.trustTier).toBe("unverified");
-      }
-    });
-
-    test.skipIf(shouldSkipBlockedSECreate)(
-      "creates a root key handle on initialization",
-      async () => {
-        const result = await manager.initialize();
-        expect(Result.isOk(result)).toBe(true);
-        if (Result.isError(result)) throw new Error("init failed");
-        expect(result.value.keyRef).toBeDefined();
-        expect(result.value.publicKey).toBeDefined();
-        expect(result.value.platform).toBe(detectPlatform());
-      },
-    );
-
-    test.skipIf(shouldSkipBlockedSECreate)(
-      "returns existing root key on re-initialization",
-      async () => {
-        const r1 = await manager.initialize();
-        const r2 = await manager.initialize();
-        if (Result.isError(r1) || Result.isError(r2))
-          throw new Error("init failed");
-        expect(r1.value.keyRef).toBe(r2.value.keyRef);
-      },
-    );
+  test("has provider set to internal", () => {
+    expect(backend.provider).toBe("internal");
   });
 
-  describe("operational keys", () => {
-    test("creates an operational key", async () => {
-      const result = await manager.createOperationalKey("agent-1", null);
+  // ---------------------------------------------------------------------------
+  // Wallet operations
+  // ---------------------------------------------------------------------------
+
+  describe("wallet operations", () => {
+    test("creates a wallet and returns WalletInfo", async () => {
+      const result = await backend.createWallet("My Wallet", PASSPHRASE);
       expect(Result.isOk(result)).toBe(true);
       if (Result.isError(result)) throw new Error("create failed");
-      expect(result.value.identityId).toBe("agent-1");
+      expect(result.value.label).toBe("My Wallet");
+      expect(result.value.provider).toBe("internal");
+      expect(result.value.accountCount).toBe(0);
+      expect(result.value.id).toBeDefined();
+      expect(result.value.createdAt).toBeDefined();
     });
 
-    test("retrieves an operational key by identity", async () => {
-      await manager.createOperationalKey("agent-1", null);
-      const result = manager.getOperationalKey("agent-1");
+    test("lists created wallets", async () => {
+      await backend.createWallet("W1", PASSPHRASE);
+      await backend.createWallet("W2", PASSPHRASE);
+      const result = await backend.listWallets();
       expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("list failed");
+      expect(result.value).toHaveLength(2);
     });
 
-    test("retrieves an operational key by group ID", async () => {
-      await manager.createOperationalKey("agent-1", "group-a");
-      const result = manager.getOperationalKeyByGroupId("group-a");
+    test("gets a wallet by ID", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const result = await backend.getWallet(created.value.id);
       expect(Result.isOk(result)).toBe(true);
       if (Result.isError(result)) throw new Error("get failed");
-      expect(result.value.groupId).toBe("group-a");
+      expect(result.value.label).toBe("W1");
     });
 
-    test("rotates an operational key", async () => {
-      const original = await manager.createOperationalKey("agent-1", null);
-      if (Result.isError(original)) throw new Error("create failed");
-
-      const rotated = await manager.rotateOperationalKey("agent-1");
-      expect(Result.isOk(rotated)).toBe(true);
-      if (Result.isError(rotated)) throw new Error("rotate failed");
-      expect(rotated.value.publicKey).not.toBe(original.value.publicKey);
+    test("returns error for nonexistent wallet", async () => {
+      const result = await backend.getWallet("nonexistent");
+      expect(Result.isError(result)).toBe(true);
     });
 
-    test("lists all operational keys", async () => {
-      await manager.createOperationalKey("agent-1", null);
-      await manager.createOperationalKey("agent-2", "group-b");
-      expect(manager.listOperationalKeys()).toHaveLength(2);
+    test("deletes a wallet", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const deleteResult = await backend.deleteWallet(created.value.id);
+      expect(Result.isOk(deleteResult)).toBe(true);
+      const getResult = await backend.getWallet(created.value.id);
+      expect(Result.isError(getResult)).toBe(true);
     });
   });
 
-  describe("session keys", () => {
-    test("issues a session key", async () => {
-      const result = await manager.issueSessionKey("ses_1", 3600);
+  // ---------------------------------------------------------------------------
+  // Account derivation
+  // ---------------------------------------------------------------------------
+
+  describe("account derivation", () => {
+    test("derives an EVM account from a wallet", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const result = await backend.deriveAccount(created.value.id, "evm");
       expect(Result.isOk(result)).toBe(true);
-      if (Result.isError(result)) throw new Error("issue failed");
-      expect(result.value.sessionId).toBe("ses_1");
+      if (Result.isError(result)) throw new Error("derive failed");
+      expect(result.value.chain).toBe("evm");
+      expect(result.value.index).toBe(0);
+      expect(result.value.address).toMatch(/^0x[0-9a-f]{40}$/);
+      expect(result.value.publicKey).toBeDefined();
     });
 
-    test("revokes a session key", async () => {
-      const issued = await manager.issueSessionKey("ses_2", 3600);
-      if (Result.isError(issued)) throw new Error("issue failed");
-      const result = manager.revokeSessionKey(issued.value.keyId);
+    test("derives an Ed25519 account from a wallet", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const result = await backend.deriveAccount(created.value.id, "ed25519");
       expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("derive failed");
+      expect(result.value.chain).toBe("ed25519");
+      expect(result.value.index).toBe(0);
+      expect(result.value.publicKey).toBeDefined();
+    });
+
+    test("increments index for each derived account", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const a0 = await backend.deriveAccount(created.value.id, "evm");
+      const a1 = await backend.deriveAccount(created.value.id, "evm");
+      if (Result.isError(a0) || Result.isError(a1))
+        throw new Error("derive failed");
+      expect(a0.value.index).toBe(0);
+      expect(a1.value.index).toBe(1);
+      expect(a0.value.address).not.toBe(a1.value.address);
+    });
+
+    test("lists accounts for a wallet", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      await backend.deriveAccount(created.value.id, "evm");
+      await backend.deriveAccount(created.value.id, "ed25519");
+      const result = await backend.listAccounts(created.value.id);
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("list failed");
+      expect(result.value).toHaveLength(2);
+    });
+
+    test("returns error when deriving from nonexistent wallet", async () => {
+      const result = await backend.deriveAccount("nonexistent", "evm");
+      expect(Result.isError(result)).toBe(true);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Signing
+  // ---------------------------------------------------------------------------
 
   describe("signing", () => {
-    test("signs with operational key", async () => {
-      await manager.createOperationalKey("agent-1", null);
-      const result = await manager.signWithOperationalKey(
-        "agent-1",
+    test("signs data with an EVM account and returns valid signature", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const derived = await backend.deriveAccount(created.value.id, "evm");
+      if (Result.isError(derived)) throw new Error("derive failed");
+
+      const data = new Uint8Array([1, 2, 3, 4]);
+      const result = await backend.sign(
+        created.value.id,
+        derived.value.index,
+        data,
+      );
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("sign failed");
+      expect(result.value.signature).toBeInstanceOf(Uint8Array);
+      expect(result.value.publicKey).toBeInstanceOf(Uint8Array);
+      expect(result.value.algorithm).toBe("secp256k1");
+    });
+
+    test("signs data with an Ed25519 account and returns valid signature", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const derived = await backend.deriveAccount(created.value.id, "ed25519");
+      if (Result.isError(derived)) throw new Error("derive failed");
+
+      const data = new Uint8Array([5, 6, 7, 8]);
+      const result = await backend.sign(
+        created.value.id,
+        derived.value.index,
+        data,
+      );
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("sign failed");
+      expect(result.value.signature).toBeInstanceOf(Uint8Array);
+      expect(result.value.publicKey).toBeInstanceOf(Uint8Array);
+      expect(result.value.algorithm).toBe("ed25519");
+    });
+
+    test("returns error when signing with nonexistent wallet", async () => {
+      const result = await backend.sign("nonexistent", 0, new Uint8Array([1]));
+      expect(Result.isError(result)).toBe(true);
+    });
+
+    test("returns error when signing with out-of-range index", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const result = await backend.sign(
+        created.value.id,
+        99,
+        new Uint8Array([1]),
+      );
+      expect(Result.isError(result)).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // API key lifecycle
+  // ---------------------------------------------------------------------------
+
+  describe("API key lifecycle", () => {
+    test("creates an API key and returns token", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const expires = new Date(Date.now() + 86400000).toISOString();
+      const result = await backend.createApiKey(
+        created.value.id,
+        "cred-1",
+        PASSPHRASE,
+        expires,
+      );
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("create key failed");
+      expect(result.value.token).toBeDefined();
+      expect(result.value.token.length).toBeGreaterThan(0);
+      expect(result.value.walletId).toBe(created.value.id);
+      expect(result.value.expiresAt).toBe(expires);
+    });
+
+    test("signs with an API key token", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      await backend.deriveAccount(created.value.id, "evm");
+      const expires = new Date(Date.now() + 86400000).toISOString();
+      const apiKey = await backend.createApiKey(
+        created.value.id,
+        "cred-1",
+        PASSPHRASE,
+        expires,
+      );
+      if (Result.isError(apiKey)) throw new Error("create key failed");
+
+      const result = await backend.signWithApiKey(
+        apiKey.value.token,
+        0,
         new Uint8Array([1, 2, 3]),
       );
       expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) throw new Error("sign failed");
+      expect(result.value.signature).toBeInstanceOf(Uint8Array);
+      expect(result.value.algorithm).toBe("secp256k1");
     });
 
-    test("signs with session key", async () => {
-      const issued = await manager.issueSessionKey("ses_3", 3600);
-      if (Result.isError(issued)) throw new Error("issue failed");
-      const result = await manager.signWithSessionKey(
-        issued.value.keyId,
-        new Uint8Array([4, 5, 6]),
+    test("revokes an API key", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      await backend.deriveAccount(created.value.id, "evm");
+      const expires = new Date(Date.now() + 86400000).toISOString();
+      const apiKey = await backend.createApiKey(
+        created.value.id,
+        "cred-1",
+        PASSPHRASE,
+        expires,
       );
-      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(apiKey)) throw new Error("create key failed");
+
+      const revokeResult = await backend.revokeApiKey(apiKey.value.id);
+      expect(Result.isOk(revokeResult)).toBe(true);
+    });
+
+    test("sign fails after API key is revoked", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      await backend.deriveAccount(created.value.id, "evm");
+      const expires = new Date(Date.now() + 86400000).toISOString();
+      const apiKey = await backend.createApiKey(
+        created.value.id,
+        "cred-1",
+        PASSPHRASE,
+        expires,
+      );
+      if (Result.isError(apiKey)) throw new Error("create key failed");
+
+      await backend.revokeApiKey(apiKey.value.id);
+
+      const result = await backend.signWithApiKey(
+        apiKey.value.token,
+        0,
+        new Uint8Array([1, 2, 3]),
+      );
+      expect(Result.isError(result)).toBe(true);
+    });
+
+    test("returns error for invalid API key token", async () => {
+      const result = await backend.signWithApiKey(
+        "invalid-token",
+        0,
+        new Uint8Array([1]),
+      );
+      expect(Result.isError(result)).toBe(true);
     });
   });
 
-  describe("vault operations", () => {
-    test("stores and retrieves a secret", async () => {
-      const setResult = await manager.vaultSet(
-        "api-key",
-        encoder.encode("secret"),
+  // ---------------------------------------------------------------------------
+  // End-to-end: create wallet -> derive -> sign -> verify
+  // ---------------------------------------------------------------------------
+
+  describe("end-to-end workflow", () => {
+    test("full lifecycle: wallet -> accounts -> sign with both chains", async () => {
+      // Create wallet
+      const wallet = await backend.createWallet("E2E Wallet", PASSPHRASE);
+      if (Result.isError(wallet)) throw new Error("create wallet failed");
+
+      // Derive EVM and Ed25519 accounts
+      const evmAccount = await backend.deriveAccount(wallet.value.id, "evm");
+      const edAccount = await backend.deriveAccount(wallet.value.id, "ed25519");
+      if (Result.isError(evmAccount) || Result.isError(edAccount))
+        throw new Error("derive failed");
+
+      // Sign with EVM
+      const evmSig = await backend.sign(
+        wallet.value.id,
+        evmAccount.value.index,
+        new Uint8Array([0xde, 0xad]),
       );
-      expect(Result.isOk(setResult)).toBe(true);
+      expect(Result.isOk(evmSig)).toBe(true);
+      if (Result.isError(evmSig)) throw new Error("evm sign failed");
+      expect(evmSig.value.algorithm).toBe("secp256k1");
 
-      const getResult = await manager.vaultGet("api-key");
-      expect(Result.isOk(getResult)).toBe(true);
-      if (Result.isError(getResult)) throw new Error("get failed");
-      expect(decoder.decode(getResult.value)).toBe("secret");
-    });
+      // Sign with Ed25519
+      const edSig = await backend.sign(
+        wallet.value.id,
+        edAccount.value.index,
+        new Uint8Array([0xbe, 0xef]),
+      );
+      expect(Result.isOk(edSig)).toBe(true);
+      if (Result.isError(edSig)) throw new Error("ed sign failed");
+      expect(edSig.value.algorithm).toBe("ed25519");
 
-    test("deletes a secret", async () => {
-      await manager.vaultSet("key", encoder.encode("val"));
-      const result = await manager.vaultDelete("key");
-      expect(Result.isOk(result)).toBe(true);
-    });
-
-    test("lists vault secrets", async () => {
-      await manager.vaultSet("a", encoder.encode("1"));
-      await manager.vaultSet("b", encoder.encode("2"));
-      const names = manager.vaultList();
-      expect(names).toHaveLength(2);
-    });
-  });
-
-  describe("getOrCreateDbKey", () => {
-    test("returns a 32-byte key", async () => {
-      const result = await manager.getOrCreateDbKey("agent-1");
-      expect(Result.isOk(result)).toBe(true);
-      if (Result.isError(result)) throw new Error("getOrCreateDbKey failed");
-      expect(result.value.byteLength).toBe(32);
-    });
-
-    test("returns the same key on repeated calls", async () => {
-      const r1 = await manager.getOrCreateDbKey("agent-1");
-      const r2 = await manager.getOrCreateDbKey("agent-1");
-      if (Result.isError(r1) || Result.isError(r2))
-        throw new Error("getOrCreateDbKey failed");
-      expect(r1.value).toEqual(r2.value);
-    });
-
-    test("returns different keys for different identities", async () => {
-      const r1 = await manager.getOrCreateDbKey("agent-1");
-      const r2 = await manager.getOrCreateDbKey("agent-2");
-      if (Result.isError(r1) || Result.isError(r2))
-        throw new Error("getOrCreateDbKey failed");
-      const same = r1.value.every((b, i) => b === r2.value[i]);
-      expect(same).toBe(false);
-    });
-
-    test("persists key across close and reopen", async () => {
-      const r1 = await manager.getOrCreateDbKey("agent-1");
-      if (Result.isError(r1)) throw new Error("getOrCreateDbKey failed");
-
-      manager.close();
-      const reopened = await createKeyManager({ dataDir });
-      if (Result.isError(reopened)) throw new Error("reopen failed");
-      manager = reopened.value;
-
-      const r2 = await manager.getOrCreateDbKey("agent-1");
-      if (Result.isError(r2)) throw new Error("getOrCreateDbKey failed");
-      expect(r1.value).toEqual(r2.value);
+      // Verify wallet now shows 2 accounts
+      const walletInfo = await backend.getWallet(wallet.value.id);
+      if (Result.isError(walletInfo)) throw new Error("get wallet failed");
+      expect(walletInfo.value.accountCount).toBe(2);
     });
   });
 });

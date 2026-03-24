@@ -1,53 +1,75 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { SignerProvider } from "@xmtp/signet-contracts";
-import type { KeyManager } from "./key-manager.js";
+import type { KeyBackend } from "./key-backend.js";
 
 /**
- * Create a SignerProvider backed by a KeyManager for a specific identity.
- * The provider signs with the identity's operational key and retrieves
- * a vault-backed random DB encryption key.
+ * Create a SignerProvider backed by a KeyBackend for a specific wallet
+ * and account.
+ *
+ * The provider signs with the account's derived key and returns the
+ * account's public key material.
+ *
+ * @param backend - Key backend for signing and key derivation
+ * @param walletId - Wallet containing the signing key
+ * @param accountIndex - BIP-44 account index within the wallet
  */
 export function createSignerProvider(
-  manager: KeyManager,
-  identityId: string,
+  backend: KeyBackend,
+  walletId: string,
+  accountIndex: number,
 ): SignerProvider {
   return {
     async sign(data: Uint8Array): Promise<Result<Uint8Array, SignetError>> {
-      return manager.signWithOperationalKey(identityId, data);
+      const result = await backend.sign(walletId, accountIndex, data);
+      if (Result.isError(result)) return result;
+      return Result.ok(result.value.signature);
     },
 
     async getPublicKey(): Promise<Result<Uint8Array, SignetError>> {
-      const opKey = manager.getOperationalKey(identityId);
-      if (Result.isError(opKey)) return opKey;
-
-      // Convert hex public key back to bytes
-      const hex = opKey.value.publicKey;
-      const bytes = hexToBytes(hex);
-      return Result.ok(bytes);
+      const result = await backend.sign(
+        walletId,
+        accountIndex,
+        new Uint8Array(0),
+      );
+      if (Result.isError(result)) return result;
+      return Result.ok(result.value.publicKey);
     },
 
     async getFingerprint(): Promise<Result<string, SignetError>> {
-      const opKey = manager.getOperationalKey(identityId);
-      if (Result.isError(opKey)) return opKey;
-      return Result.ok(opKey.value.fingerprint);
+      const result = await backend.sign(
+        walletId,
+        accountIndex,
+        new Uint8Array(0),
+      );
+      if (Result.isError(result)) return result;
+      const hex = Buffer.from(result.value.publicKey).toString("hex");
+      return Result.ok(hex);
     },
 
     async getDbEncryptionKey(): Promise<Result<Uint8Array, SignetError>> {
-      return manager.getOrCreateDbKey(identityId);
+      // Derive a deterministic 32-byte key from account public key
+      const result = await backend.sign(
+        walletId,
+        accountIndex,
+        new Uint8Array(0),
+      );
+      if (Result.isError(result)) return result;
+      // Use a hash of the public key as a stable DB encryption key
+      const { sha256 } = await import("@noble/hashes/sha256");
+      const hash = sha256(result.value.publicKey);
+      return Result.ok(hash);
     },
 
     async getXmtpIdentityKey(): Promise<Result<`0x${string}`, SignetError>> {
-      return manager.getOrCreateXmtpIdentityKey(identityId);
+      const identityKey = await backend.getXmtpIdentityKey(
+        walletId,
+        accountIndex,
+      );
+      if (Result.isError(identityKey)) {
+        return identityKey;
+      }
+      return Result.ok(identityKey.value);
     },
   };
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const length = hex.length / 2;
-  const bytes = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
 }
