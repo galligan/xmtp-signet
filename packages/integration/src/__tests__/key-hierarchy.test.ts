@@ -13,7 +13,7 @@ import { join } from "node:path";
 import {
   createKeyManager,
   type KeyManager,
-  createSignerProvider,
+  createSignerProviderCompat,
   detectPlatform,
 } from "@xmtp/signet-keys";
 
@@ -129,13 +129,13 @@ describe("key-hierarchy", () => {
     expect(sig1Hex).not.toBe(sig2Hex);
   });
 
-  test("signerProvider and sealSigner use operational key", async () => {
+  test("signerProvider uses the operational key", async () => {
     const km = await setup();
     await km.initialize();
     await km.createOperationalKey("provider-id", null);
 
     // SignerProvider
-    const signer = createSignerProvider(km, "provider-id");
+    const signer = createSignerProviderCompat(km, "provider-id");
     const signResult = await signer.sign(new TextEncoder().encode("data"));
     expect(signResult.isOk()).toBe(true);
 
@@ -156,7 +156,7 @@ describe("key-hierarchy", () => {
     expect(dbKeyResult.value.byteLength).toBe(32);
   });
 
-  test("credential key -- issue, sign, revoke", async () => {
+  test("credential key issues, signs, and revoke invalidates it", async () => {
     const km = await setup();
     await km.initialize();
 
@@ -175,11 +175,9 @@ describe("key-hierarchy", () => {
     );
     expect(sigResult.isOk()).toBe(true);
 
-    // Revoke
     const revokeResult = km.revokeCredentialKey(credentialKey.keyId);
     expect(revokeResult.isOk()).toBe(true);
 
-    // Sign after revoke fails
     const failResult = await km.signWithCredentialKey(
       credentialKey.keyId,
       new TextEncoder().encode("after revoke"),
