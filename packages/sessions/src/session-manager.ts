@@ -22,13 +22,11 @@ import {
   InternalError,
   resolveScopeSet,
 } from "@xmtp/signet-schemas";
-import type {
-  MaterialityCheck,
-  RevealStateStore,
-} from "@xmtp/signet-contracts";
+import type { RevealStateStore } from "@xmtp/signet-contracts";
 import { createRevealStateStore } from "@xmtp/signet-policy";
 import { generateToken, generateCredentialId } from "./token.js";
 import { computePolicyHash } from "./policy-hash.js";
+import type { DetailedMaterialityCheck } from "./materiality.js";
 import { checkMateriality as checkMaterialityImpl } from "./materiality.js";
 
 /** Configuration for the credential manager. */
@@ -126,7 +124,7 @@ export interface InternalCredentialManager {
   checkMateriality(
     credentialId: string,
     newScopes: ScopeSetType,
-  ): Result<MaterialityCheck, NotFoundError>;
+  ): Result<DetailedMaterialityCheck, NotFoundError>;
   /** Get the reveal state store for a credential. */
   getRevealState(credentialId: string): Result<RevealStateStore, NotFoundError>;
   /** Set the status of a credential directly. */

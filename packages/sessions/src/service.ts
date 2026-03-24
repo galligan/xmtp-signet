@@ -2,7 +2,8 @@
  * Credential service -- public API over the internal credential manager.
  *
  * Maps internal records to contract types for consumption by
- * transports (CLI, WS, MCP, HTTP).
+ * transports (CLI, WS, MCP, HTTP). Optionally resolves scopes
+ * from a policy manager when a `policyId` is present.
  */
 
 import { Result } from "better-result";
@@ -12,12 +13,19 @@ import type {
   CredentialIssuerType,
   IssuedCredentialType,
   CredentialRevocationReason,
+  SignetError,
+  PermissionScopeType,
   ScopeSetType,
 } from "@xmtp/signet-schemas";
-import { ValidationError } from "@xmtp/signet-schemas";
+import {
+  resolvePolicy,
+  NotFoundError,
+  ValidationError,
+} from "@xmtp/signet-schemas";
 import type {
   CredentialManager,
   CredentialRecord,
+  PolicyManager,
 } from "@xmtp/signet-contracts";
 import { fingerprintToken, generateCredentialId } from "./token.js";
 import type {
@@ -27,7 +35,10 @@ import type {
 
 /** Dependencies required by the credential service. */
 export interface CredentialServiceDeps {
+  /** The internal credential manager for storage and lifecycle. */
   readonly manager: InternalCredentialManager;
+  /** Optional policy manager for resolving policyId references. */
+  readonly policyManager?: PolicyManager;
 }
 
 /** Optional provenance supplied at credential issuance time. */
@@ -86,6 +97,29 @@ function toIssuedCredential(
   };
 }
 
+/**
+ * Resolve scopes by looking up a policy and merging with inline overrides.
+ *
+ * @returns Ok with merged scope set, or Err if policy lookup fails.
+ */
+async function resolvePolicyScopes(
+  policyManager: PolicyManager | undefined,
+  policyId: string,
+  inlineAllow?: PermissionScopeType[],
+  inlineDeny?: PermissionScopeType[],
+): Promise<Result<ScopeSetType, SignetError>> {
+  if (policyManager === undefined) {
+    return Result.err(NotFoundError.create("policy", policyId));
+  }
+  const policyResult = await policyManager.lookup(policyId);
+  if (Result.isError(policyResult)) {
+    return policyResult;
+  }
+  return Result.ok(
+    resolvePolicy(policyResult.value.config, inlineAllow, inlineDeny),
+  );
+}
+
 /** Create the public credential service implementation. */
 export function createCredentialService(
   deps: CredentialServiceDeps,
@@ -97,8 +131,26 @@ export function createCredentialService(
     ) {
       deps.manager.sweepExpired();
 
-      const credentialId = generateCredentialId();
+      // Resolve scopes from policy if policyId is specified
+      let resolvedConfig = config;
+      if (config.policyId !== undefined) {
+        const scopeResult = await resolvePolicyScopes(
+          deps.policyManager,
+          config.policyId,
+          config.allow,
+          config.deny,
+        );
+        if (Result.isError(scopeResult)) {
+          return scopeResult;
+        }
+        resolvedConfig = {
+          ...config,
+          allow: scopeResult.value.allow,
+          deny: scopeResult.value.deny,
+        };
+      }
 
+      const credentialId = generateCredentialId();
       const issueOptions =
         options?.issuedBy !== undefined
           ? {
@@ -107,7 +159,10 @@ export function createCredentialService(
             }
           : { credentialId };
 
-      const created = await deps.manager.issueCredential(config, issueOptions);
+      const created = await deps.manager.issueCredential(
+        resolvedConfig,
+        issueOptions,
+      );
       if (Result.isError(created)) {
         return created;
       }
@@ -161,21 +216,41 @@ export function createCredentialService(
         return Result.err(
           ValidationError.create(
             "changes",
-            "Credential updates only support allow/deny changes",
+            "Credential updates only support allow/deny/policyId changes",
           ),
         );
       }
 
       const hasScopeChanges =
-        changes.allow !== undefined || changes.deny !== undefined;
+        changes.allow !== undefined ||
+        changes.deny !== undefined ||
+        changes.policyId !== undefined;
 
       if (!hasScopeChanges) {
         return Result.ok(toCredentialRecord(current.value));
       }
 
+      // Resolve policy if policyId is changing
+      let effectiveAllow = changes.allow ?? current.value.effectiveScopes.allow;
+      let effectiveDeny = changes.deny ?? current.value.effectiveScopes.deny;
+
+      if (changes.policyId !== undefined) {
+        const scopeResult = await resolvePolicyScopes(
+          deps.policyManager,
+          changes.policyId,
+          changes.allow,
+          changes.deny,
+        );
+        if (Result.isError(scopeResult)) {
+          return scopeResult;
+        }
+        effectiveAllow = scopeResult.value.allow;
+        effectiveDeny = scopeResult.value.deny;
+      }
+
       const nextScopes = {
-        allow: changes.allow ?? current.value.effectiveScopes.allow,
-        deny: changes.deny ?? current.value.effectiveScopes.deny,
+        allow: effectiveAllow,
+        deny: effectiveDeny,
       } satisfies ScopeSetType;
 
       const materialityResult = deps.manager.checkMateriality(
