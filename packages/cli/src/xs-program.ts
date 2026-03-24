@@ -13,6 +13,11 @@ import { createOperatorCommands } from "./commands/xs-operator.js";
 import { createCredentialCommands } from "./commands/xs-credential.js";
 import { createChatCommands } from "./commands/xs-chat.js";
 import { createMessageCommands } from "./commands/xs-message.js";
+import { createPolicyCommands } from "./commands/xs-policy.js";
+import { createSealCommands } from "./commands/xs-seal.js";
+import { createWalletCommands } from "./commands/xs-wallet.js";
+import { createKeyCommands } from "./commands/xs-key.js";
+import { createUtilityCommands } from "./commands/xs-utility.js";
 
 /** Placeholder action for stub commands not yet implemented. */
 function stubAction(): void {
@@ -57,19 +62,11 @@ export function createXsProgram(): Command {
     requireCommand(createLifecycleCommands(), "status", "lifecycle"),
   );
   program.addCommand(stub("reset", "Destructive reset of signet state"));
-  program.addCommand(stub("logs", "View audit logs"));
-  program.addCommand(
-    stub("lookup", "Look up an address").argument(
-      "<address>",
-      "Address to look up",
-    ),
-  );
-  program.addCommand(
-    stub("search", "Search conversations and messages").argument(
-      "<query>",
-      "Search query",
-    ),
-  );
+
+  // Utility commands (logs, lookup, search, consent) replace stubs
+  for (const cmd of createUtilityCommands()) {
+    program.addCommand(cmd);
+  }
 
   // --- daemon ---
 
@@ -100,49 +97,19 @@ export function createXsProgram(): Command {
 
   // --- policy ---
 
-  const policy = new Command("policy").description("Policy management");
-  policy.addCommand(stub("create", "Create a policy"));
-  policy.addCommand(stub("list", "List policies"));
-  policy.addCommand(stub("info", "Show policy details"));
-  policy.addCommand(stub("update", "Update a policy"));
-  policy.addCommand(stub("rm", "Remove a policy"));
-  program.addCommand(policy);
+  program.addCommand(createPolicyCommands());
 
   // --- seal ---
 
-  const seal = new Command("seal").description(
-    "Seal inspection and verification",
-  );
-  seal.addCommand(stub("list", "List seals"));
-  seal.addCommand(stub("info", "Show seal details"));
-  seal.addCommand(stub("verify", "Verify a seal"));
-  seal.addCommand(stub("history", "Show seal chain history"));
-  program.addCommand(seal);
+  program.addCommand(createSealCommands());
 
   // --- wallet ---
 
-  const wallet = new Command("wallet").description("Wallet management");
-  wallet.addCommand(stub("list", "List wallets"));
-  wallet.addCommand(stub("info", "Show wallet details"));
-  wallet.addCommand(stub("provider", "Manage wallet providers"));
-  program.addCommand(wallet);
+  program.addCommand(createWalletCommands());
 
   // --- key ---
 
-  const key = new Command("key").description("Key management");
-  key.addCommand(stub("init", "Initialize key hierarchy"));
-  key.addCommand(stub("rotate", "Rotate keys"));
-  key.addCommand(stub("list", "List keys"));
-  key.addCommand(stub("info", "Show key details"));
-  program.addCommand(key);
-
-  // --- consent ---
-
-  const consent = new Command("consent").description("Consent management");
-  consent.addCommand(stub("check", "Check consent state"));
-  consent.addCommand(stub("allow", "Allow a contact"));
-  consent.addCommand(stub("deny", "Deny a contact"));
-  program.addCommand(consent);
+  program.addCommand(createKeyCommands());
 
   return program;
 }
