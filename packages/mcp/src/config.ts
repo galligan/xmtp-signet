@@ -9,7 +9,7 @@ export const McpServerConfigSchema: z.ZodObject<{
   serverName: z.ZodDefault<z.ZodString>;
   serverVersion: z.ZodDefault<z.ZodString>;
   toolPrefix: z.ZodDefault<z.ZodString>;
-  sessionToken: z.ZodString;
+  credentialToken: z.ZodString;
   requestTimeoutMs: z.ZodDefault<z.ZodNumber>;
 }> = z.object({
   mode: z
@@ -28,9 +28,9 @@ export const McpServerConfigSchema: z.ZodObject<{
     .string()
     .default("signet")
     .describe("Prefix for all tool names (e.g., signet/message/send)"),
-  sessionToken: z
+  credentialToken: z
     .string()
-    .describe("Session bearer token for authenticating the MCP caller"),
+    .describe("Credential bearer token for authenticating the MCP caller"),
   requestTimeoutMs: z
     .number()
     .int()

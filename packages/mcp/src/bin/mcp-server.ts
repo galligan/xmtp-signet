@@ -2,7 +2,7 @@
 
 /**
  * Standalone MCP server entry point.
- * Reads XMTP_SIGNET_SESSION_TOKEN from env, creates server,
+ * Reads XMTP_SIGNET_CREDENTIAL_TOKEN from env, creates server,
  * starts stdio transport.
  */
 
@@ -11,9 +11,9 @@ import { createActionRegistry } from "@xmtp/signet-contracts";
 import { Result } from "better-result";
 import { InternalError } from "@xmtp/signet-schemas";
 
-const sessionToken = process.env["XMTP_SIGNET_SESSION_TOKEN"];
-if (!sessionToken) {
-  console.error("XMTP_SIGNET_SESSION_TOKEN is required");
+const credentialToken = process.env["XMTP_SIGNET_CREDENTIAL_TOKEN"];
+if (!credentialToken) {
+  console.error("XMTP_SIGNET_CREDENTIAL_TOKEN is required");
   process.exit(1);
 }
 
@@ -24,7 +24,7 @@ const registry = createActionRegistry();
 const server = createMcpServer(
   {
     mode: "stdio",
-    sessionToken,
+    credentialToken,
   },
   {
     registry,

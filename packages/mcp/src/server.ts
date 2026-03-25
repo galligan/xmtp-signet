@@ -81,7 +81,7 @@ function buildMeta(requestId: string, startTime: number): ActionResultMeta {
  * liveness on each tool call.
  */
 export function createMcpServer(
-  rawConfig: Partial<McpServerConfig> & { sessionToken: string },
+  rawConfig: Partial<McpServerConfig> & { credentialToken: string },
   deps: McpServerDeps,
 ): McpServerInstance {
   const config = McpServerConfigSchema.parse(rawConfig);
@@ -103,7 +103,7 @@ export function createMcpServer(
     async start() {
       // Validate credential token
       const credentialResult = await validateCredential(
-        config.sessionToken,
+        config.credentialToken,
         deps.tokenLookup,
       );
       if (!credentialResult.isOk()) {
