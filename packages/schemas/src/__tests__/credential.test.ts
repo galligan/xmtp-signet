@@ -63,14 +63,14 @@ describe("CredentialConfig", () => {
     expect(result.success).toBe(true);
   });
 
-  it("defaults ttlSeconds to 3600", () => {
+  it("leaves ttlSeconds unset for runtime defaulting", () => {
     const result = CredentialConfig.safeParse({
       operatorId: "op_abcd1234feedbabe",
       chatIds: ["conv_abcd1234feedbabe"],
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.ttlSeconds).toBe(3600);
+      expect(result.data.ttlSeconds).toBeUndefined();
     }
   });
 
