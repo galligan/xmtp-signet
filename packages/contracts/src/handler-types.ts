@@ -24,7 +24,7 @@ export interface HandlerContext extends CoreContext {
 
   /**
    * Admin authentication context. Present when the caller is the signet
-   * admin (CLI, local MCP). Absent for harness sessions.
+   * admin (CLI, local MCP). Absent for harness credentials.
    */
   readonly adminAuth?: AdminAuthContext;
 
