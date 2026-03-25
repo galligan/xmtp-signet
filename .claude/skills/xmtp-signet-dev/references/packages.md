@@ -34,7 +34,7 @@ Service interfaces, action system, and wire format schemas that define boundarie
 **Exports:**
 - Core types: `CoreState`, `CoreContext`, `GroupInfo`, `RawMessage`, `RawEvent`
 - Credential types: `CredentialRecord`, `MaterialityCheck`
-- Policy types: `PolicyDelta`, `GrantError`
+- Policy types: `PolicyDelta`
 - Seal types: `SignedRevocationEnvelope`, `MessageProvenanceMetadata`
 - Handler types: `HandlerContext` (with `requestId`, `signal`, optional `adminAuth`, `operatorId`, `credentialId`), `Handler`, `AdminAuthContext`
 - Action system: `ActionSpec`, `CliSurface`, `McpSurface`, `CliOption`, `ActionRegistry`, `createActionRegistry`, `ActionResult`, `toActionResult`
