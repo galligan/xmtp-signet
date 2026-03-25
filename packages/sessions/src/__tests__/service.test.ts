@@ -31,6 +31,16 @@ describe("createCredentialService", () => {
     expect(result.value.credential.config.operatorId).toBe("op_test1234");
   });
 
+  test("preserves explicit credential issuer provenance", async () => {
+    const result = await service.issue(createTestCredentialConfig(), {
+      issuedBy: "admin",
+    });
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.credential.issuedBy).toBe("admin");
+  });
+
   test("reuses an existing matching active credential", async () => {
     const config = createTestCredentialConfig();
     const first = await service.issue(config);
