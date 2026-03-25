@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { createCredentialManager } from "../session-manager.js";
-import type { InternalCredentialManager } from "../session-manager.js";
+import { createCredentialManager } from "../credential-manager.js";
+import type { InternalCredentialManager } from "../credential-manager.js";
 import { createTestCredentialConfig } from "./fixtures.js";
 
 let manager: InternalCredentialManager;

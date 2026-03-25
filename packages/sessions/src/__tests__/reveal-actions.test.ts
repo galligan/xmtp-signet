@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { RevealGrant } from "@xmtp/signet-schemas";
 import type { CredentialManager } from "@xmtp/signet-contracts";
-import { createCredentialManager } from "../session-manager.js";
+import { createCredentialManager } from "../credential-manager.js";
 import { createCredentialService } from "../service.js";
 import { createRevealActions } from "../reveal-actions.js";
 import type { RevealActionDeps } from "../reveal-actions.js";
 import { createTestCredentialConfig } from "./fixtures.js";
-import type { InternalCredentialManager } from "../session-manager.js";
+import type { InternalCredentialManager } from "../credential-manager.js";
 
 let manager: InternalCredentialManager;
 let credentialService: CredentialManager;

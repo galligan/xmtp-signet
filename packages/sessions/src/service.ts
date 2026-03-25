@@ -31,7 +31,7 @@ import { fingerprintToken, generateCredentialId } from "./token.js";
 import type {
   InternalCredentialManager,
   InternalCredentialRecord,
-} from "./session-manager.js";
+} from "./credential-manager.js";
 
 /** Dependencies required by the credential service. */
 export interface CredentialServiceDeps {

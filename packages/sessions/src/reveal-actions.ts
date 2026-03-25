@@ -13,7 +13,7 @@ import type {
 } from "@xmtp/signet-schemas";
 import { RevealScope, PermissionError } from "@xmtp/signet-schemas";
 import type { RevealStateSnapshot } from "@xmtp/signet-contracts";
-import type { InternalCredentialManager } from "./session-manager.js";
+import type { InternalCredentialManager } from "./credential-manager.js";
 
 /** Dependencies for reveal action registration. */
 export interface RevealActionDeps {

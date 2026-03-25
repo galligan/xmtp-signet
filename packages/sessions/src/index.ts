@@ -2,7 +2,7 @@ export { generateToken, generateCredentialId } from "./token.js";
 export { computePolicyHash } from "./policy-hash.js";
 export { checkMateriality } from "./materiality.js";
 export type { DetailedMaterialityCheck } from "./materiality.js";
-export { createCredentialManager } from "./session-manager.js";
+export { createCredentialManager } from "./credential-manager.js";
 export { createCredentialService } from "./service.js";
 export { createCredentialActions } from "./actions.js";
 export { createRevealActions } from "./reveal-actions.js";
@@ -11,7 +11,7 @@ export type {
   CredentialManagerOptions,
   InternalCredentialRecord,
   InternalCredentialManager,
-} from "./session-manager.js";
+} from "./credential-manager.js";
 export type { CredentialServiceDeps } from "./service.js";
 export type { CredentialActionDeps } from "./actions.js";
 export type { RevealActionDeps } from "./reveal-actions.js";

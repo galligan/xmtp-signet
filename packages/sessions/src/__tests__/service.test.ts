@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { createCredentialService } from "../service.js";
-import { createCredentialManager } from "../session-manager.js";
-import type { InternalCredentialManager } from "../session-manager.js";
+import { createCredentialManager } from "../credential-manager.js";
+import type { InternalCredentialManager } from "../credential-manager.js";
 import type { PolicyManager } from "@xmtp/signet-contracts";
 import {
   NotFoundError,

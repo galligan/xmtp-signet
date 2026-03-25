@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { CredentialManager, SignerProvider } from "@xmtp/signet-contracts";
 import { Result } from "better-result";
 import { InternalError } from "@xmtp/signet-schemas";
-import { createCredentialManager } from "../session-manager.js";
+import { createCredentialManager } from "../credential-manager.js";
 import { createCredentialService } from "../service.js";
 import { createCredentialActions } from "../actions.js";
 import type { CredentialActionDeps } from "../actions.js";
-import type { InternalCredentialManager } from "../session-manager.js";
+import type { InternalCredentialManager } from "../credential-manager.js";
 
 let manager: InternalCredentialManager;
 let credentialService: CredentialManager;

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { PermissionScopeType } from "@xmtp/signet-schemas";
 import type { CredentialManager } from "@xmtp/signet-contracts";
-import { createCredentialManager } from "../session-manager.js";
+import { createCredentialManager } from "../credential-manager.js";
 import { createCredentialService } from "../service.js";
 import { createUpdateActions } from "../update-actions.js";
 import type { UpdateActionDeps } from "../update-actions.js";
-import type { InternalCredentialManager } from "../session-manager.js";
+import type { InternalCredentialManager } from "../credential-manager.js";
 import { createTestCredentialConfig, createTestScopes } from "./fixtures.js";
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import type { ActionSpec } from "@xmtp/signet-contracts";
 import type { CredentialManager } from "@xmtp/signet-contracts";
 import type { SignetError, ScopeSetType } from "@xmtp/signet-schemas";
 import { AuthError, ScopeSet } from "@xmtp/signet-schemas";
-import type { InternalCredentialManager } from "./session-manager.js";
+import type { InternalCredentialManager } from "./credential-manager.js";
 
 /** Dependencies for credential update actions. */
 export interface UpdateActionDeps {
