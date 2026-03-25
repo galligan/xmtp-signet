@@ -3,7 +3,7 @@ import type { ConnectionData } from "./connection-state.js";
 
 /**
  * Tracks authenticated WebSocket connections.
- * Provides lookups by connection ID, session ID, and agent inbox ID.
+ * Provides lookups by connection ID, credential ID, and operator ID.
  */
 export class ConnectionRegistry {
   private readonly connections = new Map<

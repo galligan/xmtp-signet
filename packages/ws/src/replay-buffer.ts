@@ -1,6 +1,6 @@
 /**
  * Fixed-capacity circular buffer. Overwrites oldest entries when full.
- * Used for per-session event replay on reconnection.
+ * Used for per-credential event replay on reconnection.
  */
 export class CircularBuffer<T> {
   private readonly buffer: Array<T | undefined>;
