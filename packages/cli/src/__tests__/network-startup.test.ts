@@ -114,17 +114,17 @@ function makeMockDeps(
             createdAt: new Date().toISOString(),
           }),
         listOperationalKeys: () => [],
-        issueSessionKey: async () =>
+        issueCredentialKey: async () =>
           Result.ok({
             keyId: "sk",
-            sessionId: "s",
+            credentialId: "cred_1a2b3c4dfeedbabe",
             fingerprint: "fp",
             publicKeyHex: "pub",
             expiresAt: new Date().toISOString(),
           }),
-        revokeSessionKey: () => Result.ok(undefined),
+        revokeCredentialKey: () => Result.ok(undefined),
         signWithOperationalKey: async () => Result.ok(new Uint8Array()),
-        signWithSessionKey: async () => Result.ok(new Uint8Array()),
+        signWithCredentialKey: async () => Result.ok(new Uint8Array()),
         getOrCreateDbKey: async () => Result.ok(new Uint8Array(32)),
         getOrCreateXmtpIdentityKey: async () =>
           Result.ok("0x00" as `0x${string}`),
@@ -167,18 +167,23 @@ function makeMockDeps(
           Result.err(InternalError.create("not implemented")),
       };
     },
-    createSessionManager: () => {
-      tracker.record("sessionManager.create");
+    createCredentialManager: () => {
+      tracker.record("credentialManager.create");
       return {
         issue: async () =>
           Result.ok({
             token: "token",
-            session: {
-              sessionId: "s1",
-              agentInboxId: "a1",
-              sessionKeyFingerprint: "fp",
+            credential: {
+              id: "cred_1",
+              config: {
+                operatorId: "op_1",
+                chatIds: [],
+              },
+              inboxIds: [],
+              status: "active",
               issuedAt: new Date().toISOString(),
               expiresAt: new Date().toISOString(),
+              issuedBy: "op_1",
             },
           }),
         list: async () => Result.ok([]),
@@ -186,9 +191,8 @@ function makeMockDeps(
         lookupByToken: async () =>
           Result.err(InternalError.create("not found")),
         revoke: async () => Result.ok(undefined),
-        heartbeat: async () => Result.ok(undefined),
-        isActive: async () => Result.ok(false),
-        getRevealState: () => Result.err(InternalError.create("not found")),
+        update: async () => Result.err(InternalError.create("not found")),
+        renew: async () => Result.err(InternalError.create("not found")),
       };
     },
     createSealManager: () => {

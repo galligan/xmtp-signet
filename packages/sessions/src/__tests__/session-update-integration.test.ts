@@ -79,6 +79,7 @@ describe("credential update integration", () => {
     const output = result.value as {
       updated: boolean;
       material: boolean;
+      reason: string | null;
     };
     expect(output.updated).toBe(true);
     expect(output.material).toBe(true);
@@ -167,5 +168,7 @@ describe("credential update integration", () => {
     expect(internal.isOk()).toBe(true);
     if (!internal.isOk()) return;
     expect(internal.value.status).toBe("revoked");
+    expect(internal.value.revocationReason).toBe("reauthorization-required");
+    expect(internal.value.revokedAt).not.toBeNull();
   });
 });

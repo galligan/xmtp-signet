@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { CredentialRecord } from "@xmtp/signet-contracts";
 import type {
   HarnessRequest,
   RevealEvent,
@@ -15,42 +15,119 @@ import { createWsRequestHandler } from "../ws/request-handler.js";
 import type { ReplayMessage } from "../ws/request-handler.js";
 import { createPendingActionStore } from "@xmtp/signet-sessions";
 import { createRevealStateStore } from "@xmtp/signet-policy";
+import type { InternalCredentialManager } from "@xmtp/signet-sessions";
 
-function makeSessionRecord(
-  overrides: Partial<SessionRecord> = {},
-): SessionRecord {
+function makeCredentialRecord(
+  overrides: Partial<CredentialRecord> = {},
+): CredentialRecord {
   return {
-    sessionId: "sess_123",
-    agentInboxId: "agent_1",
-    sessionKeyFingerprint: "fp_abc",
-    view: {
-      mode: "full",
-      threadScopes: [{ groupId: "g1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
+    id: "cred_123",
+    config: {
+      operatorId: "operator_1",
+      chatIds: ["g1"],
+      allow: ["send", "read-messages"],
+      deny: [],
     },
-    grant: {
-      messaging: { send: true, reply: false, react: false, draftOnly: false },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
-      },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
+    inboxIds: ["inbox_12345678feedbabe"],
+    credentialId: "cred_123",
+    operatorId: "operator_1",
+    effectiveScopes: {
+      allow: ["send", "read-messages"],
+      deny: [],
     },
-    state: "active",
+    status: "active",
     issuedAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-02T00:00:00Z",
+    issuedBy: "op_admin1234",
+    isExpired: false,
     lastHeartbeat: "2024-01-01T00:00:00Z",
     ...overrides,
   };
+}
+
+function makeInternalCredentialManager(
+  overrides: Partial<InternalCredentialManager> = {},
+): InternalCredentialManager {
+  return {
+    issueCredential: async () =>
+      Result.err({
+        _tag: "InternalError",
+        code: 0,
+        category: "internal",
+        message: "not impl",
+        context: null,
+      }),
+    getCredentialByToken: () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    getCredentialById: () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    getActiveCredentials: () => [],
+    listCredentials: () => [],
+    recordHeartbeat: () => Result.ok(undefined),
+    renewCredential: async () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    updateCredentialScopes: () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    revokeCredential: () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    revokeAllCredentials: () => [],
+    lookupByToken: () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    checkMateriality: () =>
+      Result.ok({
+        isMaterial: false,
+        reason: null,
+        requiresReauthorization: false,
+      }),
+    getRevealState: () => Result.ok(createRevealStateStore()),
+    setCredentialStatus: () =>
+      Result.err({
+        _tag: "NotFoundError",
+        code: 0,
+        category: "not_found",
+        message: "not found",
+        context: null,
+      }),
+    sweepExpired: () => [],
+    isHeartbeatStale: () => Result.ok(false),
+    ...overrides,
+  } as unknown as InternalCredentialManager;
 }
 
 describe("createWsRequestHandler", () => {
@@ -65,9 +142,9 @@ describe("createWsRequestHandler", () => {
         calls.push(`send:${groupId}:${contentType}:${JSON.stringify(content)}`);
         return Result.ok({ messageId: "msg_1" });
       },
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
-        lookup: async () => Result.ok(makeSessionRecord()),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
     });
 
@@ -79,7 +156,21 @@ describe("createWsRequestHandler", () => {
       content: { text: "hello" },
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -94,95 +185,236 @@ describe("createWsRequestHandler", () => {
     ]);
   });
 
-  test("rejects heartbeats whose session id does not match the authenticated session", async () => {
-    const heartbeatCalls: string[] = [];
+  test("rejects heartbeats whose credential id does not match the authenticated credential", async () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async (sessionId: string) => {
-          heartbeatCalls.push(sessionId);
-          return Result.ok(undefined);
-        },
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
+      internalCredentialManager: makeInternalCredentialManager(),
     });
 
     const request: HarnessRequest = {
       type: "heartbeat",
       requestId: "req_2",
-      sessionId: "spoofed_session",
+      credentialId: "spoofed_credential",
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toBeInstanceOf(AuthError);
       expect(result.error.category).toBe("auth");
     }
-    expect(heartbeatCalls).toEqual([]);
   });
 
-  test("records heartbeat for the authenticated session", async () => {
+  test("records heartbeat for the authenticated credential", async () => {
     const heartbeatCalls: string[] = [];
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async (sessionId: string) => {
-          heartbeatCalls.push(sessionId);
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
+      },
+      internalCredentialManager: makeInternalCredentialManager({
+        recordHeartbeat: (credentialId: string) => {
+          heartbeatCalls.push(credentialId);
           return Result.ok(undefined);
         },
-      },
+      } as unknown as Partial<InternalCredentialManager>),
     });
 
     const request: HarnessRequest = {
       type: "heartbeat",
       requestId: "req_2b",
-      sessionId: "sess_123",
+      credentialId: "cred_123",
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value).toBeNull();
     }
-    expect(heartbeatCalls).toEqual(["sess_123"]);
+    expect(heartbeatCalls).toEqual(["cred_123"]);
   });
 
-  test("rejects content types outside the session view", async () => {
+  test("applies scope narrowing in place without marking the credential pending", async () => {
+    const statusCalls: string[] = [];
+    const updateCalls: Array<{
+      credentialId: string;
+      scopes: { allow: readonly string[]; deny: readonly string[] };
+    }> = [];
+
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
-      sendMessage: async () => Result.ok({ messageId: "msg_1" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
+      internalCredentialManager: makeInternalCredentialManager({
+        checkMateriality: () =>
+          Result.ok({
+            isMaterial: true,
+            reason: "Material change: removed: send",
+            requiresReauthorization: false,
+          }),
+        updateCredentialScopes: (credentialId, scopes) => {
+          updateCalls.push({ credentialId, scopes });
+          return Result.ok({
+            credentialId,
+            token: "token",
+            operatorId: "operator_1",
+            chatIds: ["g1"],
+            effectiveScopes: scopes,
+            resolvedScopes: new Set(scopes.allow),
+            policyHash: "hash",
+            status: "active",
+            heartbeatInterval: 30,
+            lastHeartbeat: "2024-01-01T00:00:00Z",
+            issuedAt: "2024-01-01T00:00:00Z",
+            expiresAt: "2024-01-02T00:00:00Z",
+            ttlMs: 3600_000,
+            revokedAt: null,
+            revocationReason: null,
+          });
+        },
+        setCredentialStatus: (_credentialId, status) => {
+          statusCalls.push(status);
+          return Result.err(NotFoundError.create("credential", "cred_123"));
+        },
+      } as unknown as Partial<InternalCredentialManager>),
     });
 
     const request: HarnessRequest = {
-      type: "send_message",
-      requestId: "req_3",
-      groupId: "g1",
-      contentType: "xmtp.org/reaction:1.0",
-      content: { emoji: ":+1:" },
+      type: "update_scopes",
+      requestId: "req_update_1",
+      allow: ["read-messages"],
+      deny: ["send"],
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(request, makeCredentialRecord());
 
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error).toBeInstanceOf(PermissionError);
-      expect(result.error.category).toBe("permission");
-    }
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value).toEqual({
+      updated: true,
+      material: true,
+      reason: "Material change: removed: send",
+    });
+    expect(updateCalls).toEqual([
+      {
+        credentialId: "cred_123",
+        scopes: { allow: ["read-messages"], deny: ["send"] },
+      },
+    ]);
+    expect(statusCalls).toEqual([]);
   });
 
-  test("rejects unsupported request types for Phase 2B", async () => {
+  test("marks the credential pending when scope escalation requires reauthorization", async () => {
+    const statusCalls: string[] = [];
+    const updateCalls: string[] = [];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
+      },
+      internalCredentialManager: makeInternalCredentialManager({
+        checkMateriality: () =>
+          Result.ok({
+            isMaterial: true,
+            reason: "Material change: added: reply",
+            requiresReauthorization: true,
+          }),
+        updateCredentialScopes: (credentialId) => {
+          updateCalls.push(credentialId);
+          return Result.err(NotFoundError.create("credential", credentialId));
+        },
+        setCredentialStatus: (_credentialId, status) => {
+          statusCalls.push(status);
+          return Result.ok({
+            credentialId: "cred_123",
+            token: "token",
+            operatorId: "operator_1",
+            chatIds: ["g1"],
+            effectiveScopes: { allow: ["send", "read-messages"], deny: [] },
+            resolvedScopes: new Set(["send", "read-messages"]),
+            policyHash: "hash",
+            status,
+            heartbeatInterval: 30,
+            lastHeartbeat: "2024-01-01T00:00:00Z",
+            issuedAt: "2024-01-01T00:00:00Z",
+            expiresAt: "2024-01-02T00:00:00Z",
+            ttlMs: 3600_000,
+            revokedAt: null,
+            revocationReason: null,
+          });
+        },
+      } as unknown as Partial<InternalCredentialManager>),
+    });
+
+    const request: HarnessRequest = {
+      type: "update_scopes",
+      requestId: "req_update_2",
+      allow: ["send", "read-messages", "reply"],
+    };
+
+    const result = await handler(request, makeCredentialRecord());
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value).toEqual({
+      updated: false,
+      material: true,
+      reason: "Material change: added: reply",
+    });
+    expect(statusCalls).toEqual(["pending"]);
+    expect(updateCalls).toEqual([]);
+  });
+
+  test("rejects unsupported request types", async () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "msg_1" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
     });
 
@@ -195,7 +427,21 @@ describe("createWsRequestHandler", () => {
       content: { text: "reply" },
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -203,70 +449,76 @@ describe("createWsRequestHandler", () => {
     }
   });
 
-  test("queues pending action for draftOnly sessions instead of rejecting", async () => {
-    const broadcastedEvents: { sessionId: string; event: SignetEvent }[] = [];
-    const pendingActions = createPendingActionStore();
-
+  test("attaches message-seal bindings when seal lookup and binding are available", async () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
-      sendMessage: async () => Result.ok({ messageId: "msg_1" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "msg_bound" }),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
-      pendingActions,
-      broadcast: (sessionId, event) => {
-        broadcastedEvents.push({ sessionId, event });
+      sealManager: {
+        current: async () =>
+          Result.ok({
+            chain: {
+              current: {
+                sealId: "seal_12345678feedbabe",
+                credentialId: "cred_123",
+                operatorId: "operator_1",
+                chatId: "g1",
+                scopeMode: "per-chat",
+                permissions: { allow: ["send"], deny: [] },
+                issuedAt: "2024-01-01T00:00:00Z",
+              },
+              delta: { added: [], removed: [], changed: [] },
+            },
+            signature: "dGVzdA==",
+            keyId: "key_12345678feedbabe",
+            algorithm: "Ed25519",
+          }),
       },
-    });
-
-    const session = makeSessionRecord({
-      grant: {
-        messaging: { send: true, reply: false, react: false, draftOnly: true },
-        groupManagement: {
-          addMembers: false,
-          removeMembers: false,
-          updateMetadata: false,
-          inviteUsers: false,
-        },
-        tools: { scopes: [] },
-        egress: {
-          storeExcerpts: false,
-          useForMemory: false,
-          forwardToProviders: false,
-          quoteRevealed: false,
-          summarize: false,
-        },
-      },
+      createMessageBinding: async () =>
+        Result.ok({
+          sealRef: "seal_12345678feedbabe",
+          sealSignature: "dGVzdC1zaWduYXR1cmU=",
+        }),
     });
 
     const request: HarnessRequest = {
       type: "send_message",
-      requestId: "req_draft",
+      requestId: "req_bound",
       groupId: "g1",
       contentType: "xmtp.org/text:1.0",
-      content: { text: "draft message" },
+      content: { text: "bound" },
     };
 
-    const result = await handler(request, session);
-
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      const data = result.value as { pending: boolean; actionId: string };
-      expect(data.pending).toBe(true);
-      expect(typeof data.actionId).toBe("string");
-
-      // Verify action was stored
-      const stored = pendingActions.get(data.actionId);
-      expect(stored).not.toBeNull();
-      expect(stored?.actionType).toBe("send_message");
-      expect(stored?.sessionId).toBe("sess_123");
-    }
-
-    // Verify broadcast was called with confirmation event
-    expect(broadcastedEvents).toHaveLength(1);
-    expect(broadcastedEvents[0]?.event.type).toBe(
-      "action.confirmation_required",
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
     );
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value).toEqual({
+      messageId: "msg_bound",
+      provenance: {
+        credentialId: "cred_123",
+        operatorId: "operator_1",
+        sealRef: "seal_12345678feedbabe",
+        sealSignature: "dGVzdC1zaWduYXR1cmU=",
+      },
+    });
   });
 
   test("confirm_action executes the pending action when confirmed", async () => {
@@ -279,8 +531,9 @@ describe("createWsRequestHandler", () => {
         sendCalls.push(`send:${groupId}:${contentType}`);
         return Result.ok({ messageId: "msg_confirmed" });
       },
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
       pendingActions,
       broadcast: () => {},
@@ -289,7 +542,7 @@ describe("createWsRequestHandler", () => {
     // Pre-populate a pending action
     pendingActions.add({
       actionId: "act_confirm_1",
-      sessionId: "sess_123",
+      credentialId: "cred_123",
       actionType: "send_message",
       payload: {
         groupId: "g1",
@@ -307,7 +560,21 @@ describe("createWsRequestHandler", () => {
       confirmed: true,
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -329,8 +596,9 @@ describe("createWsRequestHandler", () => {
         sendCalls.push("send");
         return Result.ok({ messageId: "unused" });
       },
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
       pendingActions,
       broadcast: () => {},
@@ -338,7 +606,7 @@ describe("createWsRequestHandler", () => {
 
     pendingActions.add({
       actionId: "act_deny_1",
-      sessionId: "sess_123",
+      credentialId: "cred_123",
       actionType: "send_message",
       payload: {
         groupId: "g1",
@@ -356,7 +624,21 @@ describe("createWsRequestHandler", () => {
       confirmed: false,
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -372,8 +654,9 @@ describe("createWsRequestHandler", () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
       pendingActions,
       broadcast: () => {},
@@ -386,7 +669,21 @@ describe("createWsRequestHandler", () => {
       confirmed: true,
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -395,14 +692,15 @@ describe("createWsRequestHandler", () => {
     }
   });
 
-  test("confirm_action rejects when session does not match pending action", async () => {
+  test("confirm_action rejects when credential does not match pending action", async () => {
     const pendingActions = createPendingActionStore();
 
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
       pendingActions,
       broadcast: () => {},
@@ -410,7 +708,7 @@ describe("createWsRequestHandler", () => {
 
     pendingActions.add({
       actionId: "act_other",
-      sessionId: "sess_other",
+      credentialId: "cred_other",
       actionType: "send_message",
       payload: {},
       createdAt: "2024-01-01T00:00:00Z",
@@ -424,7 +722,21 @@ describe("createWsRequestHandler", () => {
       confirmed: true,
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -435,7 +747,7 @@ describe("createWsRequestHandler", () => {
   test("reveal_content replays historical messages as message.revealed events", async () => {
     const revealStore = createRevealStateStore();
     const broadcastedEvents: {
-      sessionId: string;
+      credentialId: string;
       event: SignetEvent;
     }[] = [];
 
@@ -463,12 +775,15 @@ describe("createWsRequestHandler", () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
-        getRevealState: () => Result.ok(revealStore),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
-      broadcast: (sessionId, event) => {
-        broadcastedEvents.push({ sessionId, event });
+      internalCredentialManager: makeInternalCredentialManager({
+        getRevealState: () => Result.ok(revealStore),
+      } as unknown as Partial<InternalCredentialManager>),
+      broadcast: (credentialId, event) => {
+        broadcastedEvents.push({ credentialId, event });
       },
       listMessages: async () => Result.ok(messages),
     });
@@ -486,7 +801,21 @@ describe("createWsRequestHandler", () => {
       },
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -497,7 +826,7 @@ describe("createWsRequestHandler", () => {
     // Both messages should be revealed via broadcast
     expect(broadcastedEvents).toHaveLength(2);
     for (const entry of broadcastedEvents) {
-      expect(entry.sessionId).toBe("sess_123");
+      expect(entry.credentialId).toBe("cred_123");
       expect(entry.event.type).toBe("message.revealed");
     }
 
@@ -514,19 +843,22 @@ describe("createWsRequestHandler", () => {
   test("reveal_content skips replay when listMessages is not provided", async () => {
     const revealStore = createRevealStateStore();
     const broadcastedEvents: {
-      sessionId: string;
+      credentialId: string;
       event: SignetEvent;
     }[] = [];
 
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
-        getRevealState: () => Result.ok(revealStore),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
-      broadcast: (sessionId, event) => {
-        broadcastedEvents.push({ sessionId, event });
+      internalCredentialManager: makeInternalCredentialManager({
+        getRevealState: () => Result.ok(revealStore),
+      } as unknown as Partial<InternalCredentialManager>),
+      broadcast: (credentialId, event) => {
+        broadcastedEvents.push({ credentialId, event });
       },
     });
 
@@ -543,157 +875,31 @@ describe("createWsRequestHandler", () => {
       },
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     // No broadcast since listMessages is not wired
     expect(broadcastedEvents).toHaveLength(0);
   });
 
-  test("reveal_content filters out replayed messages with disallowed content types", async () => {
-    const revealStore = createRevealStateStore();
-    const broadcastedEvents: {
-      sessionId: string;
-      event: SignetEvent;
-    }[] = [];
-
-    const messages: readonly ReplayMessage[] = [
-      {
-        messageId: "msg_text",
-        groupId: "g1",
-        senderInboxId: "sender_a",
-        contentType: "xmtp.org/text:1.0",
-        content: { text: "allowed" },
-        sentAt: "2024-01-01T00:01:00Z",
-        threadId: null,
-      },
-      {
-        messageId: "msg_reaction",
-        groupId: "g1",
-        senderInboxId: "sender_a",
-        contentType: "xmtp.org/reaction:1.0",
-        content: { emoji: ":+1:" },
-        sentAt: "2024-01-01T00:02:00Z",
-        threadId: null,
-      },
-    ];
-
-    const handler = createWsRequestHandler({
-      ensureCoreReady: async () => Result.ok(undefined),
-      sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
-        getRevealState: () => Result.ok(revealStore),
-      },
-      broadcast: (sessionId, event) => {
-        broadcastedEvents.push({ sessionId, event });
-      },
-      listMessages: async () => Result.ok(messages),
-    });
-
-    // Use sender scope to reveal all messages from sender_a.
-    // Session only allows text content type, so reaction should be filtered.
-    const request: HarnessRequest = {
-      type: "reveal_content",
-      requestId: "req_reveal_filter",
-      reveal: {
-        revealId: "rev_filter",
-        groupId: "g1",
-        scope: "sender",
-        targetId: "sender_a",
-        requestedBy: "owner_1",
-        expiresAt: null,
-      },
-    };
-
-    const result = await handler(request, makeSessionRecord());
-
-    expect(result.isOk()).toBe(true);
-    // Only the text message should be broadcast; the reaction is filtered
-    expect(broadcastedEvents).toHaveLength(1);
-    const revealed = broadcastedEvents[0]?.event as RevealEvent;
-    expect(revealed.messageId).toBe("msg_text");
-    expect(revealed.contentType).toBe("xmtp.org/text:1.0");
-  });
-
-  test("reveal_content filters out replayed messages outside thread scope", async () => {
-    const revealStore = createRevealStateStore();
-    const broadcastedEvents: {
-      sessionId: string;
-      event: SignetEvent;
-    }[] = [];
-
-    const messages: readonly ReplayMessage[] = [
-      {
-        messageId: "msg_in_scope",
-        groupId: "g1",
-        senderInboxId: "sender_a",
-        contentType: "xmtp.org/text:1.0",
-        content: { text: "in scope" },
-        sentAt: "2024-01-01T00:01:00Z",
-        threadId: "thread_allowed",
-      },
-      {
-        messageId: "msg_out_scope",
-        groupId: "g1",
-        senderInboxId: "sender_a",
-        contentType: "xmtp.org/text:1.0",
-        content: { text: "out of scope" },
-        sentAt: "2024-01-01T00:02:00Z",
-        threadId: "thread_not_allowed",
-      },
-    ];
-
-    const handler = createWsRequestHandler({
-      ensureCoreReady: async () => Result.ok(undefined),
-      sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
-        getRevealState: () => Result.ok(revealStore),
-      },
-      broadcast: (sessionId, event) => {
-        broadcastedEvents.push({ sessionId, event });
-      },
-      listMessages: async () => Result.ok(messages),
-    });
-
-    // Session scoped to a specific thread. Use sender scope to reveal
-    // all messages from sender_a; thread scope filter should drop the
-    // message in thread_not_allowed.
-    const session = makeSessionRecord({
-      view: {
-        mode: "full",
-        threadScopes: [{ groupId: "g1", threadId: "thread_allowed" }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      },
-    });
-
-    const request: HarnessRequest = {
-      type: "reveal_content",
-      requestId: "req_reveal_scope",
-      reveal: {
-        revealId: "rev_scope",
-        groupId: "g1",
-        scope: "sender",
-        targetId: "sender_a",
-        requestedBy: "owner_1",
-        expiresAt: null,
-      },
-    };
-
-    const result = await handler(request, session);
-
-    expect(result.isOk()).toBe(true);
-    // Only in-scope thread message should be broadcast
-    expect(broadcastedEvents).toHaveLength(1);
-    const revealed = broadcastedEvents[0]?.event as RevealEvent;
-    expect(revealed.messageId).toBe("msg_in_scope");
-  });
-
   test("reveal_content only replays messages matching the reveal scope", async () => {
     const revealStore = createRevealStateStore();
     const broadcastedEvents: {
-      sessionId: string;
+      credentialId: string;
       event: SignetEvent;
     }[] = [];
 
@@ -721,12 +927,15 @@ describe("createWsRequestHandler", () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),
       sendMessage: async () => Result.ok({ messageId: "unused" }),
-      sessionManager: {
-        heartbeat: async () => Result.ok(undefined),
-        getRevealState: () => Result.ok(revealStore),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
       },
-      broadcast: (sessionId, event) => {
-        broadcastedEvents.push({ sessionId, event });
+      internalCredentialManager: makeInternalCredentialManager({
+        getRevealState: () => Result.ok(revealStore),
+      } as unknown as Partial<InternalCredentialManager>),
+      broadcast: (credentialId, event) => {
+        broadcastedEvents.push({ credentialId, event });
       },
       listMessages: async () => Result.ok(messages),
     });
@@ -745,7 +954,21 @@ describe("createWsRequestHandler", () => {
       },
     };
 
-    const result = await handler(request, makeSessionRecord());
+    const result = await handler(
+      request,
+      makeCredentialRecord({
+        config: {
+          operatorId: "operator_1",
+          chatIds: ["g1"],
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+        effectiveScopes: {
+          allow: ["send", "read-messages", "read-history"],
+          deny: [],
+        },
+      }),
+    );
 
     expect(result.isOk()).toBe(true);
     // Only the targeted message should be revealed

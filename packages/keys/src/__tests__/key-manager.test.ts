@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createKeyManager, type KeyManager } from "../key-manager.js";
 import { detectPlatform } from "../platform.js";
+import { shouldSkipBlockedSECreate } from "./se-test-capability.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -40,22 +41,28 @@ describe("KeyManager", () => {
       }
     });
 
-    test("creates a root key handle on initialization", async () => {
-      const result = await manager.initialize();
-      expect(Result.isOk(result)).toBe(true);
-      if (Result.isError(result)) throw new Error("init failed");
-      expect(result.value.keyRef).toBeDefined();
-      expect(result.value.publicKey).toBeDefined();
-      expect(result.value.platform).toBe(detectPlatform());
-    });
+    test.skipIf(shouldSkipBlockedSECreate)(
+      "creates a root key handle on initialization",
+      async () => {
+        const result = await manager.initialize();
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) throw new Error("init failed");
+        expect(result.value.keyRef).toBeDefined();
+        expect(result.value.publicKey).toBeDefined();
+        expect(result.value.platform).toBe(detectPlatform());
+      },
+    );
 
-    test("returns existing root key on re-initialization", async () => {
-      const r1 = await manager.initialize();
-      const r2 = await manager.initialize();
-      if (Result.isError(r1) || Result.isError(r2))
-        throw new Error("init failed");
-      expect(r1.value.keyRef).toBe(r2.value.keyRef);
-    });
+    test.skipIf(shouldSkipBlockedSECreate)(
+      "returns existing root key on re-initialization",
+      async () => {
+        const r1 = await manager.initialize();
+        const r2 = await manager.initialize();
+        if (Result.isError(r1) || Result.isError(r2))
+          throw new Error("init failed");
+        expect(r1.value.keyRef).toBe(r2.value.keyRef);
+      },
+    );
   });
 
   describe("operational keys", () => {

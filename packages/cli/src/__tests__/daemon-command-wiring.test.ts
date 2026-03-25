@@ -6,33 +6,11 @@ import type { AdminClient } from "../admin/client.js";
 import { createLifecycleCommands } from "../commands/lifecycle.js";
 import { createSessionCommands } from "../commands/session.js";
 
-const view = {
-  mode: "full" as const,
-  threadScopes: [{ groupId: "group-1", threadId: null }],
-  contentTypes: ["xmtp.org/text:1.0"],
-};
-
-const grant = {
-  messaging: {
-    send: true,
-    reply: false,
-    react: false,
-    draftOnly: false,
-  },
-  groupManagement: {
-    addMembers: false,
-    removeMembers: false,
-    updateMetadata: false,
-    inviteUsers: false,
-  },
-  tools: { scopes: [] },
-  egress: {
-    storeExcerpts: false,
-    useForMemory: false,
-    forwardToProviders: false,
-    quoteRevealed: false,
-    summarize: false,
-  },
+const credentialConfig = {
+  operatorId: "op_deadbeeffeedbabe",
+  chatIds: ["conv_c0ffee12feedbabe"],
+  allow: ["send", "read-messages"],
+  deny: [],
 };
 
 interface RequestCall {
@@ -94,15 +72,17 @@ function createHarness<T>(response: T) {
 }
 
 describe("daemon-backed CLI command wiring", () => {
-  test("session issue parses JSON inputs and routes through daemon client", async () => {
+  test("credential issue parses JSON inputs and routes through daemon client", async () => {
     const issued = {
-      token: "session-token",
-      session: {
-        sessionId: "sess_123",
-        agentInboxId: "agent_1",
-        sessionKeyFingerprint: "fp_session",
+      token: "credential-token",
+      credential: {
+        id: "cred_cafe1234feedbabe",
+        config: credentialConfig,
+        inboxIds: [],
+        status: "active",
         issuedAt: "2024-01-01T00:00:00.000Z",
         expiresAt: "2024-01-01T01:00:00.000Z",
+        issuedBy: "op_deadbeeffeedbabe",
       },
     };
     const harness = createHarness(issued);
@@ -114,14 +94,12 @@ describe("daemon-backed CLI command wiring", () => {
       "issue",
       "--config",
       "/tmp/test-config.toml",
-      "--agent",
-      "agent_1",
+      "--operator",
+      "op_deadbeeffeedbabe",
       "--ttl",
       "120",
-      "--view",
-      JSON.stringify(view),
-      "--grant",
-      JSON.stringify(grant),
+      "--credential",
+      JSON.stringify(credentialConfig),
     ]);
 
     expect(harness.withDaemonCalls).toEqual([
@@ -129,19 +107,65 @@ describe("daemon-backed CLI command wiring", () => {
     ]);
     expect(harness.requestCalls).toEqual([
       {
-        method: "session.issue",
+        method: "credential.issue",
         params: {
-          agentInboxId: "agent_1",
+          operatorId: "op_deadbeeffeedbabe",
+          chatIds: ["conv_c0ffee12feedbabe"],
+          allow: ["send", "read-messages"],
+          deny: [],
           ttlSeconds: 120,
-          heartbeatInterval: 30,
-          view,
-          grant,
         },
       },
     ]);
     expect(harness.stderr).toEqual([]);
-    expect(harness.stdout.join("")).toContain("session-token");
-    expect(harness.stdout.join("")).toContain("sess_123");
+    expect(harness.stdout.join("")).toContain("credential-token");
+    expect(harness.stdout.join("")).toContain("cred_cafe1234feedbabe");
+  });
+
+  test("credential issue preserves ttlSeconds from credential JSON", async () => {
+    const issued = {
+      token: "credential-token",
+      credential: {
+        id: "cred_cafe1234feedbabe",
+        config: {
+          ...credentialConfig,
+          ttlSeconds: 900,
+        },
+        inboxIds: [],
+        status: "active",
+        issuedAt: "2024-01-01T00:00:00.000Z",
+        expiresAt: "2024-01-01T01:00:00.000Z",
+        issuedBy: "op_deadbeeffeedbabe",
+      },
+    };
+    const harness = createHarness(issued);
+
+    const command = createSessionCommands(harness.deps);
+    await command.parseAsync([
+      "node",
+      "session",
+      "issue",
+      "--operator",
+      "op_deadbeeffeedbabe",
+      "--credential",
+      JSON.stringify({
+        ...credentialConfig,
+        ttlSeconds: 900,
+      }),
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "credential.issue",
+        params: {
+          operatorId: "op_deadbeeffeedbabe",
+          chatIds: ["conv_c0ffee12feedbabe"],
+          allow: ["send", "read-messages"],
+          deny: [],
+          ttlSeconds: 900,
+        },
+      },
+    ]);
   });
 
   test("status routes through daemon client and prints response", async () => {
@@ -150,7 +174,7 @@ describe("daemon-backed CLI command wiring", () => {
       coreState: "ready",
       pid: 1234,
       uptime: 5,
-      activeSessions: 2,
+      activeCredentials: 2,
       activeConnections: 1,
       xmtpEnv: "local" as const,
       identityMode: "per-group" as const,
@@ -180,6 +204,5 @@ describe("daemon-backed CLI command wiring", () => {
     ]);
     expect(harness.stderr).toEqual([]);
     expect(harness.stdout.join("")).toContain("running");
-    expect(harness.stdout.join("")).toContain("8393");
   });
 });

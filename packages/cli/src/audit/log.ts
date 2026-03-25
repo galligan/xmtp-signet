@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 
 /**
  * A single entry in the signet's append-only audit log.
- * Covers admin operations: session issuance/revocation,
+ * Covers admin operations: credential issuance/revocation,
  * key rotation, daemon lifecycle events.
  */
 export interface AuditEntry {

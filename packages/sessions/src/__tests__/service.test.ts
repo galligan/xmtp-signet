@@ -1,11 +1,83 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { Result } from "better-result";
 import { createCredentialService } from "../service.js";
 import { createCredentialManager } from "../session-manager.js";
-import { createPolicyManager } from "../policy-manager.js";
 import type { InternalCredentialManager } from "../session-manager.js";
 import type { PolicyManager } from "@xmtp/signet-contracts";
-import type { PermissionScopeType } from "@xmtp/signet-schemas";
+import {
+  NotFoundError,
+  type PermissionScopeType,
+  type PolicyConfigType,
+  type PolicyRecordType,
+} from "@xmtp/signet-schemas";
 import { createTestCredentialConfig } from "./fixtures.js";
+
+function createTestPolicyManager(): PolicyManager {
+  const policies = new Map<string, PolicyRecordType>();
+  let counter = 1;
+
+  function nextPolicyId(): string {
+    return `policy_${counter.toString(16).padStart(8, "0")}`;
+  }
+
+  return {
+    async create(config: PolicyConfigType) {
+      const now = new Date().toISOString();
+      const record: PolicyRecordType = {
+        id: nextPolicyId(),
+        config: {
+          label: config.label,
+          allow: [...config.allow],
+          deny: [...config.deny],
+        },
+        createdAt: now,
+        updatedAt: now,
+      };
+      policies.set(record.id, record);
+      counter += 1;
+      return Result.ok(record);
+    },
+
+    async list() {
+      return Result.ok([...policies.values()]);
+    },
+
+    async lookup(policyId: string) {
+      const record = policies.get(policyId);
+      if (record === undefined) {
+        return Result.err(NotFoundError.create("policy", policyId));
+      }
+      return Result.ok(record);
+    },
+
+    async update(policyId: string, changes: Partial<PolicyConfigType>) {
+      const record = policies.get(policyId);
+      if (record === undefined) {
+        return Result.err(NotFoundError.create("policy", policyId));
+      }
+
+      const updated: PolicyRecordType = {
+        ...record,
+        config: {
+          label: changes.label ?? record.config.label,
+          allow: changes.allow ?? record.config.allow,
+          deny: changes.deny ?? record.config.deny,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+      policies.set(policyId, updated);
+      return Result.ok(updated);
+    },
+
+    async remove(policyId: string) {
+      if (!policies.has(policyId)) {
+        return Result.err(NotFoundError.create("policy", policyId));
+      }
+      policies.delete(policyId);
+      return Result.ok(undefined);
+    },
+  };
+}
 
 describe("createCredentialService", () => {
   let manager: InternalCredentialManager;
@@ -204,7 +276,7 @@ describe("createCredentialService with policy resolution", () => {
       renewalWindowSeconds: 10,
       heartbeatGracePeriod: 3,
     });
-    policyManager = createPolicyManager();
+    policyManager = createTestPolicyManager();
     service = createCredentialService({ manager, policyManager });
   });
 

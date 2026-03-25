@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
 import { AuthError } from "@xmtp/signet-schemas";
+import type { AdminJwtPayload } from "@xmtp/signet-keys";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 import {
   createHttpServer,
@@ -32,17 +33,31 @@ function makeDispatcher(overrides?: Partial<AdminDispatcher>): AdminDispatcher {
 function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   return {
     dispatcher: overrides?.dispatcher ?? makeDispatcher(),
-    sessionManager:
-      overrides?.sessionManager ?? ({} as HttpServerDeps["sessionManager"]),
+    credentialManager:
+      overrides?.credentialManager ??
+      ({} as HttpServerDeps["credentialManager"]),
     verifyAdminJwt:
-      overrides?.verifyAdminJwt ?? (async () => Result.ok(undefined)),
+      overrides?.verifyAdminJwt ??
+      (async () =>
+        Result.ok({
+          iss: "admin-fingerprint",
+          sub: "admin",
+          iat: 1,
+          exp: 2,
+          jti: "test-jti",
+        } satisfies AdminJwtPayload)),
     status: overrides?.status ?? (() => ({ state: "running", pid: 1 })),
   };
 }
 
-/** Pick a random high port to avoid collisions between parallel tests. */
-function randomPort(): number {
-  return 10_000 + Math.floor(Math.random() * 50_000);
+async function startTestServer(deps: HttpServerDeps): Promise<number> {
+  server = createHttpServer({ port: 0, host: "127.0.0.1" }, deps);
+  const result = await server.start();
+  expect(Result.isOk(result)).toBe(true);
+  if (!Result.isOk(result)) {
+    throw new Error(result.error.message);
+  }
+  return result.value.port;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,11 +77,7 @@ describe("HttpServer", () => {
   test("GET /v1/health returns status without auth", async () => {
     const statusData = { state: "running", pid: 42 };
     const deps = makeDeps({ status: () => statusData });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-
-    const startResult = await server.start();
-    expect(Result.isOk(startResult)).toBe(true);
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/health`);
     expect(res.status).toBe(200);
@@ -76,21 +87,23 @@ describe("HttpServer", () => {
   });
 
   test("POST /v1/admin/:method with valid JWT dispatches to admin", async () => {
+    let seenFingerprint: string | null = null;
     const dispatcher = makeDispatcher({
-      dispatch: async () => ({
-        ok: true as const,
-        data: { sessions: [] },
-        meta: {
-          requestId: "req-1",
-          timestamp: new Date().toISOString(),
-          durationMs: 1,
-        },
-      }),
+      dispatch: async (_method, _params, ctx) => {
+        seenFingerprint = ctx.adminAuth?.adminKeyFingerprint ?? null;
+        return {
+          ok: true as const,
+          data: { credentials: [] },
+          meta: {
+            requestId: "req-1",
+            timestamp: new Date().toISOString(),
+            durationMs: 1,
+          },
+        };
+      },
     });
     const deps = makeDeps({ dispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/signet.status`, {
       method: "POST",
@@ -104,14 +117,13 @@ describe("HttpServer", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.data).toEqual({ sessions: [] });
+    expect(body.data).toEqual({ credentials: [] });
+    expect(seenFingerprint).toBe("admin-fingerprint");
   });
 
   test("unauthenticated request to /v1/admin returns 401", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/signet.status`, {
       method: "POST",
@@ -127,13 +139,66 @@ describe("HttpServer", () => {
 
   test("unknown route returns 404", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/nonexistent`);
     expect(res.status).toBe(404);
 
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.category).toBe("not_found");
+  });
+
+  test("legacy /v1/session route is not exposed", async () => {
+    const deps = makeDeps();
+    const port = await startTestServer(deps);
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/session/info`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer credential-token",
+      },
+    });
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.category).toBe("not_found");
+  });
+
+  test("session-prefixed credential method is rejected", async () => {
+    const deps = makeDeps({
+      credentialManager: {
+        lookupByToken: async () =>
+          Result.ok({
+            id: "cred_123",
+            config: {
+              operatorId: "op_123",
+              chatIds: [],
+              allow: [],
+              deny: [],
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            issuedBy: "owner",
+          }),
+      } as HttpServerDeps["credentialManager"],
+    });
+    const port = await startTestServer(deps);
+
+    const res = await fetch(
+      `http://127.0.0.1:${port}/v1/credential/session.info`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer credential-token",
+        },
+      },
+    );
+
+    expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error.category).toBe("not_found");
@@ -158,9 +223,7 @@ describe("HttpServer", () => {
       hasMethod: () => false,
     });
     const deps = makeDeps({ dispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/no.such`, {
       method: "POST",
@@ -181,9 +244,7 @@ describe("HttpServer", () => {
     const deps = makeDeps({
       verifyAdminJwt: async () => Result.err(AuthError.create("Invalid JWT")),
     });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/signet.status`, {
       method: "POST",
@@ -219,9 +280,7 @@ describe("HttpServer", () => {
       }),
     });
     const deps = makeDeps({ dispatcher: validationDispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/test.action`, {
       method: "POST",
@@ -237,21 +296,18 @@ describe("HttpServer", () => {
 
   test("start returns port on success", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
+    server = createHttpServer({ port: 0, host: "127.0.0.1" }, deps);
 
     const result = await server.start();
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.port).toBe(port);
+      expect(result.value.port).toBeGreaterThan(0);
     }
   });
 
   test("stop transitions state to stopped", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    await startTestServer(deps);
 
     expect(server.state).toBe("listening");
     const stopResult = await server.stop();

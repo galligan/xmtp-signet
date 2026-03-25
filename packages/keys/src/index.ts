@@ -20,6 +20,7 @@ export {
   resetPlatformCache,
 } from "./platform.js";
 export type { KeyTrustTier } from "./platform.js";
+export type { TrustTier } from "./platform.js";
 
 // Secure Enclave bridge
 export {

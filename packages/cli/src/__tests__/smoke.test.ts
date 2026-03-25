@@ -201,44 +201,11 @@ describe("Phase 2B smoke tests", () => {
     expect(await daemon.exited).toBe(0);
   });
 
-  test("credentialed daemon flow issues a session, authenticates over WS, routes deny/allow requests, binds heartbeat to the authenticated session, and stops cleanly", async () => {
+  test("credentialed daemon flow issues a credential, authenticates over WS, enforces scope/auth checks, binds heartbeat to the authenticated credential, and stops cleanly", async () => {
     const workspace = await makeWorkspace();
-    const viewPath = join(workspace.dir, "view.json");
-    const grantPath = join(workspace.dir, "grant.json");
-
-    await writeFile(
-      viewPath,
-      JSON.stringify({
-        mode: "full",
-        threadScopes: [{ groupId: "group-1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      }),
-    );
-    await writeFile(
-      grantPath,
-      JSON.stringify({
-        messaging: {
-          send: true,
-          reply: false,
-          react: false,
-          draftOnly: false,
-        },
-        groupManagement: {
-          addMembers: false,
-          removeMembers: false,
-          updateMetadata: false,
-          inviteUsers: false,
-        },
-        tools: { scopes: [] },
-        egress: {
-          storeExcerpts: false,
-          useForMemory: false,
-          forwardToProviders: false,
-          quoteRevealed: false,
-          summarize: false,
-        },
-      }),
-    );
+    const inScopeGroupId = "conv_c0ffee12feedbabe";
+    const outOfScopeGroupId = "conv_0badc0defeedbabe";
+    const operatorId = "op_deadbeeffeedbabe";
 
     const initResult = await runCli([
       "identity",
@@ -273,28 +240,28 @@ describe("Phase 2B smoke tests", () => {
       "issue",
       "--config",
       workspace.configPath,
-      "--agent",
-      "agent-test",
-      "--view",
-      `@${viewPath}`,
-      "--grant",
-      `@${grantPath}`,
+      "--op",
+      operatorId,
+      "--chat",
+      inScopeGroupId,
+      "--allow",
+      "send",
       "--json",
     ]);
     expect(issueResult.exitCode).toBe(0);
 
-    const issuedSession = JSON.parse(issueResult.stdout) as {
+    const issuedCredential = JSON.parse(issueResult.stdout) as {
       token: string;
-      session: { sessionId: string };
+      credential: { id: string };
     };
-    expect(issuedSession.token).toBeTruthy();
+    expect(issuedCredential.token).toBeTruthy();
 
     const ws = new WebSocket(`ws://127.0.0.1:${workspace.wsPort}/v1/agent`);
     await waitForOpen(ws);
     ws.send(
       JSON.stringify({
         type: "auth",
-        token: issuedSession.token,
+        token: issuedCredential.token,
         lastSeenSeq: null,
       }),
     );
@@ -302,28 +269,12 @@ describe("Phase 2B smoke tests", () => {
     const authenticated = (await nextMessage(ws)) as Record<string, unknown>;
     expect(authenticated["type"]).toBe("authenticated");
 
-    ws.send(
-      JSON.stringify({
-        type: "send_message",
-        requestId: "req-deny",
-        groupId: "group-1",
-        contentType: "xmtp.org/reaction:1.0",
-        content: { emoji: ":+1:" },
-      }),
-    );
-
-    const denied = (await nextMessage(ws)) as Record<string, unknown>;
-    expect(denied["ok"]).toBe(false);
-    expect((denied["error"] as Record<string, unknown>)["category"]).toBe(
-      "permission",
-    );
-
-    // Out-of-scope group: session view only includes group-1
+    // Out-of-scope group: credential only includes inScopeGroupId.
     ws.send(
       JSON.stringify({
         type: "send_message",
         requestId: "req-out-of-scope",
-        groupId: "group-not-in-view",
+        groupId: outOfScopeGroupId,
         contentType: "xmtp.org/text:1.0",
         content: { text: "should be denied" },
       }),
@@ -339,7 +290,7 @@ describe("Phase 2B smoke tests", () => {
       JSON.stringify({
         type: "send_message",
         requestId: "req-allow",
-        groupId: "group-1",
+        groupId: inScopeGroupId,
         contentType: "xmtp.org/text:1.0",
         content: { text: "hello from smoke" },
       }),
@@ -359,7 +310,7 @@ describe("Phase 2B smoke tests", () => {
       JSON.stringify({
         type: "heartbeat",
         requestId: "req-heartbeat-spoofed",
-        sessionId: "spoofed-session",
+        credentialId: "cred_badc0de0feedbabe",
       }),
     );
 
@@ -373,7 +324,7 @@ describe("Phase 2B smoke tests", () => {
       JSON.stringify({
         type: "heartbeat",
         requestId: "req-heartbeat",
-        sessionId: issuedSession.session.sessionId,
+        credentialId: issuedCredential.credential.id,
       }),
     );
 

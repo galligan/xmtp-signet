@@ -39,7 +39,7 @@ identityMode = "shared"
 port = 9000
 host = "0.0.0.0"
 
-[sessions]
+[credentials]
 defaultTtlSeconds = 7200
 `,
     );
@@ -52,10 +52,25 @@ defaultTtlSeconds = 7200
     expect(config.signet.identityMode).toBe("shared");
     expect(config.ws.port).toBe(9000);
     expect(config.ws.host).toBe("0.0.0.0");
-    expect(config.sessions.defaultTtlSeconds).toBe(7200);
+    expect(config.credentials.defaultTtlSeconds).toBe(7200);
     // Unspecified sections get defaults
     expect(config.keys.rootKeyPolicy).toBe("biometric");
     expect(config.logging.level).toBe("info");
+  });
+
+  test("legacy sessions section is rejected", async () => {
+    const tomlPath = join(tempDir, "legacy-sections.toml");
+    await writeFile(
+      tomlPath,
+      `[sessions]
+defaultTtlSeconds = 7200
+`,
+    );
+
+    const result = await loadConfig({ configPath: tomlPath });
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error._tag).toBe("ValidationError");
   });
 
   test("signet env vars override TOML values", async () => {

@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
+import type { AdminJwtPayload } from "@xmtp/signet-keys";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 import {
   createHttpServer,
@@ -31,16 +32,31 @@ function makeDispatcher(overrides?: Partial<AdminDispatcher>): AdminDispatcher {
 function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   return {
     dispatcher: overrides?.dispatcher ?? makeDispatcher(),
-    sessionManager:
-      overrides?.sessionManager ?? ({} as HttpServerDeps["sessionManager"]),
+    credentialManager:
+      overrides?.credentialManager ??
+      ({} as HttpServerDeps["credentialManager"]),
     verifyAdminJwt:
-      overrides?.verifyAdminJwt ?? (async () => Result.ok(undefined)),
+      overrides?.verifyAdminJwt ??
+      (async () =>
+        Result.ok({
+          iss: "admin-fingerprint",
+          sub: "admin",
+          iat: 1,
+          exp: 2,
+          jti: "test-jti",
+        } satisfies AdminJwtPayload)),
     status: overrides?.status ?? (() => ({ state: "running", pid: 1 })),
   };
 }
 
-function randomPort(): number {
-  return 10_000 + Math.floor(Math.random() * 50_000);
+async function startTestServer(deps: HttpServerDeps): Promise<number> {
+  server = createHttpServer({ port: 0, host: "127.0.0.1" }, deps);
+  const result = await server.start();
+  expect(Result.isOk(result)).toBe(true);
+  if (!Result.isOk(result)) {
+    throw new Error(result.error.message);
+  }
+  return result.value.port;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,9 +77,7 @@ describe("HTTP API integration", () => {
     const deps = makeDeps({
       status: () => ({ state: "running", pid: 42 }),
     });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/health`);
 
@@ -77,7 +91,7 @@ describe("HTTP API integration", () => {
     const dispatcher = makeDispatcher({
       dispatch: async () => ({
         ok: true as const,
-        data: { activeSessions: 3 },
+        data: { activeCredentials: 3 },
         meta: {
           requestId: "req-admin",
           timestamp: new Date().toISOString(),
@@ -86,9 +100,7 @@ describe("HTTP API integration", () => {
       }),
     });
     const deps = makeDeps({ dispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/broker.status`, {
       method: "POST",
@@ -102,14 +114,12 @@ describe("HTTP API integration", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.data).toEqual({ activeSessions: 3 });
+    expect(body.data).toEqual({ activeCredentials: 3 });
   });
 
   test("unauthenticated admin request returns 401", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/broker.status`, {
       method: "POST",
@@ -125,9 +135,7 @@ describe("HTTP API integration", () => {
 
   test("unknown route returns 404", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/nonexistent`);
 

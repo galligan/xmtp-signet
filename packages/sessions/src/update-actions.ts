@@ -2,8 +2,8 @@
  * Credential scope update actions.
  *
  * Allows modifying a credential's scopes in-place without
- * revoke + reissue. Non-material changes (narrowing scope) apply
- * immediately. Material escalations trigger reauthorization.
+ * revoke + reissue. Non-escalating changes apply immediately.
+ * Escalations trigger reauthorization.
  */
 
 import { Result } from "better-result";

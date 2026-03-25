@@ -4,18 +4,18 @@ import { InternalError } from "@xmtp/signet-schemas";
 import type {
   ActionSpec,
   SignetCore,
-  SessionManager,
+  CredentialManager,
   SealManager,
 } from "@xmtp/signet-contracts";
 import { createActionRegistry } from "@xmtp/signet-contracts";
 import type { KeyManager } from "@xmtp/signet-keys";
 import type { WsServer } from "@xmtp/signet-ws";
 import {
-  createSessionActions,
+  createCredentialActions,
   createRevealActions,
   createUpdateActions,
 } from "@xmtp/signet-sessions";
-import type { InternalSessionManager } from "@xmtp/signet-sessions";
+import type { InternalCredentialManager } from "@xmtp/signet-sessions";
 import type { AdminServer } from "./admin/server.js";
 import type { HttpServer } from "./http/server.js";
 import type { CliConfig } from "./config/schema.js";
@@ -35,7 +35,7 @@ import { createSignetActions } from "./actions/signet-actions.js";
 /** The fully wired signet runtime returned by the composition root. */
 export interface SignetRuntime {
   readonly core: SignetCore;
-  readonly sessionManager: SessionManager;
+  readonly credentialManager: CredentialManager;
   readonly sealManager: SealManager;
   readonly keyManager: KeyManager;
   readonly wsServer: WsServer;
@@ -73,10 +73,10 @@ export interface SignetRuntimeDeps {
     clientFactory: unknown,
   ) => SignetCore;
 
-  createSessionManager: (
+  createCredentialManager: (
     config: unknown,
     keyManager: KeyManager,
-  ) => SessionManager;
+  ) => CredentialManager;
   createSealManager: (deps: unknown) => SealManager;
 
   createWsServer: (config: unknown, deps: unknown) => WsServer;
@@ -89,8 +89,8 @@ export interface SignetRuntimeDeps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createConversationActions?: () => ActionSpec<any, any, SignetError>[];
 
-  /** Optional factory to expose the internal session manager for update actions. */
-  getInternalSessionManager?: () => InternalSessionManager;
+  /** Optional factory to expose the internal credential manager for update actions. */
+  getInternalCredentialManager?: () => InternalCredentialManager;
 
   /** Optional callback to list registered identities with their inbox IDs. */
   listIdentities?: () => Promise<readonly { inboxId: string | null }[]>;
@@ -139,10 +139,10 @@ export async function createSignetRuntime(
     null, // clientFactory -- wired by production code
   );
 
-  const sessionManager = deps.createSessionManager(
+  const credentialManager = deps.createCredentialManager(
     {
-      defaultTtlSeconds: config.sessions.defaultTtlSeconds,
-      maxConcurrentPerAgent: config.sessions.maxConcurrentPerAgent,
+      defaultTtlSeconds: config.credentials.defaultTtlSeconds,
+      maxConcurrentPerOperator: config.credentials.maxConcurrentPerOperator,
     },
     keyManager,
   );
@@ -150,18 +150,18 @@ export async function createSignetRuntime(
   const sealManager = deps.createSealManager({
     core,
     keyManager,
-    sessionManager,
+    credentialManager,
   });
 
   const wsServer = deps.createWsServer(
     {
       port: config.ws.port,
       host: config.ws.host,
-      actionExpirySeconds: config.sessions.actionExpirySeconds,
+      actionExpirySeconds: config.credentials.actionExpirySeconds,
     },
     {
       core,
-      sessionManager,
+      credentialManager,
       sealManager,
     },
   );
@@ -203,18 +203,23 @@ export async function createSignetRuntime(
 
   let runtimeRef: SignetRuntime | undefined;
 
-  for (const spec of createSessionActions({ sessionManager })) {
+  for (const spec of createCredentialActions({ credentialManager })) {
     registry.register(spec);
   }
 
-  for (const spec of createRevealActions({ sessionManager })) {
-    registry.register(spec);
-  }
+  if (deps.getInternalCredentialManager) {
+    const internalManager = deps.getInternalCredentialManager();
 
-  if (deps.getInternalSessionManager) {
+    for (const spec of createRevealActions({
+      credentialManager,
+      internalManager,
+    })) {
+      registry.register(spec);
+    }
+
     for (const spec of createUpdateActions({
-      sessionManager,
-      internalManager: deps.getInternalSessionManager(),
+      credentialManager,
+      internalManager,
     })) {
       registry.register(spec);
     }
@@ -284,11 +289,9 @@ export async function createSignetRuntime(
       { port: config.http.port, host: config.http.host },
       {
         dispatcher,
-        sessionManager,
+        credentialManager,
         verifyAdminJwt: async (token: string) => {
-          const result = await keyManager.admin.verifyJwt(token);
-          if (Result.isError(result)) return result;
-          return Result.ok(undefined);
+          return keyManager.admin.verifyJwt(token);
         },
         status: async () => {
           if (runtimeRef === undefined) {
@@ -303,7 +306,7 @@ export async function createSignetRuntime(
   // -- Build runtime object --
   const runtime: SignetRuntime = {
     core,
-    sessionManager,
+    credentialManager,
     sealManager,
     keyManager,
     wsServer,
@@ -321,7 +324,7 @@ export async function createSignetRuntime(
       const identitySnapshot = deps.listIdentities
         ? await deps.listIdentities()
         : [];
-      const sessionsResult = await sessionManager.list();
+      const credentialsResult = await credentialManager.list();
       const daemonStatusState: DaemonStatus["state"] =
         currentState === "running" || currentState === "draining"
           ? currentState
@@ -332,8 +335,8 @@ export async function createSignetRuntime(
         coreState: core.state,
         pid: process.pid,
         uptime: process.uptime(),
-        activeSessions: Result.isOk(sessionsResult)
-          ? sessionsResult.value.length
+        activeCredentials: Result.isOk(credentialsResult)
+          ? credentialsResult.value.length
           : 0,
         activeConnections: wsServer.connectionCount,
         xmtpEnv: config.signet.env,

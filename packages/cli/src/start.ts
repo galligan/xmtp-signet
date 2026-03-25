@@ -9,7 +9,12 @@ import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import { InternalError } from "@xmtp/signet-schemas";
 import type { SignetCore, CoreState } from "@xmtp/signet-contracts";
-import { createKeyManager, type KeyManager } from "@xmtp/signet-keys";
+import {
+  createKeyManager,
+  createSignerProvider,
+  createSealStamper,
+  type KeyManager,
+} from "@xmtp/signet-keys";
 import type { KeyManagerConfig } from "@xmtp/signet-keys";
 import {
   SignetCoreImpl,
@@ -19,16 +24,14 @@ import {
   type SignetState,
   type SignerProviderFactory,
 } from "@xmtp/signet-core";
-import { createSignerProvider } from "@xmtp/signet-keys";
 import {
-  createSessionManager as createSessionManagerImpl,
-  createSessionService,
-  type InternalSessionManager,
+  createCredentialManager as createCredentialManagerImpl,
+  createCredentialService,
+  type InternalCredentialManager,
 } from "@xmtp/signet-sessions";
 import { createSealManager as createSealManagerImpl } from "@xmtp/signet-seals";
 import { createSealPublisher } from "@xmtp/signet-seals";
 import type { InputResolver } from "@xmtp/signet-seals";
-import { createSealStamper as createKeysSealStamper } from "@xmtp/signet-keys";
 import {
   createWsServer as createWsServerImpl,
   type WsServer,
@@ -80,8 +83,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
   // Hold references so downstream factories can access shared instances
   let keyManagerRef: KeyManager | null = null;
   let coreImplRef: SignetCoreImpl | null = null;
-  let internalSessionManagerRef: InternalSessionManager | null = null;
-  // Late-bound WS server ref for session invalidation callbacks
+  let internalCredentialManagerRef: InternalCredentialManager | null = null;
+  // Late-bound WS server ref for credential invalidation callbacks
   let globalWsServerRef: WsServer | null = null;
   // Late-bound seal manager ref for revocation publishing
   let globalSealManagerRef:
@@ -184,59 +187,55 @@ export function createProductionDeps(): SignetRuntimeDeps {
       };
     },
 
-    createSessionManager(config: unknown, keyManager: KeyManager) {
+    createCredentialManager(config: unknown, _keyManager: KeyManager) {
       const cfg = config as {
         defaultTtlSeconds: number;
-        maxConcurrentPerAgent: number;
+        maxConcurrentPerOperator: number;
       };
-      const internal = createSessionManagerImpl(
+      const internal = createCredentialManagerImpl(
         {
           defaultTtlSeconds: cfg.defaultTtlSeconds,
-          maxConcurrentPerAgent: cfg.maxConcurrentPerAgent,
+          maxConcurrentPerOperator: cfg.maxConcurrentPerOperator,
         },
         {
-          onSessionMutated(sessionId: string) {
-            // Push-invalidate cached session on live WS connections.
-            // invalidateSession() synchronously suppresses broadcasts for
-            // this session (via pendingInvalidations set) before starting
-            // the async lookup, so no events leak under stale policy.
-            void globalWsServerRef?.invalidateSession(sessionId);
+          onCredentialMutated(credentialId: string) {
+            // Push-invalidate cached credential on live WS connections.
+            void globalWsServerRef?.invalidateCredential(credentialId);
           },
-          onSessionRevoked(session) {
-            // Trigger seal revocation publishing when a session is revoked.
-            // The seal manager publishes a RevocationSeal to the XMTP group.
+          onCredentialRevoked(credential) {
+            // Trigger seal revocation publishing when a credential is revoked.
             if (!globalSealManagerRef) return;
             const sealMgr = globalSealManagerRef;
 
-            // Map session revocation reason to agent revocation reason.
-            // All SessionRevocationReason values except "reauthorization-required"
-            // are valid AgentRevocationReason values.
+            // Map credential revocation reason to agent revocation reason.
             const reasonMap: Record<
               string,
               import("@xmtp/signet-schemas").AgentRevocationReason
             > = {
               "owner-initiated": "owner-initiated",
-              "session-expired": "session-expired",
+              "credential-expired": "credential-expired",
               "heartbeat-timeout": "heartbeat-timeout",
               "policy-violation": "policy-violation",
               "reauthorization-required": "admin-removed",
             };
             const reason =
-              reasonMap[session.revocationReason ?? ""] ?? "owner-initiated";
+              reasonMap[credential.revocationReason ?? ""] ?? "owner-initiated";
 
-            // Extract group IDs from the session's view scopes and revoke
-            // the seal for each group the session was scoped to.
-            const groupIds = session.view.threadScopes.map((s) => s.groupId);
+            // Extract chat IDs from the credential and revoke seals
+            const chatIds = credential.chatIds;
 
             void (async () => {
-              for (const groupId of groupIds) {
+              for (const chatId of chatIds) {
                 try {
                   const sealResult = await sealMgr.current(
-                    session.agentInboxId,
-                    groupId,
+                    credential.credentialId,
+                    chatId,
                   );
                   if (sealResult.isOk() && sealResult.value !== null) {
-                    await sealMgr.revoke(sealResult.value.seal.sealId, reason);
+                    await sealMgr.revoke(
+                      sealResult.value.chain.current.sealId,
+                      reason,
+                    );
                   }
                 } catch {
                   // Best-effort: log failures but don't block revocation
@@ -246,33 +245,33 @@ export function createProductionDeps(): SignetRuntimeDeps {
           },
         },
       );
-      internalSessionManagerRef = internal;
+      internalCredentialManagerRef = internal;
 
-      return createSessionService({
+      return createCredentialService({
         manager: internal,
-        keyManager,
       });
     },
 
-    getInternalSessionManager() {
-      if (!internalSessionManagerRef) {
-        throw new Error("Internal session manager not initialized");
+    getInternalCredentialManager() {
+      if (!internalCredentialManagerRef) {
+        throw new Error("Internal credential manager not initialized");
       }
-      return internalSessionManagerRef;
+      return internalCredentialManagerRef;
     },
 
     createSealManager(deps: unknown) {
       const d = deps as {
         core: SignetCore;
         keyManager: KeyManager;
-        sessionManager: import("@xmtp/signet-contracts").SessionManager;
+        credentialManager: import("@xmtp/signet-contracts").CredentialManager;
       };
 
-      // Dynamic stamper: resolves the signing identity from the seal
-      // payload. The key manager stores operational keys under the internal
-      // identityId, not the XMTP inboxId, so we resolve via the identity store.
+      // Dynamic stamper: resolves the signing identity from the seal payload's
+      // chat binding. Operational keys are keyed by internal identityId, while
+      // seals themselves carry operator metadata, so we resolve the XMTP
+      // identity associated with the target conversation.
       async function resolveIdentityId(
-        inboxId: string,
+        groupId: string,
       ): Promise<Result<string, SignetError>> {
         if (!coreImplRef) {
           return Result.err(
@@ -281,10 +280,10 @@ export function createProductionDeps(): SignetRuntimeDeps {
             ),
           );
         }
-        const identity = await coreImplRef.identityStore.getByInboxId(inboxId);
+        const identity = await coreImplRef.identityStore.getByGroupId(groupId);
         if (!identity) {
           return Result.err(
-            InternalError.create(`No identity found for inboxId: ${inboxId}`),
+            InternalError.create(`No identity found for groupId: ${groupId}`),
           );
         }
         return Result.ok(identity.id);
@@ -299,9 +298,9 @@ export function createProductionDeps(): SignetRuntimeDeps {
               ),
             );
           }
-          const idResult = await resolveIdentityId(seal.agentInboxId);
+          const idResult = await resolveIdentityId(seal.chatId);
           if (Result.isError(idResult)) return idResult;
-          const stamper = createKeysSealStamper(keyManagerRef, idResult.value);
+          const stamper = createSealStamper(keyManagerRef, idResult.value);
           return stamper.sign(seal);
         },
         async signRevocation(revocation) {
@@ -312,9 +311,9 @@ export function createProductionDeps(): SignetRuntimeDeps {
               ),
             );
           }
-          const idResult = await resolveIdentityId(revocation.agentInboxId);
+          const idResult = await resolveIdentityId(revocation.chatId);
           if (Result.isError(idResult)) return idResult;
-          const stamper = createKeysSealStamper(keyManagerRef, idResult.value);
+          const stamper = createSealStamper(keyManagerRef, idResult.value);
           return stamper.signRevocation(revocation);
         },
       };
@@ -325,14 +324,13 @@ export function createProductionDeps(): SignetRuntimeDeps {
           d.core.sendMessage(groupId, contentType, content),
       });
 
-      // InputResolver stub: translating session policy into SealInput
-      // requires aggregating fields from the session record, config,
-      // and key manager that don't have a mapping layer yet. This will
-      // be wired when the full seal issuance flow is exercised.
-      const resolveInput: InputResolver = async (_sessionId, _groupId) => {
+      // InputResolver stub: translating credential policy into SealInput
+      // requires aggregating fields from the credential record, config,
+      // and key manager that don't have a mapping layer yet.
+      const resolveInput: InputResolver = async (_credentialId, _groupId) => {
         return Result.err(
           InternalError.create(
-            "InputResolver not yet wired -- session-to-seal-input mapping pending",
+            "InputResolver not yet wired -- credential-to-seal-input mapping pending",
           ),
         );
       };
@@ -354,7 +352,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
       };
       const d = deps as {
         core: SignetCore;
-        sessionManager: import("@xmtp/signet-contracts").SessionManager;
+        credentialManager: import("@xmtp/signet-contracts").CredentialManager;
         sealManager: import("@xmtp/signet-contracts").SealManager;
       };
 
@@ -371,30 +369,30 @@ export function createProductionDeps(): SignetRuntimeDeps {
         ensureCoreReady,
         sendMessage: (groupId: string, contentType: string, content: unknown) =>
           d.core.sendMessage(groupId, contentType, content),
-        sessionManager: d.sessionManager,
+        credentialManager: d.credentialManager,
         sealManager: d.sealManager,
         pendingActions,
         actionExpiryMs,
         onActionExpired: (action: {
           actionId: string;
-          sessionId: string;
+          credentialId: string;
           actionType: string;
           createdAt: string;
           expiresAt: string;
         }) => {
           // eslint-disable-next-line no-console
           console.info(
-            "[audit] action expired: %s (%s) session=%s created=%s expired=%s",
+            "[audit] action expired: %s (%s) credential=%s created=%s expired=%s",
             action.actionId,
             action.actionType,
-            action.sessionId,
+            action.credentialId,
             action.createdAt,
             action.expiresAt,
           );
         },
-        broadcast: (sessionId: string, event: unknown) => {
+        broadcast: (credentialId: string, event: unknown) => {
           wsServerRef?.broadcast(
-            sessionId,
+            credentialId,
             event as import("@xmtp/signet-schemas").SignetEvent,
           );
         },
@@ -417,27 +415,41 @@ export function createProductionDeps(): SignetRuntimeDeps {
           return coreImplRef.context.listMessages(groupId, options);
         },
       };
-      // Only add internalSessionManager when available (exactOptionalPropertyTypes)
-      if (internalSessionManagerRef) {
+      // Only add internalCredentialManager when available (exactOptionalPropertyTypes)
+      if (internalCredentialManagerRef) {
         Object.assign(requestHandlerDeps, {
-          internalSessionManager: internalSessionManagerRef,
+          internalCredentialManager: internalCredentialManagerRef,
         });
       }
       const requestHandler = createWsRequestHandler(requestHandlerDeps);
 
       const projector = createEventProjector({
-        getRevealState(sessionId: string) {
-          const result = d.sessionManager.getRevealState(sessionId);
+        getRevealState(
+          credentialId: string,
+        ): import("@xmtp/signet-contracts").RevealStateStore | null {
+          if (!internalCredentialManagerRef) return null;
+          const result =
+            internalCredentialManagerRef.getRevealState(credentialId);
           return Result.isOk(result) ? result.value : null;
         },
       });
 
       const wsDeps: WsServerDeps = {
         core: d.core,
-        sessionManager: d.sessionManager,
         sealManager: d.sealManager,
-        async tokenLookup(token: string) {
-          return d.sessionManager.lookupByToken(token);
+        async credentialLookup(
+          credentialId: string,
+        ): Promise<
+          Result<import("@xmtp/signet-contracts").CredentialRecord, SignetError>
+        > {
+          return d.credentialManager.lookup(credentialId);
+        },
+        async tokenLookup(
+          token: string,
+        ): Promise<
+          Result<import("@xmtp/signet-contracts").CredentialRecord, SignetError>
+        > {
+          return d.credentialManager.lookupByToken(token);
         },
         requestHandler,
         projectEvent: projector,

@@ -17,9 +17,9 @@ describe("CliConfigSchema", () => {
     expect(config.ws.host).toBe("127.0.0.1");
     expect(config.admin.authMode).toBe("admin-key");
     expect(config.admin.socketPath).toBeUndefined();
-    expect(config.sessions.defaultTtlSeconds).toBe(3600);
-    expect(config.sessions.maxConcurrentPerAgent).toBe(3);
-    expect(config.sessions.heartbeatIntervalSeconds).toBe(30);
+    expect(config.credentials.defaultTtlSeconds).toBe(3600);
+    expect(config.credentials.maxConcurrentPerOperator).toBe(3);
+    expect(config.credentials.actionExpirySeconds).toBe(300);
     expect(config.logging.level).toBe("info");
     expect(config.logging.auditLogPath).toBeUndefined();
   });
@@ -110,9 +110,9 @@ describe("CliConfigSchema", () => {
     }
   });
 
-  test("rejects negative session TTL", () => {
+  test("rejects negative credential TTL", () => {
     const result = CliConfigSchema.safeParse({
-      sessions: { defaultTtlSeconds: -100 },
+      credentials: { defaultTtlSeconds: -100 },
     });
     expect(result.success).toBe(false);
   });
@@ -128,7 +128,7 @@ describe("CliConfigSchema", () => {
     expect(result.data.signet.identityMode).toBe("per-group");
     expect(result.data.ws.port).toBe(4000);
     expect(result.data.ws.host).toBe("127.0.0.1");
-    expect(result.data.sessions.defaultTtlSeconds).toBe(3600);
+    expect(result.data.credentials.defaultTtlSeconds).toBe(3600);
   });
 
   test("admin.authMode only accepts admin-key", () => {

@@ -52,35 +52,35 @@ function makeSpec(
 describe("AdminDispatcher", () => {
   test("dispatches to correct handler via explicit rpcMethod", async () => {
     const registry = createActionRegistry();
-    const spec = makeSpec("session.list", {
-      rpcMethod: "session.list",
-      command: "session:list",
-      handler: async () => Result.ok({ sessions: [] }),
+    const spec = makeSpec("credential.list", {
+      rpcMethod: "credential.list",
+      command: "credential:list",
+      handler: async () => Result.ok({ credentials: [] }),
     });
     registry.register(spec);
 
     const dispatcher = createAdminDispatcher(registry);
     const ctx = makeHandlerContext();
-    const result = await dispatcher.dispatch("session.list", {}, ctx);
+    const result = await dispatcher.dispatch("credential.list", {}, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.data).toEqual({ sessions: [] });
+      expect(result.data).toEqual({ credentials: [] });
     }
   });
 
   test("derives rpcMethod from command by replacing : with .", async () => {
     const registry = createActionRegistry();
-    // No explicit rpcMethod -- should derive "session.revoke" from "session:revoke"
-    const spec = makeSpec("session.revoke", {
-      command: "session:revoke",
+    // No explicit rpcMethod -- should derive "credential.revoke" from "credential:revoke"
+    const spec = makeSpec("credential.revoke", {
+      command: "credential:revoke",
       handler: async () => Result.ok({ revoked: true }),
     });
     registry.register(spec);
 
     const dispatcher = createAdminDispatcher(registry);
     const ctx = makeHandlerContext();
-    const result = await dispatcher.dispatch("session.revoke", {}, ctx);
+    const result = await dispatcher.dispatch("credential.revoke", {}, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -102,8 +102,8 @@ describe("AdminDispatcher", () => {
 
   test("returns validation error when input fails schema", async () => {
     const registry = createActionRegistry();
-    const spec = makeSpec("session.issue", {
-      rpcMethod: "session.issue",
+    const spec = makeSpec("credential.issue", {
+      rpcMethod: "credential.issue",
       command: "session:issue",
       input: z.object({
         agentId: z.string().min(1),
@@ -114,7 +114,7 @@ describe("AdminDispatcher", () => {
     const dispatcher = createAdminDispatcher(registry);
     const ctx = makeHandlerContext();
     // Missing required agentId
-    const result = await dispatcher.dispatch("session.issue", {}, ctx);
+    const result = await dispatcher.dispatch("credential.issue", {}, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -144,14 +144,14 @@ describe("AdminDispatcher", () => {
 
   test("hasMethod returns true for registered method", () => {
     const registry = createActionRegistry();
-    const spec = makeSpec("session.list", {
-      rpcMethod: "session.list",
+    const spec = makeSpec("credential.list", {
+      rpcMethod: "credential.list",
       command: "session:list",
     });
     registry.register(spec);
 
     const dispatcher = createAdminDispatcher(registry);
-    expect(dispatcher.hasMethod("session.list")).toBe(true);
+    expect(dispatcher.hasMethod("credential.list")).toBe(true);
   });
 
   test("hasMethod returns false for unregistered method", () => {
