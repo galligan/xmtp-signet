@@ -8,19 +8,17 @@ import type { CheckHandler } from "./handler.js";
 export const SEAL_CHAIN_CHECK_ID = "seal_chain" as const;
 
 /**
- * Verifies the seal's chain integrity.
+ * Verifies the seal payload's structural integrity for chain validation.
  *
- * Current checks:
+ * Current checks (v1):
  * - sealId is present and non-empty
- * - previousSealId is null (initial) or a non-empty string
- * - No self-referencing (sealId !== previousSealId)
- * - Seal version is a positive integer
- * - groupId and agentInboxId are consistent and non-empty
+ * - chatId is present and non-empty
+ * - operatorId is present and non-empty
+ * - credentialId is present and non-empty
  *
- * Full chain walk (fetching and verifying the complete chain of
- * previousSealId references) requires a seal store or group message
- * history query, which is not yet available to the verifier.
- * The check returns skip for the chain continuity portion.
+ * Full chain walk (verifying the SealChain with previous seal references)
+ * requires the SealEnvelope and a seal store, which is not yet available
+ * to the verifier. The check returns skip for the chain continuity portion.
  */
 export function createSealChainCheck(): CheckHandler {
   return {
@@ -46,28 +44,19 @@ export function createSealChainCheck(): CheckHandler {
         failures.push("Missing sealId");
       }
 
-      // previousSealId must be null (initial) or a non-empty string
-      if (
-        seal.previousSealId !== null &&
-        (typeof seal.previousSealId !== "string" ||
-          seal.previousSealId.length === 0)
-      ) {
-        failures.push("previousSealId must be null or a non-empty string");
+      // chatId must be non-empty (replaces v0 groupId)
+      if (!seal.chatId || seal.chatId.length === 0) {
+        failures.push("Missing chatId");
       }
 
-      // Self-referencing chain is invalid
-      if (seal.previousSealId !== null && seal.previousSealId === seal.sealId) {
-        failures.push("Seal references itself as previous");
+      // operatorId must be non-empty (replaces v0 agentInboxId)
+      if (!seal.operatorId || seal.operatorId.length === 0) {
+        failures.push("Missing operatorId");
       }
 
-      // groupId must be non-empty
-      if (!seal.groupId || seal.groupId.length === 0) {
-        failures.push("Missing groupId");
-      }
-
-      // agentInboxId must be non-empty
-      if (!seal.agentInboxId || seal.agentInboxId.length === 0) {
-        failures.push("Missing agentInboxId");
+      // credentialId must be non-empty
+      if (!seal.credentialId || seal.credentialId.length === 0) {
+        failures.push("Missing credentialId");
       }
 
       if (failures.length > 0) {
@@ -78,33 +67,23 @@ export function createSealChainCheck(): CheckHandler {
           evidence: {
             failures,
             sealId: seal.sealId,
-            previousSealId: seal.previousSealId,
-            // Legacy aliases for backward compatibility
-            previousId: seal.previousSealId,
             chainValid: false,
-            chainLength: 0,
             chainWalked: false,
           },
         });
       }
 
-      // Structural checks pass — full chain walk requires a seal store
+      // Structural checks pass -- full chain walk requires the SealEnvelope
+      // and a seal store (not yet available to the verifier)
       return Result.ok({
         checkId: SEAL_CHAIN_CHECK_ID,
         verdict: "skip",
         reason:
-          seal.previousSealId === null
-            ? "Initial seal — chain origin validated"
-            : "Chain link structurally valid; full chain walk requires seal store (not yet available)",
+          "Seal payload structurally valid; full chain walk requires SealEnvelope and seal store (not yet available)",
         evidence: {
           sealId: seal.sealId,
-          previousSealId: seal.previousSealId,
-          isInitial: seal.previousSealId === null,
           chainWalked: false,
-          // Legacy aliases for backward compatibility
-          previousId: seal.previousSealId,
           chainValid: true,
-          chainLength: seal.previousSealId === null ? 1 : 2,
         },
       });
     },

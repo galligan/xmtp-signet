@@ -1,41 +1,24 @@
-import type { Seal } from "@xmtp/signet-schemas";
+import type { SealPayloadType } from "@xmtp/signet-schemas";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { VerifierConfig } from "../config.js";
 
 const BASE_TIME = new Date("2025-01-15T00:00:00.000Z");
 
-export function createTestSeal(overrides?: Partial<Seal>): Seal {
+/** Creates a test seal payload matching the v1 SealPayload schema. */
+export function createTestSeal(
+  overrides?: Partial<SealPayloadType>,
+): SealPayloadType {
   return {
-    sealId: "att-001",
-    previousSealId: null,
-    agentInboxId: "agent-inbox-001",
-    ownerInboxId: "owner-inbox-001",
-    groupId: "group-001",
-    threadScope: null,
-    viewMode: "full",
-    contentTypes: ["xmtp.org/text:1.0"],
-    grantedOps: ["send"],
-    toolScopes: [],
-    inferenceMode: "local",
-    inferenceProviders: [],
-    contentEgressScope: "none",
-    retentionAtProvider: "none",
-    hostingMode: "self-hosted",
-    trustTier: "source-verified",
-    buildProvenanceRef: null,
-    verifierStatementRef: null,
-    sessionKeyFingerprint: null,
-    policyHash: "abc123",
-    heartbeatInterval: 30,
-    issuedAt: BASE_TIME.toISOString(),
-    expiresAt: new Date(BASE_TIME.getTime() + 86_400_000).toISOString(),
-    revocationRules: {
-      maxTtlSeconds: 86400,
-      requireHeartbeat: false,
-      ownerCanRevoke: true,
-      adminCanRemove: true,
+    sealId: "seal_a1b2c3d4feedbabe",
+    credentialId: "cred_abc12345feedbabe",
+    operatorId: "op_deadbeeffeedbabe",
+    chatId: "conv_c0ffee12feedbabe",
+    scopeMode: "per-chat",
+    permissions: {
+      allow: ["send", "read-messages"],
+      deny: [],
     },
-    issuer: "signet-signer-001",
+    issuedAt: BASE_TIME.toISOString(),
     ...overrides,
   };
 }
