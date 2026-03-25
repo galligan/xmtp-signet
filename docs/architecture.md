@@ -70,7 +70,7 @@ Packages that implement the signet's actual behavior.
 
 - Credential issuance, lookup, renewal, and revocation
 - Reveal state stores and pending-action tracking
-- Compatibility action surfaces used by CLI and MCP
+- Action surfaces used by CLI, WebSocket, and MCP
 - Materiality checks that decide when a credential update becomes a
   reauthorization event
 
@@ -233,13 +233,3 @@ Transports consume the same registry:
 
 This keeps behavior centralized while letting each surface present the same
 operation in its native form.
-
-## Compatibility layer
-
-The most visible legacy names are:
-
-- `@xmtp/signet-sessions` package name
-- internal `session` references in package and type names
-
-Those legacy names are now limited to implementation details. The external CLI
-and HTTP API use the v1 credential model directly.

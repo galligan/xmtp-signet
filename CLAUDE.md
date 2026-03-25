@@ -184,7 +184,6 @@ Short IDs are accepted where they resolve uniquely.
 The current `xs` command groups are:
 
 - `start`, `stop`, `status`
-- `config`
 - `identity`
 - `credential`
 - `seal`
@@ -209,7 +208,7 @@ Use the shared error categories from `@xmtp/signet-schemas`:
 - `cancelled`
 
 In v1 terms, `auth` generally means invalid or expired admin tokens or
-credentials, not the older session model.
+credentials.
 
 ## Reference material
 
