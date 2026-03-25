@@ -19,6 +19,15 @@ export function generateCredentialId(): string {
   return createResourceId("credential");
 }
 
+/** Create a stable verification fingerprint for a bearer token. */
+export async function fingerprintToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token),
+  );
+  return `sha256:${Buffer.from(digest).toString("hex")}`;
+}
+
 /** Encode bytes as base64url without padding. */
 function base64UrlEncode(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");

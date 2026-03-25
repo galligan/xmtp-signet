@@ -58,8 +58,8 @@ export function checkMateriality(
       } else {
         added.push(scope);
       }
+      continue;
     }
-  }
 
     if (newDenySet.has(scope)) {
       changed.push({ scope, from: "allow", to: "deny" });

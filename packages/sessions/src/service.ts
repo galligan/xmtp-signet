@@ -287,6 +287,7 @@ export function createCredentialService(
       if (Result.isError(result)) {
         return result;
       }
+      const fingerprint = await fingerprintToken(result.value.token);
       return Result.ok({
         credentialId: result.value.credentialId,
         operatorId: result.value.operatorId,
