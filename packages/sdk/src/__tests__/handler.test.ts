@@ -27,9 +27,9 @@ describe("Handler lifecycle", () => {
     expect(harness.handler.state).toBe("disconnected");
   });
 
-  test("session is null before connect", () => {
+  test("credential is null before connect", () => {
     harness = createTestHandler();
-    expect(harness.handler.session).toBeNull();
+    expect(harness.handler.credential).toBeNull();
   });
 
   test("connect transitions to connected", async () => {
@@ -39,7 +39,7 @@ describe("Handler lifecycle", () => {
     expect(harness.handler.state).toBe("connected");
   });
 
-  test("session is populated after connect", async () => {
+  test("credential is populated after connect", async () => {
     harness = createTestHandler();
     await harness.handler.connect();
     const credential = harness.handler.credential;
@@ -129,7 +129,7 @@ describe("Non-retryable close codes", () => {
     });
     await harness.handler.connect();
 
-    harness.closeWith(4004, "session revoked");
+    harness.closeWith(4004, "credential revoked");
     await waitForState(harness.handler, "closed");
     expect(harness.handler.state).toBe("closed");
   });

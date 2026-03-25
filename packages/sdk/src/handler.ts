@@ -11,7 +11,7 @@ import type { SignetHandlerConfig } from "./config.js";
 import type {
   SignetHandler,
   HandlerState,
-  SessionInfo,
+  CredentialInfo,
   MessageContent,
   MessageSent,
   ReactionSent,
@@ -99,7 +99,7 @@ export function createSignetHandler(
 ): SignetHandler {
   let state: HandlerState = "disconnected";
   let ws: WebSocket | null = null;
-  let sessionInfo: SessionInfo | null = null;
+  let credentialInfo: CredentialInfo | null = null;
   let lastSeenSeq: number | null = null;
   let eventStream: EventStream = createEventStream();
   const requestTracker: RequestTracker = createRequestTracker(
@@ -304,7 +304,7 @@ export function createSignetHandler(
             authHandled = true;
             clearTimeout(authTimeout);
             const authData = data as unknown as AuthenticatedFrameData;
-            sessionInfo = {
+            credentialInfo = {
               connectionId: authData.connectionId,
               credentialId: authData.credential.credentialId,
               operatorId: authData.credential.operatorId,
@@ -561,8 +561,8 @@ export function createSignetHandler(
       return Result.ok(result.value as ConversationInfo);
     },
 
-    get session(): SessionInfo | null {
-      return sessionInfo;
+    get credential(): CredentialInfo | null {
+      return credentialInfo;
     },
 
     get state(): HandlerState {

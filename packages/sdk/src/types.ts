@@ -92,7 +92,7 @@ export interface SignetHandler {
     reaction: string,
   ): Promise<Result<ReactionSent, SignetError>>;
 
-  /** List conversations visible to this session. */
+  /** List conversations visible to this credential. */
   listConversations(): Promise<Result<Conversation[], SignetError>>;
 
   /** Get detailed info about a conversation. */
@@ -100,8 +100,8 @@ export interface SignetHandler {
     groupId: string,
   ): Promise<Result<ConversationInfo, SignetError>>;
 
-  /** Current session info. */
-  readonly session: SessionInfo | null;
+  /** Current authenticated credential info. */
+  readonly credential: CredentialInfo | null;
 
   /** Current connection state. */
   readonly state: HandlerState;
