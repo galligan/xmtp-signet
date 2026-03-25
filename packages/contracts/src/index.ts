@@ -11,7 +11,7 @@ export type {
 export type { CredentialRecord, MaterialityCheck } from "./credential-types.js";
 
 // Policy types
-export type { PolicyDelta, GrantError } from "./policy-types.js";
+export type { PolicyDelta } from "./policy-types.js";
 
 // Seal types and wire format schemas
 export { SignedRevocationEnvelope } from "./seal-envelope.js";
