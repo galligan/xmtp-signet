@@ -2,7 +2,7 @@ import type { Result } from "better-result";
 import type {
   SignetError,
   ContentTypeId,
-  RevealGrant,
+  RevealAccess,
   RevealRequest,
   SealPayloadType,
   SealEnvelopeType,
@@ -52,7 +52,7 @@ export interface SealPublisher {
 
 /** Serializable reveal entry that preserves request context for restore. */
 export interface RevealStateEntry {
-  readonly grant: RevealGrant;
+  readonly access: RevealAccess;
   readonly request: RevealRequest;
 }
 
@@ -62,15 +62,15 @@ export interface RevealStateSnapshot {
 }
 
 /**
- * In-memory reveal state store scoped to an agent session.
- * The policy engine owns the matching logic; the session manager
+ * In-memory reveal state store scoped to an agent credential.
+ * The policy engine owns the matching logic; the credential manager
  * owns the lifecycle (create, cleanup on revoke/expire).
  */
 export interface RevealStateStore {
-  /** Add a reveal grant with its originating request. */
-  grant(reveal: RevealGrant, request: RevealRequest): void;
+  /** Record active reveal access with its originating request. */
+  record(reveal: RevealAccess, request: RevealRequest): void;
 
-  /** Check if a specific message is revealed by any active grant. */
+  /** Check if a specific message is revealed by any active access record. */
   isRevealed(
     messageId: string,
     groupId: string,
@@ -80,7 +80,7 @@ export interface RevealStateStore {
     sentAt: string,
   ): boolean;
 
-  /** Remove expired reveals. Returns count of removed grants. */
+  /** Remove expired reveals. Returns count of removed records. */
   expireStale(now: Date): number;
 
   /** Snapshot the current state for serialization. */

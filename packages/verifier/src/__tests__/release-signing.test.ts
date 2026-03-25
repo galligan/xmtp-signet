@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { describe, expect, test, afterEach } from "bun:test";
 import { createReleaseSigningCheck } from "../checks/release-signing.js";
 import { createTestVerificationRequest } from "./fixtures.js";
 

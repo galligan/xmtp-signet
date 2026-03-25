@@ -64,7 +64,7 @@ function resolveViewModeVisibility(mode: LegacyViewMode, isRevealed: boolean) {
  * @param scopes - The resolved permission scope set for the credential
  * @param chatIds - The credential's scoped conversation IDs
  * @param effectiveAllowlist - Pre-computed content type allowlist
- * @param isRevealed - Whether this message has an active reveal grant
+ * @param isRevealed - Whether this message has active reveal access
  */
 export function projectMessage(
   message: RawMessage,

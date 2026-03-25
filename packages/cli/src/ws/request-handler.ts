@@ -14,7 +14,7 @@ import type {
   SendMessageRequest,
   UpdateScopesRequest,
   RevealContentRequest,
-  RevealGrant,
+  RevealAccess,
   ScopeSetType,
   MessageSealBindingType,
 } from "@xmtp/signet-schemas";
@@ -223,7 +223,7 @@ export function createWsRequestHandler(
   async function handleRevealContent(
     request: RevealContentRequest,
     credential: CredentialRecord,
-  ): Promise<Result<RevealGrant, SignetError>> {
+  ): Promise<Result<RevealAccess, SignetError>> {
     const { reveal } = request;
 
     if (!deps.internalCredentialManager) {
@@ -240,14 +240,14 @@ export function createWsRequestHandler(
     }
 
     const store = storeResult.value;
-    const grant: RevealGrant = {
+    const access: RevealAccess = {
       revealId: reveal.revealId,
       grantedAt: new Date().toISOString(),
       grantedBy: reveal.requestedBy,
       expiresAt: reveal.expiresAt,
     };
 
-    store.grant(grant, reveal);
+    store.record(access, reveal);
 
     // Replay historical messages through the projection pipeline
     if (deps.listMessages && deps.broadcast) {
@@ -295,14 +295,14 @@ export function createWsRequestHandler(
               groupId: msg.groupId,
               contentType: msg.contentType,
               content: projection.event.content,
-              revealId: grant.revealId,
+              revealId: access.revealId,
             });
           }
         }
       }
     }
 
-    return Result.ok(grant);
+    return Result.ok(access);
   }
 
   async function handleUpdateScopes(

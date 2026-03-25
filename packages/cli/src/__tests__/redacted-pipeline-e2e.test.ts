@@ -4,7 +4,7 @@ import type { RevealStateStore } from "@xmtp/signet-contracts";
 import { createRevealStateStore } from "@xmtp/signet-policy";
 import type {
   MessageEvent,
-  RevealGrant,
+  RevealAccess,
   RevealRequest,
 } from "@xmtp/signet-schemas";
 import {
@@ -58,7 +58,7 @@ function makeMessageEvent(overrides: Partial<MessageEvent> = {}): MessageEvent {
 
 function makeRevealStore(revealed: boolean): RevealStateStore {
   return {
-    grant: () => {},
+    record: () => {},
     isRevealed: () => revealed,
     expireStale: () => 0,
     snapshot: () => ({ activeReveals: [] }),
@@ -104,7 +104,7 @@ describe("redacted pipeline e2e", () => {
 
   test("revealed messages pass through even with limited scopes", () => {
     const store = createRevealStateStore();
-    const grant: RevealGrant = {
+    const access: RevealAccess = {
       revealId: "reveal_1",
       grantedAt: "2024-01-01T00:00:00Z",
       grantedBy: "owner_1",
@@ -118,7 +118,7 @@ describe("redacted pipeline e2e", () => {
       requestedBy: "owner_1",
       expiresAt: null,
     };
-    store.grant(grant, request);
+    store.record(access, request);
 
     const projector = createEventProjector(makeDeps(store));
     const credential = makeCredentialRecord({

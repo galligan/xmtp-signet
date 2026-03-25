@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   RevealScope,
   RevealRequest,
-  RevealGrant,
+  RevealAccess,
   RevealState,
 } from "../reveal.js";
 
@@ -59,25 +59,25 @@ describe("RevealRequest", () => {
   });
 });
 
-describe("RevealGrant", () => {
-  it("accepts valid grant with null expiry", () => {
+describe("RevealAccess", () => {
+  it("accepts valid access with null expiry", () => {
     const valid = {
       revealId: "rev-1",
       grantedAt: "2024-01-01T00:00:00Z",
       grantedBy: "inbox-2",
       expiresAt: null,
     };
-    expect(RevealGrant.safeParse(valid).success).toBe(true);
+    expect(RevealAccess.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts valid grant with datetime expiry", () => {
+  it("accepts valid access with datetime expiry", () => {
     const valid = {
       revealId: "rev-1",
       grantedAt: "2024-01-01T00:00:00Z",
       grantedBy: "inbox-2",
       expiresAt: "2024-06-01T00:00:00Z",
     };
-    expect(RevealGrant.safeParse(valid).success).toBe(true);
+    expect(RevealAccess.safeParse(valid).success).toBe(true);
   });
 });
 
@@ -86,7 +86,7 @@ describe("RevealState", () => {
     expect(RevealState.safeParse({ activeReveals: [] }).success).toBe(true);
   });
 
-  it("accepts active reveals with valid grants", () => {
+  it("accepts active reveals with valid access records", () => {
     const valid = {
       activeReveals: [
         {

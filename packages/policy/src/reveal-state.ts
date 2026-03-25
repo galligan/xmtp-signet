@@ -1,18 +1,18 @@
 import type {
   ContentTypeId,
-  RevealGrant,
+  RevealAccess,
   RevealRequest,
 } from "@xmtp/signet-schemas";
 
-/** Internal entry pairing a grant with its request context for matching. */
+/** Internal entry pairing reveal access with its request context. */
 interface RevealEntry {
-  readonly grant: RevealGrant;
+  readonly access: RevealAccess;
   readonly request: RevealRequest;
 }
 
 /** Serializable reveal entry that preserves request context for restore. */
 export interface RevealStateEntry {
-  readonly grant: RevealGrant;
+  readonly access: RevealAccess;
   readonly request: RevealRequest;
 }
 
@@ -26,10 +26,10 @@ export interface RevealStateSnapshot {
  * Persisted by the credential manager; the policy engine owns the logic.
  */
 export interface RevealStateStore {
-  /** Add a reveal grant with its originating request. */
-  grant(reveal: RevealGrant, request: RevealRequest): void;
+  /** Record active reveal access with its originating request. */
+  record(reveal: RevealAccess, request: RevealRequest): void;
 
-  /** Check if a specific message is revealed by any active grant. */
+  /** Check if a specific message is revealed by any active access record. */
   isRevealed(
     messageId: string,
     groupId: string,
@@ -39,7 +39,7 @@ export interface RevealStateStore {
     sentAt: string,
   ): boolean;
 
-  /** Remove expired reveals. Returns count of removed grants. */
+  /** Remove expired reveals. Returns count of removed records. */
   expireStale(now: Date): number;
 
   /** Snapshot the current state for serialization. */
@@ -56,8 +56,8 @@ export function createRevealStateStore(): RevealStateStore {
   const entries: RevealEntry[] = [];
 
   return {
-    grant(reveal: RevealGrant, request: RevealRequest): void {
-      entries.push({ grant: reveal, request });
+    record(reveal: RevealAccess, request: RevealRequest): void {
+      entries.push({ access: reveal, request });
     },
 
     isRevealed(
@@ -71,10 +71,10 @@ export function createRevealStateStore(): RevealStateStore {
       const now = Date.now();
 
       return entries.some((entry) => {
-        // Skip expired grants
+        // Skip expired reveal access
         if (
-          entry.grant.expiresAt !== null &&
-          new Date(entry.grant.expiresAt).getTime() <= now
+          entry.access.expiresAt !== null &&
+          new Date(entry.access.expiresAt).getTime() <= now
         ) {
           return false;
         }
@@ -119,8 +119,8 @@ export function createRevealStateStore(): RevealStateStore {
         const entry = entries[i];
         if (entry === undefined) continue;
         if (
-          entry.grant.expiresAt !== null &&
-          new Date(entry.grant.expiresAt).getTime() <= nowMs
+          entry.access.expiresAt !== null &&
+          new Date(entry.access.expiresAt).getTime() <= nowMs
         ) {
           entries.splice(i, 1);
           removed++;
@@ -133,7 +133,7 @@ export function createRevealStateStore(): RevealStateStore {
     snapshot(): RevealStateSnapshot {
       return {
         activeReveals: entries.map((e) => ({
-          grant: e.grant,
+          access: e.access,
           request: e.request,
         })),
       };
@@ -143,7 +143,7 @@ export function createRevealStateStore(): RevealStateStore {
       entries.length = 0;
       for (const entry of state.activeReveals) {
         entries.push({
-          grant: entry.grant,
+          access: entry.access,
           request: entry.request,
         });
       }

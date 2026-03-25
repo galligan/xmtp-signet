@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { createRevealStateStore } from "../reveal-state.js";
 import type {
   ContentTypeId,
-  RevealGrant,
+  RevealAccess,
   RevealRequest,
 } from "@xmtp/signet-schemas";
 
@@ -18,7 +18,7 @@ function makeRequest(overrides?: Partial<RevealRequest>): RevealRequest {
   };
 }
 
-function makeGrant(overrides?: Partial<RevealGrant>): RevealGrant {
+function makeAccess(overrides?: Partial<RevealAccess>): RevealAccess {
   return {
     revealId: "rev-1",
     grantedAt: "2024-01-01T00:00:00Z",
@@ -29,10 +29,10 @@ function makeGrant(overrides?: Partial<RevealGrant>): RevealGrant {
 }
 
 describe("RevealStateStore", () => {
-  test("grant and query: message scope", () => {
+  test("record and query: message scope", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant(),
+    store.record(
+      makeAccess(),
       makeRequest({ scope: "message", targetId: "msg-1" }),
     );
 
@@ -50,8 +50,8 @@ describe("RevealStateStore", () => {
 
   test("message scope does not match different message", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant(),
+    store.record(
+      makeAccess(),
       makeRequest({ scope: "message", targetId: "msg-1" }),
     );
 
@@ -69,8 +69,8 @@ describe("RevealStateStore", () => {
 
   test("thread scope reveals all messages in thread", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant({ revealId: "rev-thread" }),
+    store.record(
+      makeAccess({ revealId: "rev-thread" }),
       makeRequest({
         revealId: "rev-thread",
         scope: "thread",
@@ -115,8 +115,8 @@ describe("RevealStateStore", () => {
 
   test("sender scope reveals all messages from sender in group", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant({ revealId: "rev-sender" }),
+    store.record(
+      makeAccess({ revealId: "rev-sender" }),
       makeRequest({
         revealId: "rev-sender",
         scope: "sender",
@@ -149,8 +149,8 @@ describe("RevealStateStore", () => {
 
   test("content-type scope reveals all messages of that type in group", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant({ revealId: "rev-ct" }),
+    store.record(
+      makeAccess({ revealId: "rev-ct" }),
       makeRequest({
         revealId: "rev-ct",
         scope: "content-type",
@@ -184,12 +184,12 @@ describe("RevealStateStore", () => {
   test("expired reveal returns false from isRevealed and is cleaned by expireStale", () => {
     const store = createRevealStateStore();
     const pastDate = "2024-01-01T00:00:00Z";
-    store.grant(
-      makeGrant({ expiresAt: pastDate }),
+    store.record(
+      makeAccess({ expiresAt: pastDate }),
       makeRequest({ expiresAt: pastDate }),
     );
 
-    // isRevealed checks expiry inline -- already-expired grant returns false
+    // isRevealed checks expiry inline -- already-expired access returns false
     expect(
       store.isRevealed(
         "msg-1",
@@ -220,7 +220,7 @@ describe("RevealStateStore", () => {
 
   test("permanent reveal (expiresAt null) is not expired", () => {
     const store = createRevealStateStore();
-    store.grant(makeGrant({ expiresAt: null }), makeRequest());
+    store.record(makeAccess({ expiresAt: null }), makeRequest());
 
     const removed = store.expireStale(new Date("2099-01-01T00:00:00Z"));
     expect(removed).toBe(0);
@@ -239,12 +239,12 @@ describe("RevealStateStore", () => {
 
   test("snapshot and restore round-trip preserves isRevealed behavior", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant(),
+    store.record(
+      makeAccess(),
       makeRequest({ scope: "message", targetId: "msg-1", groupId: "group-1" }),
     );
-    store.grant(
-      makeGrant({ revealId: "rev-thread" }),
+    store.record(
+      makeAccess({ revealId: "rev-thread" }),
       makeRequest({
         revealId: "rev-thread",
         scope: "thread",
@@ -297,8 +297,8 @@ describe("RevealStateStore", () => {
 
   test("snapshot includes request data for each reveal", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant(),
+    store.record(
+      makeAccess(),
       makeRequest({ groupId: "group-1", scope: "sender", targetId: "s-1" }),
     );
 
@@ -311,15 +311,15 @@ describe("RevealStateStore", () => {
     expect(entry!.request.targetId).toBe("s-1");
   });
 
-  test("isRevealed returns false for expired grant without calling expireStale", () => {
+  test("isRevealed returns false for expired access without calling expireStale", () => {
     const store = createRevealStateStore();
     const pastDate = "2020-01-01T00:00:00Z";
-    store.grant(
-      makeGrant({ expiresAt: pastDate }),
+    store.record(
+      makeAccess({ expiresAt: pastDate }),
       makeRequest({ scope: "message", targetId: "msg-1" }),
     );
 
-    // The grant is expired — isRevealed should check expiry inline
+    // The access record is expired — isRevealed should check expiry inline
     expect(
       store.isRevealed(
         "msg-1",
@@ -332,11 +332,11 @@ describe("RevealStateStore", () => {
     ).toBe(false);
   });
 
-  test("isRevealed returns true for non-expired grant with future expiry", () => {
+  test("isRevealed returns true for non-expired access with future expiry", () => {
     const store = createRevealStateStore();
     const futureDate = "2099-01-01T00:00:00Z";
-    store.grant(
-      makeGrant({ expiresAt: futureDate }),
+    store.record(
+      makeAccess({ expiresAt: futureDate }),
       makeRequest({ scope: "message", targetId: "msg-1" }),
     );
 
@@ -352,10 +352,10 @@ describe("RevealStateStore", () => {
     ).toBe(true);
   });
 
-  test("grant scoped to different group does not match", () => {
+  test("reveal access scoped to different group does not match", () => {
     const store = createRevealStateStore();
-    store.grant(
-      makeGrant(),
+    store.record(
+      makeAccess(),
       makeRequest({ groupId: "group-2", scope: "message", targetId: "msg-1" }),
     );
 
@@ -373,7 +373,7 @@ describe("RevealStateStore", () => {
 
   test("time-window scope reveals messages within the window", () => {
     const store = createRevealStateStore();
-    store.grant(
+    store.record(
       {
         revealId: "r1",
         grantedAt: "2024-01-01T00:00:00Z",
