@@ -1,5 +1,9 @@
 import { Result } from "better-result";
-import type { SealEnvelopeType, SignetError } from "@xmtp/signet-schemas";
+import {
+  ValidationError,
+  type SealEnvelopeType,
+  type SignetError,
+} from "@xmtp/signet-schemas";
 
 /** Callback to republish a seal to a specific chat. */
 export type SealRepublisher = (
@@ -47,6 +51,21 @@ export async function republishToChats(
   const failed: RepublishFailure[] = [];
 
   for (const chatId of chatIds) {
+    if (seal.chain.current.chatId !== chatId) {
+      failed.push({
+        chatId,
+        error: ValidationError.create(
+          "chatId",
+          "Seal chatId does not match target chat",
+          {
+            expectedChatId: seal.chain.current.chatId,
+            targetChatId: chatId,
+          },
+        ),
+      });
+      continue;
+    }
+
     let lastError: SignetError | undefined;
     let delay = initialDelay;
 

@@ -79,39 +79,38 @@ function alwaysFailPublisher(): SealRepublisher & {
 }
 
 describe("republishToChats", () => {
-  test("all chats succeed on first attempt", async () => {
+  test("matching chat succeeds on first attempt", async () => {
     const publisher = succeedingPublisher();
     const seal = stubSeal();
-    const chatIds = ["chat_1", "chat_2", "chat_3"];
+    const chatIds = [seal.chain.current.chatId];
 
     const result = await republishToChats(chatIds, seal, publisher);
 
-    expect(result.succeeded).toEqual(["chat_1", "chat_2", "chat_3"]);
+    expect(result.succeeded).toEqual([seal.chain.current.chatId]);
     expect(result.failed).toEqual([]);
-    expect(publisher.calls).toHaveLength(3);
+    expect(publisher.calls).toHaveLength(1);
   });
 
-  test("retries a failing chat then succeeds", async () => {
-    const failures = new Map([["chat_2", 2]]);
-    const publisher = failThenSucceedPublisher(failures);
+  test("retries a failing matching chat then succeeds", async () => {
     const seal = stubSeal();
-    const chatIds = ["chat_1", "chat_2"];
+    const failures = new Map([[seal.chain.current.chatId, 2]]);
+    const publisher = failThenSucceedPublisher(failures);
+    const chatIds = [seal.chain.current.chatId];
 
     const result = await republishToChats(chatIds, seal, publisher, {
       maxRetries: 3,
       initialDelayMs: 1,
     });
 
-    expect(result.succeeded).toEqual(["chat_1", "chat_2"]);
+    expect(result.succeeded).toEqual([seal.chain.current.chatId]);
     expect(result.failed).toEqual([]);
-    // chat_2 should have been called 3 times (2 failures + 1 success)
-    expect(publisher.callCounts.get("chat_2")).toBe(3);
+    expect(publisher.callCounts.get(seal.chain.current.chatId)).toBe(3);
   });
 
-  test("chat fails all retries and appears in failed list", async () => {
+  test("matching chat fails all retries and appears in failed list", async () => {
     const publisher = alwaysFailPublisher();
     const seal = stubSeal();
-    const chatIds = ["chat_1"];
+    const chatIds = [seal.chain.current.chatId];
 
     const result = await republishToChats(chatIds, seal, publisher, {
       maxRetries: 2,
@@ -120,10 +119,10 @@ describe("republishToChats", () => {
 
     expect(result.succeeded).toEqual([]);
     expect(result.failed).toHaveLength(1);
-    expect(result.failed[0]?.chatId).toBe("chat_1");
+    expect(result.failed[0]?.chatId).toBe(seal.chain.current.chatId);
     expect(result.failed[0]?.error._tag).toBe("NetworkError");
     // 1 initial + 2 retries = 3 total calls
-    expect(publisher.callCounts.get("chat_1")).toBe(3);
+    expect(publisher.callCounts.get(seal.chain.current.chatId)).toBe(3);
   });
 
   test("empty chatIds returns empty results", async () => {
@@ -137,6 +136,19 @@ describe("republishToChats", () => {
     expect(publisher.calls).toHaveLength(0);
   });
 
+  test("fails fast when the target chat does not match the seal payload", async () => {
+    const publisher = succeedingPublisher();
+    const seal = stubSeal();
+
+    const result = await republishToChats(["chat_other000"], seal, publisher);
+
+    expect(result.succeeded).toEqual([]);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.chatId).toBe("chat_other000");
+    expect(result.failed[0]?.error._tag).toBe("ValidationError");
+    expect(publisher.calls).toHaveLength(0);
+  });
+
   test("custom config overrides defaults", async () => {
     const publisher = alwaysFailPublisher();
     const seal = stubSeal();
@@ -145,27 +157,32 @@ describe("republishToChats", () => {
       initialDelayMs: 1,
     };
 
-    const result = await republishToChats(["chat_1"], seal, publisher, config);
+    const result = await republishToChats(
+      [seal.chain.current.chatId],
+      seal,
+      publisher,
+      config,
+    );
 
     // 1 initial + 1 retry = 2 total calls
-    expect(publisher.callCounts.get("chat_1")).toBe(2);
+    expect(publisher.callCounts.get(seal.chain.current.chatId)).toBe(2);
     expect(result.failed).toHaveLength(1);
   });
 
-  test("mixed results with multiple chats", async () => {
-    const failures = new Map([["chat_fail", 999]]);
-    const publisher = failThenSucceedPublisher(failures);
+  test("mixed results succeed for matching chat and fail for mismatched chats", async () => {
+    const publisher = succeedingPublisher();
     const seal = stubSeal();
 
     const result = await republishToChats(
-      ["chat_ok", "chat_fail"],
+      [seal.chain.current.chatId, "chat_fail"],
       seal,
       publisher,
       { maxRetries: 2, initialDelayMs: 1 },
     );
 
-    expect(result.succeeded).toEqual(["chat_ok"]);
+    expect(result.succeeded).toEqual([seal.chain.current.chatId]);
     expect(result.failed).toHaveLength(1);
     expect(result.failed[0]?.chatId).toBe("chat_fail");
+    expect(result.failed[0]?.error._tag).toBe("ValidationError");
   });
 });
