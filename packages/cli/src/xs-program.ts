@@ -9,6 +9,8 @@
 import { Command } from "commander";
 import { createLifecycleCommands } from "./commands/lifecycle.js";
 import { createIdentityInitCommand } from "./commands/identity.js";
+import { createOperatorCommands } from "./commands/xs-operator.js";
+import { createCredentialCommands } from "./commands/xs-credential.js";
 
 /** Placeholder action for stub commands not yet implemented. */
 function stubAction(): void {
@@ -80,23 +82,11 @@ export function createXsProgram(): Command {
 
   // --- operator ---
 
-  const operator = new Command("operator").description("Operator management");
-  operator.addCommand(stub("create", "Create an operator"));
-  operator.addCommand(stub("list", "List operators"));
-  operator.addCommand(stub("info", "Show operator details"));
-  operator.addCommand(stub("rename", "Rename an operator"));
-  operator.addCommand(stub("rm", "Remove an operator"));
-  program.addCommand(operator);
+  program.addCommand(createOperatorCommands());
 
   // --- cred ---
 
-  const cred = new Command("cred").description("Credential management");
-  cred.addCommand(stub("issue", "Issue a credential"));
-  cred.addCommand(stub("list", "List credentials"));
-  cred.addCommand(stub("info", "Show credential details"));
-  cred.addCommand(stub("revoke", "Revoke a credential"));
-  cred.addCommand(stub("update", "Update a credential"));
-  program.addCommand(cred);
+  program.addCommand(createCredentialCommands());
 
   // --- chat ---
 
