@@ -9,7 +9,7 @@ import {
   PermissionError,
   GrantDeniedError,
   AuthError,
-  SessionExpiredError,
+  CredentialExpiredError,
   InternalError,
   TimeoutError,
   CancelledError,
@@ -179,14 +179,14 @@ describe("AuthError", () => {
   });
 });
 
-describe("SessionExpiredError", () => {
+describe("CredentialExpiredError", () => {
   it("creates with correct properties", () => {
-    const err = SessionExpiredError.create("sess-99");
-    expect(err._tag).toBe("SessionExpiredError");
+    const err = CredentialExpiredError.create("cred_99");
+    expect(err._tag).toBe("CredentialExpiredError");
     expect(err.code).toBe(1310);
     expect(err.category).toBe("auth");
-    expect(err.context.sessionId).toBe("sess-99");
-    expect(err.message).toBe("Session 'sess-99' has expired");
+    expect(err.context.credentialId).toBe("cred_99");
+    expect(err.message).toBe("Credential 'cred_99' has expired");
   });
 });
 
@@ -262,7 +262,7 @@ describe("matchError", () => {
       PermissionError: () => "permission",
       GrantDeniedError: (e) => `denied:${e.context.operation}`,
       AuthError: () => "auth",
-      SessionExpiredError: () => "session_expired",
+      CredentialExpiredError: () => "credential_expired",
       InternalError: () => "internal",
       TimeoutError: () => "timeout",
       CancelledError: () => "cancelled",
@@ -279,7 +279,7 @@ describe("matchError", () => {
       PermissionError.create("msg"),
       GrantDeniedError.create("op", "gt"),
       AuthError.create("msg"),
-      SessionExpiredError.create("s"),
+      CredentialExpiredError.create("cred_s"),
       InternalError.create("msg"),
       TimeoutError.create("op", 1000),
       CancelledError.create("msg"),
@@ -294,7 +294,7 @@ describe("matchError", () => {
         PermissionError: () => "PermissionError",
         GrantDeniedError: () => "GrantDeniedError",
         AuthError: () => "AuthError",
-        SessionExpiredError: () => "SessionExpiredError",
+        CredentialExpiredError: () => "CredentialExpiredError",
         InternalError: () => "InternalError",
         TimeoutError: () => "TimeoutError",
         CancelledError: () => "CancelledError",

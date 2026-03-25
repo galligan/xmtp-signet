@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { SealSchema, type InternalError } from "@xmtp/signet-schemas";
+import { SealPayload, type InternalError } from "@xmtp/signet-schemas";
 import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
@@ -9,7 +9,7 @@ export const SCHEMA_COMPLIANCE_CHECK_ID = "schema_compliance" as const;
 
 /**
  * Verifies the seal conforms to the expected schema.
- * Runs the seal through SealSchema.safeParse.
+ * Runs the seal through SealPayload.safeParse.
  */
 export function createSchemaComplianceCheck(): CheckHandler {
   return {
@@ -27,13 +27,13 @@ export function createSchemaComplianceCheck(): CheckHandler {
         });
       }
 
-      const parseResult = SealSchema.safeParse(request.seal);
+      const parseResult = SealPayload.safeParse(request.seal);
 
       if (parseResult.success) {
         return Result.ok({
           checkId: SCHEMA_COMPLIANCE_CHECK_ID,
           verdict: "pass",
-          reason: "Seal conforms to SealSchema",
+          reason: "Seal conforms to SealPayload schema",
           evidence: null,
         });
       }

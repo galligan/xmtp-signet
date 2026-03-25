@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateToken, generateSessionId } from "../token.js";
+import { generateToken, generateCredentialId } from "../token.js";
 
 describe("generateToken", () => {
   test("returns a base64url-encoded string of 43 characters", () => {
@@ -19,32 +19,27 @@ describe("generateToken", () => {
 
   test("can be decoded back to 32 bytes", () => {
     const token = generateToken();
-    // base64url decode
     const padded = token.replace(/-/g, "+").replace(/_/g, "/");
     const decoded = Buffer.from(padded, "base64");
     expect(decoded).toHaveLength(32);
   });
 });
 
-describe("generateSessionId", () => {
-  test("starts with ses_ prefix", () => {
-    const id = generateSessionId();
-    expect(id.startsWith("ses_")).toBe(true);
+describe("generateCredentialId", () => {
+  test("starts with cred_ prefix", () => {
+    const id = generateCredentialId();
+    expect(id.startsWith("cred_")).toBe(true);
   });
 
-  test("has total length of 36 characters", () => {
-    const id = generateSessionId();
-    expect(id).toHaveLength(36);
-  });
-
-  test("hex portion contains only hex characters", () => {
-    const id = generateSessionId();
-    const hex = id.slice(4);
-    expect(hex).toMatch(/^[0-9a-f]{32}$/);
+  test("has correct format (cred_ + 16 hex chars)", () => {
+    const id = generateCredentialId();
+    expect(id).toMatch(/^cred_[0-9a-f]{16}$/);
   });
 
   test("generates unique IDs on each call", () => {
-    const ids = new Set(Array.from({ length: 100 }, () => generateSessionId()));
+    const ids = new Set(
+      Array.from({ length: 100 }, () => generateCredentialId()),
+    );
     expect(ids.size).toBe(100);
   });
 });

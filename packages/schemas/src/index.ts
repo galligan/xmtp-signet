@@ -232,7 +232,7 @@ export {
   PermissionError,
   GrantDeniedError,
   AuthError,
-  SessionExpiredError,
+  CredentialExpiredError,
   InternalError,
   TimeoutError,
   CancelledError,

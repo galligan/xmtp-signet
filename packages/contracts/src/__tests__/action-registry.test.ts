@@ -36,19 +36,19 @@ function createTestSpec(
 describe("ActionRegistry", () => {
   it("registers and looks up a spec by id", () => {
     const registry = createActionRegistry();
-    const spec = createTestSpec("session.list");
+    const spec = createTestSpec("credential.list");
     registry.register(spec);
 
-    expect(registry.lookup("session.list")).toBe(spec);
+    expect(registry.lookup("credential.list")).toBe(spec);
   });
 
   it("throws on duplicate registration", () => {
     const registry = createActionRegistry();
-    const spec = createTestSpec("session.list");
+    const spec = createTestSpec("credential.list");
     registry.register(spec);
 
     expect(() => registry.register(spec)).toThrow(
-      "Action 'session.list' is already registered",
+      "Action 'credential.list' is already registered",
     );
   });
 
@@ -59,8 +59,8 @@ describe("ActionRegistry", () => {
 
   it("lists all registered specs", () => {
     const registry = createActionRegistry();
-    const spec1 = createTestSpec("session.list");
-    const spec2 = createTestSpec("session.revoke");
+    const spec1 = createTestSpec("credential.list");
+    const spec2 = createTestSpec("credential.revoke");
     registry.register(spec1);
     registry.register(spec2);
 
@@ -78,7 +78,7 @@ describe("ActionRegistry", () => {
     const mcpOnly = createTestSpec("message.list", {
       mcp: testMcpSurface,
     });
-    const both = createTestSpec("session.list", {
+    const both = createTestSpec("credential.list", {
       cli: testCliSurface,
       mcp: testMcpSurface,
     });
@@ -100,7 +100,7 @@ describe("ActionRegistry", () => {
     const mcpOnly = createTestSpec("message.list", {
       mcp: testMcpSurface,
     });
-    const both = createTestSpec("session.list", {
+    const both = createTestSpec("credential.list", {
       cli: testCliSurface,
       mcp: testMcpSurface,
     });
@@ -116,7 +116,7 @@ describe("ActionRegistry", () => {
 
   it("spec with both surfaces appears in both filtered lists", () => {
     const registry = createActionRegistry();
-    const both = createTestSpec("session.list", {
+    const both = createTestSpec("credential.list", {
       cli: testCliSurface,
       mcp: testMcpSurface,
     });

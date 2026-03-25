@@ -1,26 +1,19 @@
 import type {
-  ContentTypeId,
   GrantDeniedError,
   PermissionError,
+  PermissionScopeType,
 } from "@xmtp/signet-schemas";
 
-/** Describes a change between two policy configurations. */
+/** Describes a change between two scope configurations. */
 export interface PolicyDelta {
-  readonly viewChanges: ReadonlyArray<{
-    field: string;
-    from: unknown;
-    to: unknown;
+  readonly added: readonly PermissionScopeType[];
+  readonly removed: readonly PermissionScopeType[];
+  readonly changed: ReadonlyArray<{
+    scope: PermissionScopeType;
+    from: "allow" | "deny";
+    to: "allow" | "deny";
   }>;
-  readonly grantChanges: ReadonlyArray<{
-    field: string;
-    from: unknown;
-    to: unknown;
-  }>;
-  readonly contentTypeChanges: {
-    readonly added: readonly ContentTypeId[];
-    readonly removed: readonly ContentTypeId[];
-  };
 }
 
-/** Type alias for grant enforcement error results. */
-export type GrantError = GrantDeniedError | PermissionError;
+/** Error union returned by the historical grant validators on this stack cut. */
+export type GrantError = PermissionError | GrantDeniedError;

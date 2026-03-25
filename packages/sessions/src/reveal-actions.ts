@@ -1,6 +1,11 @@
+/**
+ * Reveal actions for credential-scoped content reveals.
+ */
+
 import { Result } from "better-result";
 import { z } from "zod";
-import type { ActionSpec, SessionManager } from "@xmtp/signet-contracts";
+import type { ActionSpec } from "@xmtp/signet-contracts";
+import type { CredentialManager } from "@xmtp/signet-contracts";
 import type {
   SignetError,
   RevealGrant,
@@ -8,15 +13,17 @@ import type {
 } from "@xmtp/signet-schemas";
 import { RevealScope, PermissionError } from "@xmtp/signet-schemas";
 import type { RevealStateSnapshot } from "@xmtp/signet-contracts";
+import type { InternalCredentialManager } from "./session-manager.js";
 
 /** Dependencies for reveal action registration. */
 export interface RevealActionDeps {
-  readonly sessionManager: SessionManager;
+  readonly credentialManager: CredentialManager;
+  readonly internalManager: InternalCredentialManager;
 }
 
 interface RevealRequestInput {
-  readonly sessionId: string;
-  readonly groupId: string;
+  readonly credentialId: string;
+  readonly chatId: string;
   readonly scope: RevealScopeType;
   readonly targetId: string;
   readonly requestedBy: string;
@@ -24,8 +31,8 @@ interface RevealRequestInput {
 }
 
 const RevealRequestInput = z.object({
-  sessionId: z.string(),
-  groupId: z.string(),
+  credentialId: z.string(),
+  chatId: z.string(),
   scope: RevealScope,
   targetId: z.string(),
   requestedBy: z.string(),
@@ -38,6 +45,28 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
+function resolveCredentialTarget(
+  requestedCredentialId: string,
+  authenticatedCredentialId: string | undefined,
+): Result<string, SignetError> {
+  if (
+    authenticatedCredentialId !== undefined &&
+    authenticatedCredentialId !== requestedCredentialId
+  ) {
+    return Result.err(
+      PermissionError.create(
+        "Credential-scoped reveal actions may only target the authenticated credential",
+        {
+          authenticatedCredentialId,
+          requestedCredentialId,
+        },
+      ),
+    );
+  }
+
+  return Result.ok(requestedCredentialId);
+}
+
 /** Create CLI and MCP actions for content reveal workflows. */
 export function createRevealActions(
   deps: RevealActionDeps,
@@ -45,63 +74,56 @@ export function createRevealActions(
   const request: ActionSpec<RevealRequestInput, RevealGrant, SignetError> = {
     id: "reveal.request",
     input: RevealRequestInput,
-    handler: async (input) => {
-      // Look up the session to validate scope
-      const sessionResult = await deps.sessionManager.lookup(input.sessionId);
-      if (Result.isError(sessionResult)) {
-        return sessionResult;
-      }
-
-      const session = sessionResult.value;
-
-      // Reject non-active sessions
-      if (session.state !== "active") {
-        return Result.err(
-          PermissionError.create(
-            `Session is ${session.state} — reveal requests require an active session`,
-            { sessionId: input.sessionId, state: session.state },
-          ),
-        );
-      }
-
-      // Validate groupId is within the session's view.threadScopes
-      const matchingScopes = session.view.threadScopes.filter(
-        (scope) => scope.groupId === input.groupId,
+    handler: async (input, ctx) => {
+      const targetResult = resolveCredentialTarget(
+        input.credentialId,
+        ctx.credentialId,
       );
-      if (matchingScopes.length === 0) {
+      if (Result.isError(targetResult)) {
+        return targetResult;
+      }
+      const targetCredentialId = targetResult.value;
+
+      // Look up the credential to validate scope
+      const credResult =
+        await deps.credentialManager.lookup(targetCredentialId);
+      if (Result.isError(credResult)) {
+        return credResult;
+      }
+
+      const credential = credResult.value;
+
+      // Reject non-active credentials
+      if (credential.status !== "active") {
         return Result.err(
           PermissionError.create(
-            "Group is not within the session's thread scopes",
+            `Credential is ${credential.status} -- reveal requests require an active credential`,
             {
-              sessionId: input.sessionId,
-              groupId: input.groupId,
+              credentialId: input.credentialId,
+              authenticatedCredentialId: ctx.credentialId,
+              status: credential.status,
             },
           ),
         );
       }
 
-      // For thread-scoped reveals, verify the target thread is allowed
-      if (input.scope === "thread" && input.targetId) {
-        const threadAllowed = matchingScopes.some(
-          (scope) =>
-            scope.threadId === null || scope.threadId === input.targetId,
+      // Validate chatId is within the credential's chatIds
+      if (!credential.config.chatIds.includes(input.chatId)) {
+        return Result.err(
+          PermissionError.create(
+            "Chat is not within the credential's scoped conversations",
+            {
+              credentialId: input.credentialId,
+              authenticatedCredentialId: ctx.credentialId,
+              chatId: input.chatId,
+            },
+          ),
         );
-        if (!threadAllowed) {
-          return Result.err(
-            PermissionError.create(
-              "Thread is not within the session's thread scopes",
-              {
-                sessionId: input.sessionId,
-                groupId: input.groupId,
-                threadId: input.targetId,
-              },
-            ),
-          );
-        }
       }
 
-      // Get or create the reveal state store for this session
-      const storeResult = deps.sessionManager.getRevealState(input.sessionId);
+      // Get or create the reveal state store for this credential
+      const storeResult =
+        deps.internalManager.getRevealState(targetCredentialId);
       if (Result.isError(storeResult)) {
         return storeResult;
       }
@@ -119,7 +141,7 @@ export function createRevealActions(
 
       const revealRequest = {
         revealId,
-        groupId: input.groupId,
+        groupId: input.chatId,
         scope: input.scope,
         targetId: input.targetId,
         requestedBy: input.requestedBy,
@@ -136,22 +158,32 @@ export function createRevealActions(
     },
     mcp: {
       toolName: "signet/reveal/request",
-      description: "Request content to be revealed to an agent session",
+      description: "Request content to be revealed to a credential holder",
       readOnly: false,
     },
   };
 
   const list: ActionSpec<
-    { sessionId: string },
+    { credentialId: string },
     RevealStateSnapshot,
     SignetError
   > = {
     id: "reveal.list",
     input: z.object({
-      sessionId: z.string(),
+      credentialId: z.string(),
     }),
-    handler: async (input) => {
-      const storeResult = deps.sessionManager.getRevealState(input.sessionId);
+    handler: async (input, ctx) => {
+      const targetResult = resolveCredentialTarget(
+        input.credentialId,
+        ctx.credentialId,
+      );
+      if (Result.isError(targetResult)) {
+        return targetResult;
+      }
+
+      const storeResult = deps.internalManager.getRevealState(
+        targetResult.value,
+      );
       if (Result.isError(storeResult)) {
         return storeResult;
       }
@@ -163,7 +195,7 @@ export function createRevealActions(
     },
     mcp: {
       toolName: "signet/reveal/list",
-      description: "List active reveals for a session",
+      description: "List active reveals for a credential",
       readOnly: true,
     },
   };

@@ -1,232 +1,170 @@
 /**
- * Session lifecycle integration tests.
+ * Credential lifecycle integration tests.
  *
- * Validates session issuance, lookup, heartbeat, expiry,
- * revocation, and materiality checks through real SessionManager.
+ * Validates credential issuance, lookup, heartbeat, expiry,
+ * revocation, and materiality checks through the real credential manager.
  */
 
 import { describe, test, expect } from "bun:test";
-import { createSessionManager } from "@xmtp/signet-sessions";
-import type { ViewConfig, GrantConfig } from "@xmtp/signet-schemas";
+import { createCredentialManager } from "@xmtp/signet-sessions";
+import type { CredentialConfigType } from "@xmtp/signet-schemas";
 
-function makeView(mode: ViewConfig["mode"] = "full"): ViewConfig {
+function makeCredentialConfig(
+  overrides?: Partial<CredentialConfigType>,
+): CredentialConfigType {
   return {
-    mode,
-    threadScopes: [{ groupId: "group-1", threadId: null }],
-    contentTypes: ["xmtp.org/text:1.0", "xmtp.org/reaction:1.0"],
+    operatorId: "op_1234abcdfeedbabe",
+    chatIds: ["conv_1234abcdfeedbabe"],
+    allow: ["send", "read-messages"],
+    deny: [],
+    ttlSeconds: 60,
+    ...overrides,
   };
 }
 
-function makeGrant(overrides?: Partial<GrantConfig["messaging"]>): GrantConfig {
-  return {
-    messaging: {
-      send: true,
-      reply: true,
-      react: true,
-      draftOnly: false,
-      ...overrides,
-    },
-    groupManagement: {
-      addMembers: false,
-      removeMembers: false,
-      updateMetadata: false,
-      inviteUsers: false,
-    },
-    tools: { scopes: [] },
-    egress: {
-      storeExcerpts: false,
-      useForMemory: false,
-      forwardToProviders: false,
-      quoteRevealed: false,
-      summarize: false,
-    },
-  };
-}
+describe("credential-lifecycle", () => {
+  test("issue credential returns token, scopes, and expiry metadata", async () => {
+    const manager = createCredentialManager({ defaultTtlSeconds: 60 });
 
-describe("session-lifecycle", () => {
-  test("issue session returns token and correct view/grant/expiry", async () => {
-    const sm = createSessionManager({ defaultTtlSeconds: 60 });
-
-    const result = await sm.createSession(
-      {
-        agentInboxId: "agent-1",
-        view: makeView(),
-        grant: makeGrant(),
-        ttlSeconds: 60,
-      },
-      "session-key-fp",
-    );
+    const result = await manager.issueCredential(makeCredentialConfig(), {
+      credentialId: "cred_1234abcdfeedbabe",
+    });
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
 
-    const session = result.value;
-    expect(session.sessionId).toBeTruthy();
-    expect(session.token).toBeTruthy();
-    expect(session.agentInboxId).toBe("agent-1");
-    expect(session.view.mode).toBe("full");
-    expect(session.grant.messaging.send).toBe(true);
-    expect(session.sessionKeyFingerprint).toBe("session-key-fp");
-    expect(session.state).toBe("active");
+    const credential = result.value;
+    expect(credential.credentialId).toBe("cred_1234abcdfeedbabe");
+    expect(credential.token).toBeTruthy();
+    expect(credential.operatorId).toBe("op_1234abcdfeedbabe");
+    expect(credential.chatIds).toEqual(["conv_1234abcdfeedbabe"]);
+    expect(credential.effectiveScopes.allow).toContain("send");
+    expect(credential.status).toBe("active");
 
-    // Expiry is approximately 60s in the future
-    const expiresAt = new Date(session.expiresAt).getTime();
+    const expiresAt = new Date(credential.expiresAt).getTime();
     const now = Date.now();
     expect(expiresAt - now).toBeGreaterThan(55_000);
     expect(expiresAt - now).toBeLessThan(65_000);
   });
 
-  test("lookup session by ID returns matching record", async () => {
-    const sm = createSessionManager();
+  test("lookup credential by ID returns the matching record", async () => {
+    const manager = createCredentialManager();
 
-    const createResult = await sm.createSession(
-      { agentInboxId: "agent-2", view: makeView(), grant: makeGrant() },
-      "fp-2",
-    );
-    expect(createResult.isOk()).toBe(true);
-    if (!createResult.isOk()) return;
+    const created = await manager.issueCredential(makeCredentialConfig(), {
+      credentialId: "cred_1234abcdfeedbabe",
+    });
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) return;
 
-    const lookupResult = sm.getSessionById(createResult.value.sessionId);
-    expect(lookupResult.isOk()).toBe(true);
-    if (!lookupResult.isOk()) return;
+    const lookup = manager.getCredentialById(created.value.credentialId);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
 
-    expect(lookupResult.value.agentInboxId).toBe("agent-2");
-    expect(lookupResult.value.sessionKeyFingerprint).toBe("fp-2");
+    expect(lookup.value.operatorId).toBe("op_1234abcdfeedbabe");
+    expect(lookup.value.credentialId).toBe(created.value.credentialId);
   });
 
-  test("lookup session by token returns matching record", async () => {
-    const sm = createSessionManager();
+  test("lookup credential by token returns the matching record", async () => {
+    const manager = createCredentialManager();
 
-    const createResult = await sm.createSession(
-      { agentInboxId: "agent-3", view: makeView(), grant: makeGrant() },
-      "fp-3",
-    );
-    expect(createResult.isOk()).toBe(true);
-    if (!createResult.isOk()) return;
+    const created = await manager.issueCredential(makeCredentialConfig());
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) return;
 
-    const tokenResult = sm.getSessionByToken(createResult.value.token);
-    expect(tokenResult.isOk()).toBe(true);
-    if (!tokenResult.isOk()) return;
+    const lookup = manager.getCredentialByToken(created.value.token);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
 
-    expect(tokenResult.value.sessionId).toBe(createResult.value.sessionId);
+    expect(lookup.value.credentialId).toBe(created.value.credentialId);
   });
 
-  test("heartbeat keeps session alive", async () => {
-    const sm = createSessionManager();
+  test("heartbeat keeps credential alive", async () => {
+    const manager = createCredentialManager();
 
-    const createResult = await sm.createSession(
-      { agentInboxId: "agent-4", view: makeView(), grant: makeGrant() },
-      "fp-4",
-    );
-    expect(createResult.isOk()).toBe(true);
-    if (!createResult.isOk()) return;
+    const created = await manager.issueCredential(makeCredentialConfig(), {
+      credentialId: "cred_1234abcdfeedbabe",
+    });
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) return;
 
-    const sessionId = createResult.value.sessionId;
-    const firstHb = createResult.value.lastHeartbeat;
+    const firstHeartbeat = created.value.lastHeartbeat;
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // Small delay so timestamps differ
-    await new Promise((r) => setTimeout(r, 10));
+    const heartbeat = manager.recordHeartbeat("cred_1234abcdfeedbabe");
+    expect(heartbeat.isOk()).toBe(true);
 
-    const hbResult = sm.recordHeartbeat(sessionId);
-    expect(hbResult.isOk()).toBe(true);
-
-    const afterHb = sm.getSessionById(sessionId);
-    expect(afterHb.isOk()).toBe(true);
-    if (!afterHb.isOk()) return;
-    // Heartbeat timestamp should be updated
-    expect(afterHb.value.lastHeartbeat).not.toBe(firstHb);
+    const after = manager.getCredentialById("cred_1234abcdfeedbabe");
+    expect(after.isOk()).toBe(true);
+    if (!after.isOk()) return;
+    expect(after.value.lastHeartbeat).not.toBe(firstHeartbeat);
   });
 
-  test("expired session returns SessionExpiredError on token lookup", async () => {
-    const sm = createSessionManager({ defaultTtlSeconds: 1 });
+  test("expired credential returns CredentialExpiredError on token lookup", async () => {
+    const manager = createCredentialManager({ defaultTtlSeconds: 1 });
 
-    const createResult = await sm.createSession(
-      {
-        agentInboxId: "agent-5",
-        view: makeView(),
-        grant: makeGrant(),
-        ttlSeconds: 1,
-      },
-      "fp-5",
+    const created = await manager.issueCredential(
+      makeCredentialConfig({ ttlSeconds: 1 }),
+      { credentialId: "cred_1234abcdfeedbabe" },
     );
-    expect(createResult.isOk()).toBe(true);
-    if (!createResult.isOk()) return;
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) return;
 
-    // Wait for TTL to expire
-    await new Promise((r) => setTimeout(r, 1_100));
+    await new Promise((resolve) => setTimeout(resolve, 1100));
 
-    const lookupResult = sm.getSessionByToken(createResult.value.token);
-    expect(lookupResult.isErr()).toBe(true);
-    if (!lookupResult.isErr()) return;
-    expect(lookupResult.error._tag).toBe("SessionExpiredError");
+    const lookup = manager.getCredentialByToken(created.value.token);
+    expect(lookup.isErr()).toBe(true);
+    if (!lookup.isErr()) return;
+    expect(lookup.error._tag).toBe("CredentialExpiredError");
   });
 
-  test("revoke session causes immediate invalidation", async () => {
-    const sm = createSessionManager();
+  test("revoke credential causes immediate invalidation", async () => {
+    const manager = createCredentialManager();
 
-    const createResult = await sm.createSession(
-      { agentInboxId: "agent-6", view: makeView(), grant: makeGrant() },
-      "fp-6",
-    );
-    expect(createResult.isOk()).toBe(true);
-    if (!createResult.isOk()) return;
+    const created = await manager.issueCredential(makeCredentialConfig(), {
+      credentialId: "cred_1234abcdfeedbabe",
+    });
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) return;
 
-    const sessionId = createResult.value.sessionId;
-    const revokeResult = sm.revokeSession(sessionId, "owner-initiated");
-    expect(revokeResult.isOk()).toBe(true);
-    if (!revokeResult.isOk()) return;
-    expect(revokeResult.value.state).toBe("revoked");
+    const revoke = manager.revokeCredential("cred_1234abcdfeedbabe", "owner-initiated");
+    expect(revoke.isOk()).toBe(true);
+    if (!revoke.isOk()) return;
+    expect(revoke.value.status).toBe("revoked");
 
-    // Token lookup fails
-    const tokenResult = sm.getSessionByToken(createResult.value.token);
-    expect(tokenResult.isErr()).toBe(true);
+    const tokenLookup = manager.getCredentialByToken(created.value.token);
+    expect(tokenLookup.isErr()).toBe(true);
 
-    // Heartbeat fails
-    const hbResult = sm.recordHeartbeat(sessionId);
-    expect(hbResult.isErr()).toBe(true);
+    const heartbeat = manager.recordHeartbeat("cred_1234abcdfeedbabe");
+    expect(heartbeat.isErr()).toBe(true);
   });
 
-  test("materiality check detects privilege escalation", async () => {
-    const sm = createSessionManager();
+  test("materiality check detects scope escalation", async () => {
+    const manager = createCredentialManager();
 
-    const createResult = await sm.createSession(
-      {
-        agentInboxId: "agent-7",
-        view: makeView("redacted"),
-        grant: makeGrant({ send: false }),
-      },
-      "fp-7",
+    const created = await manager.issueCredential(
+      makeCredentialConfig({
+        allow: ["read-messages"],
+        deny: [],
+      }),
+      { credentialId: "cred_1234abcdfeedbabe" },
     );
-    expect(createResult.isOk()).toBe(true);
-    if (!createResult.isOk()) return;
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) return;
 
-    // Escalate view mode: redacted -> full
-    const checkResult = sm.checkMateriality(
-      createResult.value.sessionId,
-      makeView("full"),
-      makeGrant({ send: false }),
-    );
-    expect(checkResult.isOk()).toBe(true);
-    if (!checkResult.isOk()) return;
-    expect(checkResult.value.isMaterial).toBe(true);
+    const check = manager.checkMateriality("cred_1234abcdfeedbabe", {
+      allow: ["read-messages", "send"],
+      deny: [],
+    });
+    expect(check.isOk()).toBe(true);
+    if (!check.isOk()) return;
+    expect(check.value.isMaterial).toBe(true);
+    expect(check.value.reason).toContain("added: send");
 
-    // Escalate grant: send false -> true
-    const grantCheckResult = sm.checkMateriality(
-      createResult.value.sessionId,
-      makeView("redacted"),
-      makeGrant({ send: true }),
-    );
-    expect(grantCheckResult.isOk()).toBe(true);
-    if (!grantCheckResult.isOk()) return;
-    expect(grantCheckResult.value.isMaterial).toBe(true);
-
-    // No change: same policy
-    const noChangeResult = sm.checkMateriality(
-      createResult.value.sessionId,
-      makeView("redacted"),
-      makeGrant({ send: false }),
-    );
-    expect(noChangeResult.isOk()).toBe(true);
-    if (!noChangeResult.isOk()) return;
-    expect(noChangeResult.value.isMaterial).toBe(false);
+    const noChange = manager.checkMateriality("cred_1234abcdfeedbabe", {
+      allow: ["read-messages"],
+      deny: [],
+    });
+    expect(noChange.isOk()).toBe(true);
+    if (!noChange.isOk()) return;
+    expect(noChange.value.isMaterial).toBe(false);
   });
 });

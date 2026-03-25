@@ -1,16 +1,14 @@
 import type { Result } from "better-result";
 import type {
-  Seal,
   SignetError,
   ContentTypeId,
   RevealGrant,
   RevealRequest,
-  RevocationSeal,
+  SealPayloadType,
+  SealEnvelopeType,
 } from "@xmtp/signet-schemas";
-import type {
-  SealEnvelope,
-  SignedRevocationEnvelope,
-} from "./seal-envelope.js";
+import type { RevocationSeal } from "@xmtp/signet-schemas";
+import type { SignedRevocationEnvelope } from "./seal-envelope.js";
 
 /** Abstracts key material for signing and identity-scoped encryption. */
 export interface SignerProvider {
@@ -28,7 +26,11 @@ export interface SignerProvider {
 
 /** Signs seal payloads. */
 export interface SealStamper {
-  sign(payload: Seal): Promise<Result<SealEnvelope, SignetError>>;
+  /** Sign a seal payload into a full envelope. */
+  sign(
+    payload: SealPayloadType,
+  ): Promise<Result<SealEnvelopeType, SignetError>>;
+  /** Sign a revocation seal into a signed revocation envelope. */
   signRevocation(
     payload: RevocationSeal,
   ): Promise<Result<SignedRevocationEnvelope, SignetError>>;
@@ -36,10 +38,12 @@ export interface SealStamper {
 
 /** Publishes signed seals to groups. */
 export interface SealPublisher {
+  /** Publish a signed seal envelope to a group. */
   publish(
     groupId: string,
-    seal: SealEnvelope,
+    seal: SealEnvelopeType,
   ): Promise<Result<void, SignetError>>;
+  /** Publish a signed revocation to a group. */
   publishRevocation(
     groupId: string,
     revocation: SignedRevocationEnvelope,

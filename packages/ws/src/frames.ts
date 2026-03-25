@@ -1,11 +1,10 @@
 import { z } from "zod";
-import {
-  SessionToken,
-  ViewConfig,
-  GrantConfig,
-  SignetEvent,
+import { CredentialToken, ScopeSet, SignetEvent } from "@xmtp/signet-schemas";
+import type {
+  SignetEvent as SignetEventType,
+  CredentialTokenType,
+  ScopeSetType,
 } from "@xmtp/signet-schemas";
-import type { SignetEvent as SignetEventType } from "@xmtp/signet-schemas";
 
 /** Inbound authentication frame sent by the harness. */
 export type AuthFrame = {
@@ -18,7 +17,7 @@ export type AuthFrame = {
 const _AuthFrame = z
   .object({
     type: z.literal("auth"),
-    token: z.string().describe("Session bearer token"),
+    token: z.string().describe("Credential bearer token"),
     lastSeenSeq: z
       .number()
       .int()
@@ -35,9 +34,8 @@ export const AuthFrame: z.ZodType<AuthFrame> = _AuthFrame;
 export type AuthenticatedFrame = {
   type: "authenticated";
   connectionId: string;
-  session: z.infer<typeof SessionToken>;
-  view: z.infer<typeof ViewConfig>;
-  grant: z.infer<typeof GrantConfig>;
+  credential: CredentialTokenType;
+  effectiveScopes: ScopeSetType;
   resumedFromSeq: number | null;
 };
 
@@ -46,9 +44,8 @@ export const AuthenticatedFrame: z.ZodType<AuthenticatedFrame> = z
   .object({
     type: z.literal("authenticated"),
     connectionId: z.string().describe("Signet-assigned connection identifier"),
-    session: SessionToken.describe("Session info"),
-    view: ViewConfig.describe("Active view configuration"),
-    grant: GrantConfig.describe("Active grant configuration"),
+    credential: CredentialToken.describe("Credential info"),
+    effectiveScopes: ScopeSet.describe("Active permission scopes"),
     resumedFromSeq: z
       .number()
       .int()

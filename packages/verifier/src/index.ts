@@ -1,4 +1,5 @@
 // Schemas
+export { TrustTier } from "./schemas/trust-tier.js";
 export { CheckVerdict, VerificationCheck } from "./schemas/check.js";
 export {
   VerificationRequestSchema,

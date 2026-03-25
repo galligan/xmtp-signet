@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ContentTypeId } from "./content-types.js";
 import { PermissionScope } from "./permission-scopes.js";
 import { RevealRequest } from "./reveal.js";
+import { CredentialId } from "./resource-id.js";
 
 /** Request to send a message to a group. */
 export type SendMessageRequest = {
@@ -146,14 +147,14 @@ export const ConfirmActionRequest: z.ZodType<ConfirmActionRequest> =
 export type HeartbeatRequest = {
   type: "heartbeat";
   requestId: string;
-  sessionId: string;
+  credentialId: string;
 };
 
 const _HeartbeatRequest = z
   .object({
     type: z.literal("heartbeat").describe("Request type discriminator"),
     requestId: z.string().describe("Client-generated request ID"),
-    sessionId: z.string().describe("Session sending the heartbeat"),
+    credentialId: CredentialId.describe("Credential sending the heartbeat"),
   })
   .describe("Heartbeat from the harness to keep the session alive");
 

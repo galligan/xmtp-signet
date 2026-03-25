@@ -16,7 +16,7 @@ describe("seal_signature check", () => {
     }
   });
 
-  test("skips when seal has valid structure (v0: no crypto verification)", async () => {
+  test("skips when seal has valid structure (signature verification deferred)", async () => {
     const check = createSealSignatureCheck();
     const result = await check.execute(createTestVerificationRequest());
 
@@ -26,28 +26,27 @@ describe("seal_signature check", () => {
     }
   });
 
-  test("fails when seal has empty issuer", async () => {
+  test("fails when operatorId is empty", async () => {
     const check = createSealSignatureCheck();
     const result = await check.execute(
       createTestVerificationRequest({
-        seal: createTestSeal({ issuer: "" }),
+        seal: createTestSeal({ operatorId: "" }),
       }),
     );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("fail");
-      expect(result.value.reason).toContain("issuer");
+      expect(result.value.reason).toContain("operatorId");
     }
   });
 
-  test("fails when agentInboxId does not match", async () => {
+  test("fails when issuedAt is non-canonical", async () => {
     const check = createSealSignatureCheck();
     const result = await check.execute(
       createTestVerificationRequest({
-        agentInboxId: "agent-inbox-001",
         seal: createTestSeal({
-          agentInboxId: "different-agent",
+          issuedAt: "2025-01-15T00:00:00Z",
         }),
       }),
     );
@@ -55,7 +54,7 @@ describe("seal_signature check", () => {
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("fail");
-      expect(result.value.reason).toContain("mismatch");
+      expect(result.value.reason).toContain("issuedAt");
     }
   });
 });

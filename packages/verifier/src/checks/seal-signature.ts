@@ -8,21 +8,20 @@ import type { CheckHandler } from "./handler.js";
 export const SEAL_SIGNATURE_CHECK_ID = "seal_signature" as const;
 
 /**
- * Verifies the seal's structural integrity and signing metadata.
+ * Verifies the seal's structural integrity and consistency with the request.
  *
- * Current checks:
- * - Seal has an issuer field
- * - Seal's agentInboxId matches the request
- * - Seal has valid timestamps (issuedAt, expiresAt ordering)
- * - Seal has required hosting and view/grant metadata
+ * Current checks (v1):
+ * - Seal has a valid issuedAt timestamp
+ * - Seal's operatorId is non-empty
+ * - Seal has required fields (scopeMode, permissions)
  *
  * Full Ed25519 signature verification requires the SealEnvelope
- * (which includes the signature bytes) and the signer's public key
- * via XMTP identity lookup. Both are deferred — the verification
- * request currently only carries the Seal payload, not the envelope.
+ * (which includes the signature bytes and keyId) and the signer's
+ * public key. Both are deferred -- the verification request currently
+ * only carries the SealPayload, not the envelope.
  *
- * TODO: Extend VerificationRequest to include envelope + signerKeyRef,
- * then verify signature against the canonical seal bytes.
+ * TODO: Extend VerificationRequest to include envelope, then verify
+ * signature against the canonical seal bytes.
  */
 export function createSealSignatureCheck(): CheckHandler {
   return {
@@ -43,41 +42,25 @@ export function createSealSignatureCheck(): CheckHandler {
       const seal = request.seal;
       const failures: string[] = [];
 
-      // Check issuer present
-      if (!seal.issuer || seal.issuer.length === 0) {
-        failures.push("Missing issuer field");
+      // Check operatorId present
+      if (!seal.operatorId || seal.operatorId.length === 0) {
+        failures.push("Missing operatorId field");
       }
 
-      // Check agentInboxId matches
-      if (seal.agentInboxId !== request.agentInboxId) {
-        failures.push(
-          `agentInboxId mismatch: seal=${seal.agentInboxId}, request=${request.agentInboxId}`,
-        );
-      }
-
-      // Check timestamps are valid — use round-trip check because JS Date
-      // silently normalizes impossible dates (e.g. Feb 30 → Mar 2)
+      // Check timestamps are valid -- use round-trip check because JS Date
+      // silently normalizes impossible dates (e.g. Feb 30 -> Mar 2)
       if (seal.issuedAt) {
         const issued = new Date(seal.issuedAt);
         if (isNaN(issued.getTime()) || issued.toISOString() !== seal.issuedAt) {
           failures.push("Invalid or non-canonical issuedAt timestamp");
         }
-        if (seal.expiresAt) {
-          const expires = new Date(seal.expiresAt);
-          if (
-            isNaN(expires.getTime()) ||
-            expires.toISOString() !== seal.expiresAt
-          ) {
-            failures.push("Invalid or non-canonical expiresAt timestamp");
-          } else if (expires.getTime() <= issued.getTime()) {
-            failures.push("expiresAt must be after issuedAt");
-          }
-        }
+      } else {
+        failures.push("Missing issuedAt timestamp");
       }
 
-      // Check hosting mode present
-      if (!seal.hostingMode) {
-        failures.push("Missing hostingMode");
+      // Check scopeMode present
+      if (!seal.scopeMode) {
+        failures.push("Missing scopeMode");
       }
 
       if (failures.length > 0) {
@@ -87,13 +70,12 @@ export function createSealSignatureCheck(): CheckHandler {
           reason: `Seal structural validation failed: ${failures.join("; ")}`,
           evidence: {
             failures,
-            signerKeyRef: seal.issuer ?? null,
             signatureVerified: false,
           },
         });
       }
 
-      // Structural checks pass — signature verification requires the
+      // Structural checks pass -- signature verification requires the
       // SealEnvelope and signer public key (not yet in VerificationRequest)
       return Result.ok({
         checkId: SEAL_SIGNATURE_CHECK_ID,
@@ -101,9 +83,7 @@ export function createSealSignatureCheck(): CheckHandler {
         reason:
           "Seal structural validation passed; Ed25519 signature verification requires envelope and key lookup (not yet implemented)",
         evidence: {
-          signerKeyRef: seal.issuer,
-          issuer: seal.issuer,
-          agentInboxId: seal.agentInboxId,
+          operatorId: seal.operatorId,
           signatureVerified: null,
         },
       });

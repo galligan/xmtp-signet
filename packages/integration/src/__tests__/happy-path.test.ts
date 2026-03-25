@@ -1,15 +1,14 @@
 /**
  * Full happy-path integration tests.
  *
- * End-to-end flow: init keys -> create signet -> issue session ->
+ * End-to-end flow: init keys -> create signet -> issue credential ->
  * start WS -> connect -> auth -> receive events -> send messages -> replay.
  */
 
 import { describe, test, expect, afterEach } from "bun:test";
 import {
   createTestRuntime,
-  issueTestSession,
-  createTestViewAndGrant,
+  issueTestCredential,
 } from "../fixtures/test-runtime.js";
 import { connectAndAuth } from "../fixtures/test-ws-client.js";
 
@@ -32,7 +31,6 @@ describe("happy-path", () => {
       runtime.keyManager.platform,
     );
 
-    // Operational key exists for the seeded identity
     const opKey = runtime.keyManager.getOperationalKey(runtime.identityId);
     expect(opKey.isOk()).toBe(true);
     if (!opKey.isOk()) return;
@@ -49,22 +47,23 @@ describe("happy-path", () => {
     expect(runtime.wsServer.state).toBe("listening");
   });
 
-  test("session issuance returns valid token and record", async () => {
+  test("credential issuance returns valid token and record", async () => {
     const result = await createTestRuntime();
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const { token, sessionId } = await issueTestSession(runtime);
+    const { token, credentialId } = await issueTestCredential(runtime);
 
     expect(token).toBeTruthy();
-    expect(sessionId).toBeTruthy();
+    expect(credentialId).toBeTruthy();
 
-    // Session is retrievable
-    const session = runtime.sessionManager.getSessionById(sessionId);
-    expect(session.isOk()).toBe(true);
-    if (!session.isOk()) return;
-    expect(session.value.state).toBe("active");
-    expect(session.value.view.mode).toBe("full");
+    const credential =
+      runtime.credentialManager.getCredentialById(credentialId);
+    expect(credential.isOk()).toBe(true);
+    if (!credential.isOk()) return;
+    expect(credential.value.status).toBe("active");
+    expect(credential.value.chatIds).toEqual([runtime.groupId]);
+    expect(credential.value.effectiveScopes.allow).toContain("read-messages");
   });
 
   test("websocket connect and auth returns authenticated frame", async () => {
@@ -72,18 +71,17 @@ describe("happy-path", () => {
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const { token } = await issueTestSession(runtime);
+    const { token, credentialId } = await issueTestCredential(runtime);
     const { client, authFrame } = await connectAndAuth(runtime.wsPort, token);
 
     expect(authFrame["type"]).toBe("authenticated");
     expect(authFrame["connectionId"]).toBeTruthy();
-    expect(authFrame["session"]).toBeTruthy();
-    expect(authFrame["view"]).toBeTruthy();
-    expect(authFrame["grant"]).toBeTruthy();
     expect(authFrame["resumedFromSeq"]).toBeNull();
+    expect(authFrame["effectiveScopes"]).toBeTruthy();
 
-    const session = authFrame["session"] as Record<string, unknown>;
-    expect(session["agentInboxId"]).toBeTruthy();
+    const credential = authFrame["credential"] as Record<string, unknown>;
+    expect(credential["credentialId"]).toBe(credentialId);
+    expect(credential["operatorId"]).toBe(runtime.operatorId);
 
     await client.close();
   });
@@ -93,13 +91,12 @@ describe("happy-path", () => {
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const { token, sessionId } = await issueTestSession(runtime);
+    const { token, credentialId } = await issueTestCredential(runtime);
     const { client } = await connectAndAuth(runtime.wsPort, token);
 
-    // Broadcast an event through the WS server
-    runtime.wsServer.broadcast(sessionId, {
+    runtime.wsServer.broadcast(credentialId, {
       type: "message.visible",
-      messageId: "msg-1",
+      messageId: "msg_1234abcdfeedbabe",
       groupId: runtime.groupId,
       senderInboxId: "sender-1",
       contentType: "xmtp.org/text:1.0",
@@ -114,17 +111,17 @@ describe("happy-path", () => {
     expect(frame["seq"]).toBe(1);
     const event = frame["event"] as Record<string, unknown>;
     expect(event["type"]).toBe("message.visible");
-    expect(event["messageId"]).toBe("msg-1");
+    expect(event["messageId"]).toBe("msg_1234abcdfeedbabe");
 
     await client.close();
   });
 
-  test("send_message request succeeds when grant allows", async () => {
+  test("send_message request succeeds when scope allows", async () => {
     const result = await createTestRuntime();
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const { token } = await issueTestSession(runtime);
+    const { token } = await issueTestCredential(runtime);
     const { client } = await connectAndAuth(runtime.wsPort, token);
 
     client.send({
@@ -145,23 +142,33 @@ describe("happy-path", () => {
     await client.close();
   });
 
-  test("heartbeat request succeeds and updates session", async () => {
+  test("heartbeat request succeeds and updates credential", async () => {
     const result = await createTestRuntime();
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const { token, sessionId } = await issueTestSession(runtime);
+    const { token, credentialId } = await issueTestCredential(runtime);
+    const before = runtime.credentialManager.getCredentialById(credentialId);
+    expect(before.isOk()).toBe(true);
+    if (!before.isOk()) return;
+
     const { client } = await connectAndAuth(runtime.wsPort, token);
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     client.send({
       type: "heartbeat",
       requestId: "req-hb-1",
-      sessionId,
+      credentialId,
     });
 
     const response = (await client.nextMessage()) as Record<string, unknown>;
     expect(response["ok"]).toBe(true);
     expect(response["requestId"]).toBe("req-hb-1");
+
+    const after = runtime.credentialManager.getCredentialById(credentialId);
+    expect(after.isOk()).toBe(true);
+    if (!after.isOk()) return;
+    expect(after.value.lastHeartbeat).not.toBe(before.value.lastHeartbeat);
 
     await client.close();
   });
@@ -173,21 +180,18 @@ describe("happy-path", () => {
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const { token, sessionId } = await issueTestSession(runtime);
+    const { token, credentialId } = await issueTestCredential(runtime);
 
-    // First connection
     const { client: c1 } = await connectAndAuth(runtime.wsPort, token);
 
-    // Send 3 events
     for (let i = 0; i < 3; i++) {
-      runtime.wsServer.broadcast(sessionId, {
+      runtime.wsServer.broadcast(credentialId, {
         type: "heartbeat",
-        sessionId,
+        credentialId,
         timestamp: new Date().toISOString(),
       });
     }
 
-    // Consume all 3
     const events: Array<Record<string, unknown>> = [];
     for (let i = 0; i < 3; i++) {
       events.push((await c1.nextMessage()) as Record<string, unknown>);
@@ -196,10 +200,8 @@ describe("happy-path", () => {
     expect(events[1]!["seq"]).toBe(2);
     expect(events[2]!["seq"]).toBe(3);
 
-    // Disconnect
     await c1.close();
 
-    // Reconnect with lastSeenSeq = 1 (should replay 2 and 3)
     const { client: c2, authFrame } = await connectAndAuth(
       runtime.wsPort,
       token,
@@ -215,36 +217,33 @@ describe("happy-path", () => {
     await c2.close();
   });
 
-  test("full end-to-end: keys -> signet -> session -> ws -> event -> request", async () => {
+  test("full end-to-end: keys -> signet -> credential -> ws -> seal -> request", async () => {
     const result = await createTestRuntime();
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    // Verify the full chain is wired
     expect(["software-vault", "secure-enclave"]).toContain(
       runtime.keyManager.platform,
     );
     expect(runtime.signet.state).toBe("running");
     expect(runtime.wsServer.state).toBe("listening");
 
-    // Issue session
-    const { token, sessionId } = await issueTestSession(runtime);
+    const { token, credentialId } = await issueTestCredential(runtime);
 
-    // Connect and authenticate
     const { client, authFrame } = await connectAndAuth(runtime.wsPort, token);
     expect(authFrame["type"]).toBe("authenticated");
 
-    // Issue seal for this session
-    const attestResult = await runtime.sealManager.issue(
-      sessionId,
+    const sealResult = await runtime.sealManager.issue(
+      credentialId,
       runtime.groupId,
     );
-    expect(attestResult.isOk()).toBe(true);
-    if (!attestResult.isOk()) return;
-    expect(attestResult.value.seal.agentInboxId).toBeTruthy();
+    expect(sealResult.isOk()).toBe(true);
+    if (!sealResult.isOk()) return;
+    expect(sealResult.value.chain.current.credentialId).toBe(credentialId);
+    expect(sealResult.value.chain.current.operatorId).toBe(runtime.operatorId);
+    expect(sealResult.value.chain.current.chatId).toBe(runtime.groupId);
     expect(runtime.publisher.published.length).toBeGreaterThan(0);
 
-    // Send a message request
     client.send({
       type: "send_message",
       requestId: "req-e2e-1",
@@ -262,37 +261,27 @@ describe("happy-path", () => {
     await client.close();
   });
 
-  test("multiple concurrent sessions for same agent", async () => {
+  test("multiple concurrent credentials for the same operator", async () => {
     const result = await createTestRuntime({
-      sessionConfig: { maxConcurrentPerAgent: 3 },
+      credentialManagerConfig: { maxConcurrentPerOperator: 3 },
     });
     cleanup = result.cleanup;
     const { runtime } = result;
 
-    const agentId = `inbox_${runtime.identityId}`;
-
-    // Create 3 sessions with different views
-    const sessions = [];
+    const credentials = [];
     for (let i = 0; i < 3; i++) {
-      const { view, grant } = createTestViewAndGrant();
-      // Each session has a different content type list to avoid dedup
-      const modifiedView = {
-        ...view,
-        contentTypes: [...view.contentTypes, `custom.org/type${i}:1.0`],
-      };
-      sessions.push(
-        await issueTestSession(runtime, {
-          agentInboxId: agentId,
-          view: modifiedView,
-          grant,
+      credentials.push(
+        await issueTestCredential(runtime, {
+          chatIds: [`conv_0000000${i}`],
         }),
       );
     }
 
-    expect(sessions.length).toBe(3);
+    expect(credentials.length).toBe(3);
 
-    // All 3 should be active
-    const active = runtime.sessionManager.getActiveSessions(agentId);
+    const active = runtime.credentialManager.getActiveCredentials(
+      runtime.operatorId,
+    );
     expect(active.length).toBe(3);
   });
 });

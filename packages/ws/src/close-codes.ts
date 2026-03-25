@@ -8,10 +8,10 @@ export const WS_CLOSE_CODES = {
   AUTH_FAILED: 4001,
   /** No auth frame within timeout. */
   AUTH_TIMEOUT: 4002,
-  /** Session TTL exceeded. */
-  SESSION_EXPIRED: 4003,
+  /** Credential TTL exceeded. */
+  CREDENTIAL_EXPIRED: 4003,
   /** Explicit revocation. */
-  SESSION_REVOKED: 4004,
+  CREDENTIAL_REVOKED: 4004,
   /** Material change requires reauth. */
   POLICY_CHANGE: 4005,
   /** Send buffer hard limit exceeded. */

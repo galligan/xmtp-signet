@@ -1,50 +1,38 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { Result } from "better-result";
-import { InternalError } from "@xmtp/signet-schemas";
-import { createSessionService } from "../service.js";
-import { createSessionManager } from "../session-manager.js";
-import type { InternalSessionManager } from "../session-manager.js";
-import { createTestSessionConfig } from "./fixtures.js";
+import { createCredentialService } from "../service.js";
+import { createCredentialManager } from "../session-manager.js";
+import { createPolicyManager } from "../policy-manager.js";
+import type { InternalCredentialManager } from "../session-manager.js";
+import type { PolicyManager } from "@xmtp/signet-contracts";
+import type { PermissionScopeType } from "@xmtp/signet-schemas";
+import { createTestCredentialConfig } from "./fixtures.js";
 
-describe("createSessionService", () => {
-  let manager: InternalSessionManager;
-  let issued: string[];
-  let service: ReturnType<typeof createSessionService>;
+describe("createCredentialService", () => {
+  let manager: InternalCredentialManager;
+  let service: ReturnType<typeof createCredentialService>;
 
   beforeEach(() => {
-    manager = createSessionManager({
+    manager = createCredentialManager({
       defaultTtlSeconds: 60,
-      maxConcurrentPerAgent: 3,
+      maxConcurrentPerOperator: 3,
       renewalWindowSeconds: 10,
       heartbeatGracePeriod: 3,
     });
-    issued = [];
-    service = createSessionService({
-      manager,
-      keyManager: {
-        async issueSessionKey(sessionId, ttlSeconds) {
-          issued.push(`${sessionId}:${ttlSeconds}`);
-          return Result.ok({ fingerprint: `fp_${sessionId}` });
-        },
-      },
-    });
+    service = createCredentialService({ manager });
   });
 
-  test("issues bearer credentials with session metadata", async () => {
-    const result = await service.issue(createTestSessionConfig());
+  test("issues bearer credentials with credential metadata", async () => {
+    const result = await service.issue(createTestCredentialConfig());
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
 
     expect(result.value.token).toHaveLength(43);
-    expect(result.value.session.sessionId).toMatch(/^ses_[0-9a-f]{32}$/);
-    expect(result.value.session.sessionKeyFingerprint).toBe(
-      `fp_${result.value.session.sessionId}`,
-    );
-    expect(issued).toEqual([`${result.value.session.sessionId}:3600`]);
+    expect(result.value.credential.id).toMatch(/^cred_[0-9a-f]{16}$/);
+    expect(result.value.credential.config.operatorId).toBe("op_test1234");
   });
 
-  test("reuses an existing matching active session without issuing a new key", async () => {
-    const config = createTestSessionConfig();
+  test("reuses an existing matching active credential", async () => {
+    const config = createTestCredentialConfig();
     const first = await service.issue(config);
     const second = await service.issue(config);
 
@@ -53,64 +41,252 @@ describe("createSessionService", () => {
     if (!first.isOk() || !second.isOk()) return;
 
     expect(second.value.token).toBe(first.value.token);
-    expect(second.value.session.sessionId).toBe(first.value.session.sessionId);
-    expect(issued).toHaveLength(1);
+    expect(second.value.credential.id).toBe(first.value.credential.id);
   });
 
-  test("lists public session records without exposing bearer tokens", async () => {
-    const issuedSession = await service.issue(createTestSessionConfig());
-    expect(issuedSession.isOk()).toBe(true);
-    if (!issuedSession.isOk()) return;
+  test("lists public credential records without exposing bearer tokens", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
 
-    const listed = await service.list("agent-inbox-1");
+    const listed = await service.list("op_test1234");
     expect(listed.isOk()).toBe(true);
     if (!listed.isOk()) return;
 
     expect(listed.value).toHaveLength(1);
-    expect(listed.value[0]?.sessionId).toBe(
-      issuedSession.value.session.sessionId,
-    );
+    expect(listed.value[0]?.id).toBe(issuedCred.value.credential.id);
+    expect(listed.value[0]?.credentialId).toBe(issuedCred.value.credential.id);
+    expect(listed.value[0]?.effectiveScopes.allow).toContain("read-messages");
+    expect(listed.value[0]?.isExpired).toBe(false);
     expect("token" in listed.value[0]!).toBe(false);
   });
 
-  test("reports whether a session is active", async () => {
-    const issuedSession = await service.issue(createTestSessionConfig());
-    expect(issuedSession.isOk()).toBe(true);
-    if (!issuedSession.isOk()) return;
+  test("revokes a credential", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
 
-    const active = await service.isActive(
-      issuedSession.value.session.sessionId,
-    );
-    expect(active.isOk()).toBe(true);
-    if (!active.isOk()) return;
-    expect(active.value).toBe(true);
-
-    await service.revoke(
-      issuedSession.value.session.sessionId,
+    const revokeResult = await service.revoke(
+      issuedCred.value.credential.id,
       "owner-initiated",
     );
+    expect(revokeResult.isOk()).toBe(true);
 
-    const revoked = await service.isActive(
-      issuedSession.value.session.sessionId,
-    );
-    expect(revoked.isOk()).toBe(true);
-    if (!revoked.isOk()) return;
-    expect(revoked.value).toBe(false);
+    // Lookup should still return but with revoked status
+    const lookup = await service.lookup(issuedCred.value.credential.id);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
+    expect(lookup.value.status).toBe("revoked");
   });
 
-  test("propagates session-key issuance errors", async () => {
-    const failing = createSessionService({
-      manager,
-      keyManager: {
-        async issueSessionKey() {
-          return Result.err(InternalError.create("session key failed"));
-        },
-      },
+  test("looks up credential by token", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
+
+    const lookup = await service.lookupByToken(issuedCred.value.token);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
+    expect(lookup.value.id).toBe(issuedCred.value.credential.id);
+    expect(lookup.value.credentialId).toBe(issuedCred.value.credential.id);
+    expect(lookup.value.operatorId).toBe("op_test1234");
+    expect(lookup.value.effectiveScopes.allow).toContain("read-messages");
+  });
+
+  test("updates credential scopes when the change does not escalate access", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
+
+    const updated = await service.update(issuedCred.value.credential.id, {
+      allow: ["read-messages"] as PermissionScopeType[],
+      deny: ["list-conversations"] as PermissionScopeType[],
+    });
+    expect(updated.isOk()).toBe(true);
+    if (!updated.isOk()) return;
+    expect(updated.value.status).toBe("active");
+    expect(updated.value.config.allow).toEqual(["read-messages"]);
+    expect(updated.value.config.deny).toEqual(["list-conversations"]);
+  });
+
+  test("applies scope narrowing in place", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
+
+    const updated = await service.update(issuedCred.value.credential.id, {
+      allow: ["read-messages"] as PermissionScopeType[],
+    });
+    expect(updated.isOk()).toBe(true);
+    if (!updated.isOk()) return;
+
+    expect(updated.value.status).toBe("active");
+    expect(updated.value.config.allow).toEqual(["read-messages"]);
+    expect(updated.value.effectiveScopes.allow).toEqual(["read-messages"]);
+  });
+
+  test("revokes credential when update requires reauthorization", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
+
+    const updated = await service.update(issuedCred.value.credential.id, {
+      allow: ["read-messages", "send"] as PermissionScopeType[],
+    });
+    expect(updated.isOk()).toBe(true);
+    if (!updated.isOk()) return;
+
+    expect(updated.value.status).toBe("revoked");
+
+    const lookup = await service.lookup(issuedCred.value.credential.id);
+    expect(lookup.isOk()).toBe(true);
+    if (!lookup.isOk()) return;
+    expect(lookup.value.status).toBe("revoked");
+  });
+
+  test("rejects unsupported credential updates", async () => {
+    const issuedCred = await service.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
+
+    const updated = await service.update(issuedCred.value.credential.id, {
+      chatIds: ["conv_other999"],
+    });
+    expect(updated.isErr()).toBe(true);
+    if (!updated.isErr()) return;
+    expect(updated.error.category).toBe("validation");
+  });
+
+  test("renews a credential and returns token metadata", async () => {
+    const shortTtl = createCredentialManager({
+      defaultTtlSeconds: 5,
+      maxConcurrentPerOperator: 3,
+      renewalWindowSeconds: 7200,
+      heartbeatGracePeriod: 3,
+    });
+    const shortService = createCredentialService({ manager: shortTtl });
+
+    const issuedCred = await shortService.issue(createTestCredentialConfig());
+    expect(issuedCred.isOk()).toBe(true);
+    if (!issuedCred.isOk()) return;
+
+    const renewed = await shortService.renew(issuedCred.value.credential.id);
+    expect(renewed.isOk()).toBe(true);
+    if (!renewed.isOk()) return;
+
+    expect(renewed.value.credentialId).toBe(issuedCred.value.credential.id);
+    expect(renewed.value.operatorId).toBe("op_test1234");
+    expect(renewed.value.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(renewed.value.issuedAt).toBeDefined();
+    expect(renewed.value.expiresAt).toBeDefined();
+  });
+});
+
+describe("createCredentialService with policy resolution", () => {
+  let manager: InternalCredentialManager;
+  let policyManager: PolicyManager;
+  let service: ReturnType<typeof createCredentialService>;
+
+  beforeEach(() => {
+    manager = createCredentialManager({
+      defaultTtlSeconds: 60,
+      maxConcurrentPerOperator: 3,
+      renewalWindowSeconds: 10,
+      heartbeatGracePeriod: 3,
+    });
+    policyManager = createPolicyManager();
+    service = createCredentialService({ manager, policyManager });
+  });
+
+  test("resolves scopes from policy when policyId is provided", async () => {
+    const policyResult = await policyManager.create({
+      label: "Test Policy",
+      allow: ["send", "react"] as PermissionScopeType[],
+      deny: ["leave"] as PermissionScopeType[],
+    });
+    expect(policyResult.isOk()).toBe(true);
+    if (!policyResult.isOk()) return;
+
+    const config = createTestCredentialConfig({
+      policyId: policyResult.value.id,
+      allow: ["reply"] as PermissionScopeType[],
+      deny: [] as PermissionScopeType[],
     });
 
-    const result = await failing.issue(createTestSessionConfig());
-    expect(result.isErr()).toBe(true);
-    if (!result.isErr()) return;
-    expect(result.error.message).toContain("session key failed");
+    const result = await service.issue(config);
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    // Policy allow ["send","react"] merged with inline allow ["reply"]
+    expect(result.value.credential.config.allow).toContain("send");
+    expect(result.value.credential.config.allow).toContain("react");
+    expect(result.value.credential.config.allow).toContain("reply");
+    // Policy deny ["leave"] merged with inline deny []
+    expect(result.value.credential.config.deny).toContain("leave");
+  });
+
+  test("uses inline scopes only when no policyId", async () => {
+    const config = createTestCredentialConfig({
+      allow: ["send"] as PermissionScopeType[],
+      deny: ["leave"] as PermissionScopeType[],
+    });
+
+    const result = await service.issue(config);
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.credential.config.allow).toEqual(["send"]);
+    expect(result.value.credential.config.deny).toEqual(["leave"]);
+  });
+
+  test("returns error when policyId references nonexistent policy", async () => {
+    const config = createTestCredentialConfig({
+      policyId: "policy_nonexistent",
+    });
+
+    const result = await service.issue(config);
+    expect(result.isOk()).toBe(false);
+    if (result.isOk()) return;
+
+    expect(result.error.category).toBe("not_found");
+  });
+
+  test("recomputes scopes on update when policyId changes", async () => {
+    const policy1 = await policyManager.create({
+      label: "Policy 1",
+      allow: ["send"] as PermissionScopeType[],
+      deny: [] as PermissionScopeType[],
+    });
+    expect(policy1.isOk()).toBe(true);
+    if (!policy1.isOk()) return;
+
+    const policy2 = await policyManager.create({
+      label: "Policy 2",
+      allow: [] as PermissionScopeType[],
+      deny: ["send"] as PermissionScopeType[],
+    });
+    expect(policy2.isOk()).toBe(true);
+    if (!policy2.isOk()) return;
+
+    // Issue with policy1
+    const config = createTestCredentialConfig({
+      policyId: policy1.value.id,
+      allow: [] as PermissionScopeType[],
+      deny: [] as PermissionScopeType[],
+    });
+    const issued = await service.issue(config);
+    expect(issued.isOk()).toBe(true);
+    if (!issued.isOk()) return;
+
+    // Update to policy2
+    const updated = await service.update(issued.value.credential.id, {
+      policyId: policy2.value.id,
+    });
+    expect(updated.isOk()).toBe(true);
+    if (!updated.isOk()) return;
+
+    expect(updated.value.status).toBe("active");
+    expect(updated.value.config.allow).toEqual([]);
+    expect(updated.value.config.deny).toContain("send");
   });
 });

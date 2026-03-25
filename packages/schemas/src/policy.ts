@@ -19,7 +19,7 @@ export type PolicyConfigType = {
   deny: PermissionScopeType[];
 };
 
-/** Zod schema for a reusable permission policy configuration. */
+/** Zod schema for {@link PolicyConfigType}. */
 export const PolicyConfig: z.ZodType<PolicyConfigType> = z
   .object({
     /** Human-readable name for this policy. */
@@ -41,7 +41,7 @@ export type PolicyRecordType = {
   updatedAt: string;
 };
 
-/** Zod schema for a persisted policy record. */
+/** Zod schema for {@link PolicyRecordType}. */
 export const PolicyRecord: z.ZodType<PolicyRecordType> = z
   .object({
     /** Unique policy identifier (`policy_` prefix). */

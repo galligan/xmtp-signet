@@ -1,189 +1,205 @@
 /**
- * Session manager implementation.
+ * Credential manager implementation.
  *
- * Manages the lifecycle of agent sessions: creation, lookup,
+ * Manages the lifecycle of operator credentials: issuance, lookup,
  * renewal, revocation, heartbeat processing, and expiry sweeps.
- * Uses an in-memory Map store for v0.
+ * Uses an in-memory Map store for v1.
  */
 
 import { Result } from "better-result";
 import type {
-  SessionConfig,
-  SessionRevocationReason,
-  ViewConfig,
-  GrantConfig,
+  CredentialConfigType,
+  CredentialIssuerType,
+  CredentialStatusType,
+  ScopeSetType,
+  PermissionScopeType,
+  CredentialRevocationReason,
 } from "@xmtp/signet-schemas";
 import {
   AuthError,
-  SessionExpiredError,
+  CredentialExpiredError,
   NotFoundError,
   InternalError,
-  ValidationError,
+  resolveScopeSet,
 } from "@xmtp/signet-schemas";
-import type {
-  MaterialityCheck,
-  RevealStateStore,
-} from "@xmtp/signet-contracts";
+import type { RevealStateStore } from "@xmtp/signet-contracts";
 import { createRevealStateStore } from "@xmtp/signet-policy";
-import { generateToken, generateSessionId } from "./token.js";
+import { generateToken, generateCredentialId } from "./token.js";
 import { computePolicyHash } from "./policy-hash.js";
+import type { DetailedMaterialityCheck } from "./materiality.js";
 import { checkMateriality as checkMaterialityImpl } from "./materiality.js";
 
-/** Configuration for the session manager. */
-export interface SessionManagerConfig {
+/** Configuration for the credential manager. */
+export interface CredentialManagerConfig {
   readonly defaultTtlSeconds: number;
-  readonly maxConcurrentPerAgent: number;
+  readonly maxConcurrentPerOperator: number;
   readonly tokenByteLength: number;
   readonly renewalWindowSeconds: number;
   readonly heartbeatGracePeriod: number;
 }
 
-const DEFAULT_CONFIG: SessionManagerConfig = {
+const DEFAULT_CONFIG: CredentialManagerConfig = {
   defaultTtlSeconds: 3600,
-  maxConcurrentPerAgent: 3,
+  maxConcurrentPerOperator: 3,
   tokenByteLength: 32,
   renewalWindowSeconds: 300,
   heartbeatGracePeriod: 3,
 };
 
-/** Internal session record with all signet-side fields. */
-export interface InternalSessionRecord {
-  readonly sessionId: string;
+/** Internal credential record with all signet-side fields. */
+export interface InternalCredentialRecord {
+  readonly credentialId: string;
   readonly token: string;
-  readonly agentInboxId: string;
-  readonly view: ViewConfig;
-  readonly grant: GrantConfig;
+  readonly operatorId: string;
+  readonly chatIds: readonly string[];
+  readonly effectiveScopes: ScopeSetType;
+  readonly resolvedScopes: ReadonlySet<PermissionScopeType>;
   readonly policyHash: string;
-  readonly sessionKeyFingerprint: string;
-  readonly state: "active" | "expired" | "revoked" | "reauthorization-required";
+  readonly status: CredentialStatusType;
   readonly heartbeatInterval: number;
   readonly lastHeartbeat: string;
   readonly issuedAt: string;
   readonly expiresAt: string;
+  readonly issuedBy: CredentialIssuerType;
   readonly ttlMs: number;
   readonly revokedAt: string | null;
-  readonly revocationReason: SessionRevocationReason | null;
+  readonly revocationReason: CredentialRevocationReason | null;
 }
 
-/** Extended session manager interface (superset of contract). */
-export interface InternalSessionManager {
-  createSession(
-    config: SessionConfig,
-    sessionKeyFingerprint: string,
-    options?: { sessionId?: string },
-  ): Promise<Result<InternalSessionRecord, ValidationError | InternalError>>;
-  getSessionByToken(
+/** Extended credential manager interface (superset of contract). */
+export interface InternalCredentialManager {
+  /** Issue a new credential from configuration. */
+  issueCredential(
+    config: CredentialConfigType,
+    options?: {
+      credentialId?: string;
+      issuedBy?: CredentialIssuerType;
+    },
+  ): Promise<Result<InternalCredentialRecord, InternalError>>;
+  /** Look up a credential by its bearer token. */
+  getCredentialByToken(
     token: string,
-  ): Result<InternalSessionRecord, SessionExpiredError | NotFoundError>;
-  getSessionById(
-    sessionId: string,
-  ): Result<InternalSessionRecord, NotFoundError>;
-  getActiveSessions(agentInboxId: string): readonly InternalSessionRecord[];
-  listSessions(agentInboxId?: string): readonly InternalSessionRecord[];
+  ): Result<InternalCredentialRecord, CredentialExpiredError | NotFoundError>;
+  /** Look up a credential by its ID. */
+  getCredentialById(
+    credentialId: string,
+  ): Result<InternalCredentialRecord, NotFoundError>;
+  /** Get all active credentials for an operator. */
+  getActiveCredentials(operatorId: string): readonly InternalCredentialRecord[];
+  /** List credentials, optionally filtered by operator. */
+  listCredentials(operatorId?: string): readonly InternalCredentialRecord[];
+  /** Record a heartbeat for a credential. */
   recordHeartbeat(
-    sessionId: string,
-  ): Result<void, SessionExpiredError | NotFoundError>;
-  renewSession(
-    sessionId: string,
+    credentialId: string,
+  ): Result<void, CredentialExpiredError | NotFoundError>;
+  /** Renew an expiring credential. */
+  renewCredential(
+    credentialId: string,
   ): Promise<
     Result<
-      InternalSessionRecord,
-      SessionExpiredError | NotFoundError | AuthError
+      InternalCredentialRecord,
+      CredentialExpiredError | NotFoundError | AuthError
     >
   >;
-  updateSessionPolicy(
-    sessionId: string,
-    view: ViewConfig,
-    grant: GrantConfig,
-  ): Result<InternalSessionRecord, SessionExpiredError | NotFoundError>;
-  revokeSession(
-    sessionId: string,
-    reason: SessionRevocationReason,
-  ): Result<InternalSessionRecord, NotFoundError>;
-  revokeAllSessions(
-    agentInboxId: string,
-    reason: SessionRevocationReason,
-  ): readonly InternalSessionRecord[];
+  /** Update a credential's scope policy. */
+  updateCredentialScopes(
+    credentialId: string,
+    scopes: ScopeSetType,
+  ): Result<InternalCredentialRecord, CredentialExpiredError | NotFoundError>;
+  /** Revoke a credential with a reason. */
+  revokeCredential(
+    credentialId: string,
+    reason: CredentialRevocationReason,
+  ): Result<InternalCredentialRecord, NotFoundError>;
+  /** Revoke all active credentials for an operator. */
+  revokeAllCredentials(
+    operatorId: string,
+    reason: CredentialRevocationReason,
+  ): readonly InternalCredentialRecord[];
+  /** Look up a credential by its bearer token. */
   lookupByToken(
     token: string,
-  ): Result<InternalSessionRecord, SessionExpiredError | NotFoundError>;
+  ): Result<InternalCredentialRecord, CredentialExpiredError | NotFoundError>;
+  /** Check if a scope change would be material. */
   checkMateriality(
-    sessionId: string,
-    newView: ViewConfig,
-    newGrant: GrantConfig,
-  ): Result<MaterialityCheck, NotFoundError>;
-  getRevealState(sessionId: string): Result<RevealStateStore, NotFoundError>;
-  setSessionState(
-    sessionId: string,
-    state: InternalSessionRecord["state"],
-  ): Result<InternalSessionRecord, NotFoundError>;
-  sweepExpired(): readonly InternalSessionRecord[];
-  /** Check if a session's heartbeat has exceeded interval + grace period. */
-  isHeartbeatStale(sessionId: string): Result<boolean, NotFoundError>;
+    credentialId: string,
+    newScopes: ScopeSetType,
+  ): Result<DetailedMaterialityCheck, NotFoundError>;
+  /** Get the reveal state store for a credential. */
+  getRevealState(credentialId: string): Result<RevealStateStore, NotFoundError>;
+  /** Set the status of a credential directly. */
+  setCredentialStatus(
+    credentialId: string,
+    status: CredentialStatusType,
+  ): Result<InternalCredentialRecord, NotFoundError>;
+  /** Sweep expired and heartbeat-timed-out credentials. */
+  sweepExpired(): readonly InternalCredentialRecord[];
+  /** Check if a credential's heartbeat has exceeded interval + grace period. */
+  isHeartbeatStale(credentialId: string): Result<boolean, NotFoundError>;
 }
 
-/** Hooks for session-manager side effects. */
-export interface SessionManagerOptions {
-  /** Called when a session's policy/state is mutated (for cache invalidation). */
-  readonly onSessionMutated?: (sessionId: string) => void;
-  /** Called when a session is revoked. Receives the full record for seal publishing. */
-  readonly onSessionRevoked?: (session: InternalSessionRecord) => void;
+/** Hooks for credential-manager side effects. */
+export interface CredentialManagerOptions {
+  /** Called when a credential's policy/status is mutated (for cache invalidation). */
+  readonly onCredentialMutated?: (credentialId: string) => void;
+  /** Called when a credential is revoked. Receives the full record for seal publishing. */
+  readonly onCredentialRevoked?: (credential: InternalCredentialRecord) => void;
 }
 
-/** Create a new session manager with the given configuration. */
-export function createSessionManager(
-  overrides?: Partial<SessionManagerConfig>,
-  options?: SessionManagerOptions,
-): InternalSessionManager {
+/** Create a new credential manager with the given configuration. */
+export function createCredentialManager(
+  overrides?: Partial<CredentialManagerConfig>,
+  options?: CredentialManagerOptions,
+): InternalCredentialManager {
   const config = { ...DEFAULT_CONFIG, ...overrides };
-  const onMutated = options?.onSessionMutated;
+  const onMutated = options?.onCredentialMutated;
 
   // In-memory stores
-  const byId = new Map<string, InternalSessionRecord>();
-  const byToken = new Map<string, string>(); // token -> sessionId
-  const byAgent = new Map<string, Set<string>>(); // agentInboxId -> sessionIds
-  const revealStates = new Map<string, RevealStateStore>(); // sessionId -> store
+  const byId = new Map<string, InternalCredentialRecord>();
+  const byToken = new Map<string, string>(); // token -> credentialId
+  const byOperator = new Map<string, Set<string>>(); // operatorId -> credentialIds
+  const revealStates = new Map<string, RevealStateStore>();
 
   function now(): string {
     return new Date().toISOString();
   }
 
-  function upsertRecord(record: InternalSessionRecord): void {
-    byId.set(record.sessionId, record);
-    byToken.set(record.token, record.sessionId);
-    let agentSessions = byAgent.get(record.agentInboxId);
-    if (!agentSessions) {
-      agentSessions = new Set();
-      byAgent.set(record.agentInboxId, agentSessions);
+  function upsertRecord(record: InternalCredentialRecord): void {
+    byId.set(record.credentialId, record);
+    byToken.set(record.token, record.credentialId);
+    let operatorCreds = byOperator.get(record.operatorId);
+    if (!operatorCreds) {
+      operatorCreds = new Set();
+      byOperator.set(record.operatorId, operatorCreds);
     }
-    agentSessions.add(record.sessionId);
+    operatorCreds.add(record.credentialId);
   }
 
   function mutateRecord(
-    sessionId: string,
-    updates: Partial<InternalSessionRecord>,
-  ): Result<InternalSessionRecord, InternalError> {
-    const existing = byId.get(sessionId);
+    credentialId: string,
+    updates: Partial<InternalCredentialRecord>,
+  ): Result<InternalCredentialRecord, InternalError> {
+    const existing = byId.get(credentialId);
     if (!existing) {
       return Result.err(
-        InternalError.create(`Session ${sessionId} not found in store`),
+        InternalError.create(`Credential ${credentialId} not found in store`),
       );
     }
-    const updated: InternalSessionRecord = {
-      sessionId: updates.sessionId ?? existing.sessionId,
+    const updated: InternalCredentialRecord = {
+      credentialId: updates.credentialId ?? existing.credentialId,
       token: updates.token ?? existing.token,
-      agentInboxId: updates.agentInboxId ?? existing.agentInboxId,
-      view: updates.view ?? existing.view,
-      grant: updates.grant ?? existing.grant,
+      operatorId: updates.operatorId ?? existing.operatorId,
+      chatIds: updates.chatIds ?? existing.chatIds,
+      effectiveScopes: updates.effectiveScopes ?? existing.effectiveScopes,
+      resolvedScopes: updates.resolvedScopes ?? existing.resolvedScopes,
       policyHash: updates.policyHash ?? existing.policyHash,
-      sessionKeyFingerprint:
-        updates.sessionKeyFingerprint ?? existing.sessionKeyFingerprint,
-      state: updates.state ?? existing.state,
+      status: updates.status ?? existing.status,
       heartbeatInterval:
         updates.heartbeatInterval ?? existing.heartbeatInterval,
       lastHeartbeat: updates.lastHeartbeat ?? existing.lastHeartbeat,
       issuedAt: updates.issuedAt ?? existing.issuedAt,
       expiresAt: updates.expiresAt ?? existing.expiresAt,
+      issuedBy: updates.issuedBy ?? existing.issuedBy,
       ttlMs: updates.ttlMs ?? existing.ttlMs,
       revokedAt:
         updates.revokedAt !== undefined
@@ -194,80 +210,86 @@ export function createSessionManager(
           ? updates.revocationReason
           : existing.revocationReason,
     };
-    byId.set(sessionId, updated);
+    byId.set(credentialId, updated);
 
-    // Only fire onMutated for policy-relevant changes, not routine
-    // updates like heartbeat timestamps that don't affect authorization.
+    // Only fire onMutated for policy-relevant changes
     const policyChanged =
-      updates.view !== undefined ||
-      updates.grant !== undefined ||
-      updates.state !== undefined ||
+      updates.effectiveScopes !== undefined ||
+      updates.status !== undefined ||
       updates.revokedAt !== undefined ||
       updates.policyHash !== undefined;
     if (policyChanged) {
-      onMutated?.(sessionId);
+      onMutated?.(credentialId);
     }
 
     return Result.ok(updated);
   }
 
-  function getActiveForAgent(agentInboxId: string): InternalSessionRecord[] {
-    const ids = byAgent.get(agentInboxId);
+  function getActiveForOperator(
+    operatorId: string,
+  ): InternalCredentialRecord[] {
+    const ids = byOperator.get(operatorId);
     if (!ids) return [];
-    const active: InternalSessionRecord[] = [];
+    const active: InternalCredentialRecord[] = [];
     for (const id of ids) {
       const record = byId.get(id);
-      if (record?.state === "active") {
+      if (record?.status === "active") {
         active.push(record);
       }
     }
     return active;
   }
 
-  function cleanupRevealState(sessionId: string): void {
-    const store = revealStates.get(sessionId);
+  function cleanupRevealState(credentialId: string): void {
+    const store = revealStates.get(credentialId);
     if (store) {
       store.restore({ activeReveals: [] });
     }
   }
 
   function revokeRecord(
-    sessionId: string,
-    reason: SessionRevocationReason,
-  ): Result<InternalSessionRecord, InternalError> {
-    cleanupRevealState(sessionId);
-    const result = mutateRecord(sessionId, {
-      state: "revoked",
+    credentialId: string,
+    reason: CredentialRevocationReason,
+  ): Result<InternalCredentialRecord, InternalError> {
+    cleanupRevealState(credentialId);
+    const result = mutateRecord(credentialId, {
+      status: "revoked",
       revokedAt: now(),
       revocationReason: reason,
     });
     if (result.isOk()) {
-      options?.onSessionRevoked?.(result.value);
+      options?.onCredentialRevoked?.(result.value);
     }
     return result;
   }
 
-  const manager: InternalSessionManager = {
-    async createSession(sessionConfig, sessionKeyFingerprint, options) {
-      const policyHash = computePolicyHash(
-        sessionConfig.view,
-        sessionConfig.grant,
+  /** Build a ScopeSetType from config allow/deny. */
+  function buildScopeSet(cfg: CredentialConfigType): ScopeSetType {
+    return {
+      allow: cfg.allow ?? [],
+      deny: cfg.deny ?? [],
+    };
+  }
+
+  const manager: InternalCredentialManager = {
+    async issueCredential(credentialConfig, opts) {
+      const scopes = buildScopeSet(credentialConfig);
+      const policyHash = computePolicyHash(scopes, credentialConfig.chatIds);
+
+      const activeCredentials = getActiveForOperator(
+        credentialConfig.operatorId,
       );
 
-      const activeSessions = getActiveForAgent(sessionConfig.agentInboxId);
-
-      // Concurrent session limit: revoke oldest if at max (check before dedup)
-      if (activeSessions.length >= config.maxConcurrentPerAgent) {
-        const sorted = [...activeSessions].sort(
+      // Concurrent credential limit: revoke oldest if at max
+      if (activeCredentials.length >= config.maxConcurrentPerOperator) {
+        const sorted = [...activeCredentials].sort(
           (a, b) =>
             new Date(a.issuedAt).getTime() - new Date(b.issuedAt).getTime(),
         );
         const oldest = sorted[0];
         if (oldest) {
-          // "policy-violation" is the closest valid SessionRevocationReason
-          // for max-sessions eviction (no dedicated enum value exists)
           const revokeResult = revokeRecord(
-            oldest.sessionId,
+            oldest.credentialId,
             "policy-violation",
           );
           if (!revokeResult.isOk()) {
@@ -276,31 +298,33 @@ export function createSessionManager(
         }
       }
 
-      // Dedup check: same agent + same policy hash (after eviction)
-      const currentActive = getActiveForAgent(sessionConfig.agentInboxId);
-      const existing = currentActive.find((s) => s.policyHash === policyHash);
+      // Dedup: same operator + same policy hash (after eviction)
+      const currentActive = getActiveForOperator(credentialConfig.operatorId);
+      const existing = currentActive.find((c) => c.policyHash === policyHash);
       if (existing) {
         return Result.ok(existing);
       }
 
       const currentTime = now();
-      const ttl = sessionConfig.ttlSeconds ?? config.defaultTtlSeconds;
+      const ttl = credentialConfig.ttlSeconds ?? config.defaultTtlSeconds;
       const ttlMs = ttl * 1000;
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+      const resolved = resolveScopeSet(scopes);
 
-      const record: InternalSessionRecord = {
-        sessionId: options?.sessionId ?? generateSessionId(),
+      const record: InternalCredentialRecord = {
+        credentialId: opts?.credentialId ?? generateCredentialId(),
         token: generateToken(config.tokenByteLength),
-        agentInboxId: sessionConfig.agentInboxId,
-        view: sessionConfig.view,
-        grant: sessionConfig.grant,
+        operatorId: credentialConfig.operatorId,
+        chatIds: credentialConfig.chatIds,
+        effectiveScopes: scopes,
+        resolvedScopes: resolved,
         policyHash,
-        sessionKeyFingerprint,
-        state: "active",
-        heartbeatInterval: sessionConfig.heartbeatInterval ?? 30,
+        status: "active",
+        heartbeatInterval: 30,
         lastHeartbeat: currentTime,
         issuedAt: currentTime,
         expiresAt,
+        issuedBy: opts?.issuedBy ?? "owner",
         ttlMs,
         revokedAt: null,
         revocationReason: null,
@@ -310,140 +334,138 @@ export function createSessionManager(
       return Result.ok(record);
     },
 
-    getSessionByToken(token) {
-      const sessionId = byToken.get(token);
-      if (!sessionId) {
-        return Result.err(NotFoundError.create("session", token));
+    getCredentialByToken(token) {
+      const credentialId = byToken.get(token);
+      if (!credentialId) {
+        return Result.err(NotFoundError.create("credential", token));
       }
-      const record = byId.get(sessionId);
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", token));
+        return Result.err(NotFoundError.create("credential", token));
       }
       if (Date.now() >= new Date(record.expiresAt).getTime()) {
-        const expireResult = mutateRecord(sessionId, { state: "expired" });
-        if (!expireResult.isOk()) {
-          return Result.err(SessionExpiredError.create(sessionId));
-        }
-        return Result.err(SessionExpiredError.create(sessionId));
+        mutateRecord(credentialId, { status: "expired" });
+        return Result.err(CredentialExpiredError.create(credentialId));
       }
-      if (record.state !== "active") {
-        return Result.err(SessionExpiredError.create(sessionId));
+      if (record.status !== "active") {
+        return Result.err(CredentialExpiredError.create(credentialId));
       }
       return Result.ok(record);
     },
 
     lookupByToken(token) {
-      return manager.getSessionByToken(token);
+      return manager.getCredentialByToken(token);
     },
 
-    getSessionById(sessionId) {
-      const record = byId.get(sessionId);
+    getCredentialById(credentialId) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
       return Result.ok(record);
     },
 
-    getActiveSessions(agentInboxId) {
-      return getActiveForAgent(agentInboxId);
+    getActiveCredentials(operatorId) {
+      return getActiveForOperator(operatorId);
     },
 
-    listSessions(agentInboxId) {
-      if (agentInboxId !== undefined) {
-        return getActiveForAgent(agentInboxId);
+    listCredentials(operatorId) {
+      if (operatorId !== undefined) {
+        return getActiveForOperator(operatorId);
       }
-      const active: InternalSessionRecord[] = [];
+      const active: InternalCredentialRecord[] = [];
       for (const record of byId.values()) {
-        if (record.state === "active") {
+        if (record.status === "active") {
           active.push(record);
         }
       }
       return active;
     },
 
-    recordHeartbeat(sessionId) {
-      const record = byId.get(sessionId);
+    recordHeartbeat(credentialId) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      if (record.state !== "active") {
-        return Result.err(SessionExpiredError.create(sessionId));
+      if (record.status !== "active") {
+        return Result.err(CredentialExpiredError.create(credentialId));
       }
-      const heartbeatResult = mutateRecord(sessionId, {
+      const heartbeatResult = mutateRecord(credentialId, {
         lastHeartbeat: now(),
       });
       if (!heartbeatResult.isOk()) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
       return Result.ok(undefined);
     },
 
-    async renewSession(sessionId) {
-      const record = byId.get(sessionId);
+    async renewCredential(credentialId) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      if (record.state !== "active") {
-        return Result.err(SessionExpiredError.create(sessionId));
+      if (record.status !== "active") {
+        return Result.err(CredentialExpiredError.create(credentialId));
       }
-      // Check renewal window
       const expiresAt = new Date(record.expiresAt).getTime();
       const remaining = (expiresAt - Date.now()) / 1000;
       if (remaining > config.renewalWindowSeconds) {
         return Result.err(
           AuthError.create("Not in renewal window", {
-            sessionId,
+            credentialId,
             remainingSeconds: remaining,
             renewalWindowSeconds: config.renewalWindowSeconds,
           }),
         );
       }
-      // Renew: reset expiry using stored TTL (avoids compounding)
       const newExpiresAt = new Date(Date.now() + record.ttlMs).toISOString();
-      const renewResult = mutateRecord(sessionId, { expiresAt: newExpiresAt });
+      const renewResult = mutateRecord(credentialId, {
+        expiresAt: newExpiresAt,
+      });
       if (!renewResult.isOk()) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
       return Result.ok(renewResult.value);
     },
 
-    updateSessionPolicy(sessionId, view, grant) {
-      const record = byId.get(sessionId);
+    updateCredentialScopes(credentialId, scopes) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      if (record.state !== "active") {
-        return Result.err(SessionExpiredError.create(sessionId));
+      if (record.status !== "active") {
+        return Result.err(CredentialExpiredError.create(credentialId));
       }
-      const policyHash = computePolicyHash(view, grant);
-      const updateResult = mutateRecord(sessionId, {
-        view,
-        grant,
+      const policyHash = computePolicyHash(scopes, record.chatIds);
+      const resolved = resolveScopeSet(scopes);
+      const updateResult = mutateRecord(credentialId, {
+        effectiveScopes: scopes,
+        resolvedScopes: resolved,
         policyHash,
       });
       if (!updateResult.isOk()) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
       return Result.ok(updateResult.value);
     },
 
-    revokeSession(sessionId, reason) {
-      const record = byId.get(sessionId);
+    revokeCredential(credentialId, reason) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      const revokeResult = revokeRecord(sessionId, reason);
+      const revokeResult = revokeRecord(credentialId, reason);
       if (!revokeResult.isOk()) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
       return Result.ok(revokeResult.value);
     },
 
-    revokeAllSessions(agentInboxId, reason) {
-      const activeSessions = getActiveForAgent(agentInboxId);
-      const revoked: InternalSessionRecord[] = [];
-      for (const session of activeSessions) {
-        const revokeResult = revokeRecord(session.sessionId, reason);
+    revokeAllCredentials(operatorId, reason) {
+      const activeCredentials = getActiveForOperator(operatorId);
+      const revoked: InternalCredentialRecord[] = [];
+      for (const cred of activeCredentials) {
+        const revokeResult = revokeRecord(cred.credentialId, reason);
         if (revokeResult.isOk()) {
           revoked.push(revokeResult.value);
         }
@@ -451,51 +473,46 @@ export function createSessionManager(
       return revoked;
     },
 
-    getRevealState(sessionId) {
-      const record = byId.get(sessionId);
+    getRevealState(credentialId) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      let store = revealStates.get(sessionId);
+      let store = revealStates.get(credentialId);
       if (!store) {
         store = createRevealStateStore();
-        revealStates.set(sessionId, store);
+        revealStates.set(credentialId, store);
       }
       return Result.ok(store);
     },
 
-    setSessionState(sessionId, state) {
-      const record = byId.get(sessionId);
+    setCredentialStatus(credentialId, status) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      const updateResult = mutateRecord(sessionId, { state });
+      const updateResult = mutateRecord(credentialId, { status });
       if (!updateResult.isOk()) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
       return Result.ok(updateResult.value);
     },
 
-    checkMateriality(sessionId, newView, newGrant) {
-      const record = byId.get(sessionId);
+    checkMateriality(credentialId, newScopes) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      const result = checkMaterialityImpl(
-        record.view,
-        record.grant,
-        newView,
-        newGrant,
-      );
+      const result = checkMaterialityImpl(record.effectiveScopes, newScopes);
       return Result.ok(result);
     },
 
-    isHeartbeatStale(sessionId: string): Result<boolean, NotFoundError> {
-      const record = byId.get(sessionId);
+    isHeartbeatStale(credentialId) {
+      const record = byId.get(credentialId);
       if (!record) {
-        return Result.err(NotFoundError.create("Session", sessionId));
+        return Result.err(NotFoundError.create("credential", credentialId));
       }
-      if (record.state !== "active") {
+      if (record.status !== "active") {
         return Result.ok(false);
       }
       const lastHb = new Date(record.lastHeartbeat).getTime();
@@ -507,17 +524,17 @@ export function createSessionManager(
     },
 
     sweepExpired() {
-      const swept: InternalSessionRecord[] = [];
+      const swept: InternalCredentialRecord[] = [];
       const currentTime = Date.now();
       for (const record of byId.values()) {
-        if (record.state !== "active") continue;
+        if (record.status !== "active") continue;
 
-        // TTL expiry: transition to "expired" (distinct from revocation)
+        // TTL expiry
         const expiresAt = new Date(record.expiresAt).getTime();
         if (currentTime >= expiresAt) {
-          cleanupRevealState(record.sessionId);
-          const expireResult = mutateRecord(record.sessionId, {
-            state: "expired",
+          cleanupRevealState(record.credentialId);
+          const expireResult = mutateRecord(record.credentialId, {
+            status: "expired",
           });
           if (expireResult.isOk()) {
             swept.push(expireResult.value);
@@ -525,7 +542,7 @@ export function createSessionManager(
           continue;
         }
 
-        // Heartbeat timeout: revoke if heartbeat overdue
+        // Heartbeat timeout
         const lastHb = new Date(record.lastHeartbeat).getTime();
         const heartbeatDeadline =
           lastHb +
@@ -533,7 +550,7 @@ export function createSessionManager(
           config.heartbeatGracePeriod * 1000;
         if (currentTime >= heartbeatDeadline) {
           const revokeResult = revokeRecord(
-            record.sessionId,
+            record.credentialId,
             "heartbeat-timeout",
           );
           if (revokeResult.isOk()) {

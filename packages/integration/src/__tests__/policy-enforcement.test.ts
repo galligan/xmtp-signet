@@ -1,33 +1,32 @@
 /**
  * Policy enforcement integration tests.
  *
- * Validates view filtering, grant checking, content type filtering,
+ * Validates message projection, scope checks, content type filtering,
  * and materiality detection across the policy and sessions packages.
  */
 
 import { describe, test, expect } from "bun:test";
-import type {
-  ViewConfig,
-  GrantConfig,
-  ContentTypeId,
-} from "@xmtp/signet-schemas";
-import { BASELINE_CONTENT_TYPES } from "@xmtp/signet-schemas";
 import {
+  BASELINE_CONTENT_TYPES,
+  resolveScopeSet,
+  type ContentTypeId,
+  type ScopeSetType,
+} from "@xmtp/signet-schemas";
+import {
+  isMaterialChange,
   projectMessage,
+  requiresReauthorization,
   resolveEffectiveAllowlist,
+  validateGroupManagement,
   validateSendMessage,
   validateSendReaction,
-  validateGroupManagement,
-  isMaterialChange,
-  requiresReauthorization,
 } from "@xmtp/signet-policy";
+import { checkMateriality } from "@xmtp/signet-sessions";
 import type { RawMessage, SignetContentTypeConfig } from "@xmtp/signet-policy";
 import type { PolicyDelta } from "@xmtp/signet-contracts";
-import { checkMateriality } from "@xmtp/signet-sessions";
 
-const GROUP_ID = "policy-group-1";
+const GROUP_ID = "conv_1234abcdfeedbabe";
 
-/** Signet config that allows all baseline types. */
 const SIGNET_CONFIG: SignetContentTypeConfig = {
   allowlist: new Set<ContentTypeId>(BASELINE_CONTENT_TYPES),
 };
@@ -46,9 +45,9 @@ function computeAllowlist(contentTypes: readonly ContentTypeId[]) {
 
 function makeRawMessage(overrides?: Partial<RawMessage>): RawMessage {
   return {
-    messageId: `msg_${crypto.randomUUID()}`,
+    messageId: "msg_1234abcdfeedbabe",
     groupId: GROUP_ID,
-    senderInboxId: "sender-inbox",
+    senderInboxId: "inbox_sender",
     contentType: "xmtp.org/text:1.0",
     content: { text: "hello" },
     sentAt: new Date().toISOString(),
@@ -58,218 +57,198 @@ function makeRawMessage(overrides?: Partial<RawMessage>): RawMessage {
   };
 }
 
-function makeView(mode: ViewConfig["mode"] = "full"): ViewConfig {
+function makeScopeSet(overrides?: Partial<ScopeSetType>): ScopeSetType {
   return {
-    mode,
-    threadScopes: [{ groupId: GROUP_ID, threadId: null }],
-    contentTypes: ["xmtp.org/text:1.0", "xmtp.org/reaction:1.0"],
-  };
-}
-
-function makeGrant(overrides?: Partial<GrantConfig["messaging"]>): GrantConfig {
-  return {
-    messaging: {
-      send: true,
-      reply: true,
-      react: true,
-      draftOnly: false,
-      ...overrides,
-    },
-    groupManagement: {
-      addMembers: false,
-      removeMembers: false,
-      updateMetadata: false,
-      inviteUsers: false,
-    },
-    tools: { scopes: [] },
-    egress: {
-      storeExcerpts: false,
-      useForMemory: false,
-      forwardToProviders: false,
-      quoteRevealed: false,
-      summarize: false,
-    },
+    allow: ["send", "reply", "react", "read-messages"],
+    deny: [],
+    ...overrides,
   };
 }
 
 describe("policy-enforcement", () => {
-  describe("view projection", () => {
-    test("full mode passes all messages", () => {
-      const view = makeView("full");
-      const allowlist = computeAllowlist(view.contentTypes);
+  describe("message projection", () => {
+    test("visible messages pass through when read-messages is allowed", () => {
+      const scopes = resolveScopeSet(makeScopeSet());
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
       const msg = makeRawMessage();
 
-      const result = projectMessage(msg, view, allowlist, false);
+      const result = projectMessage(msg, scopes, [GROUP_ID], allowlist, false);
       expect(result.action).toBe("emit");
       if (result.action !== "emit") return;
-      expect(result.event.messageId).toBe(msg.messageId);
       expect(result.event.visibility).toBe("visible");
       expect(result.event.content).toEqual({ text: "hello" });
     });
 
-    test("redacted mode strips content", () => {
-      const view = makeView("redacted");
-      const allowlist = computeAllowlist(view.contentTypes);
+    test("messages are dropped when read-messages is absent and not revealed", () => {
+      const scopes = resolveScopeSet({
+        allow: ["send"],
+        deny: [],
+      });
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
       const msg = makeRawMessage();
 
-      const result = projectMessage(msg, view, allowlist, false);
+      const result = projectMessage(msg, scopes, [GROUP_ID], allowlist, false);
+      expect(result.action).toBe("drop");
+    });
+
+    test("revealed messages surface without read-messages scope", () => {
+      const scopes = resolveScopeSet({
+        allow: ["send"],
+        deny: [],
+      });
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
+      const msg = makeRawMessage();
+
+      const result = projectMessage(msg, scopes, [GROUP_ID], allowlist, true);
       expect(result.action).toBe("emit");
       if (result.action !== "emit") return;
-      expect(result.event.visibility).toBe("redacted");
-      // Redacted content is null
-      expect(result.event.content).toBeNull();
+      expect(result.event.visibility).toBe("revealed");
+      expect(result.event.content).toEqual({ text: "hello" });
     });
 
-    test("reveal-only mode drops non-revealed messages", () => {
-      const view = makeView("reveal-only");
-      const allowlist = computeAllowlist(view.contentTypes);
+    test("messages outside scoped chats are dropped", () => {
+      const scopes = resolveScopeSet(makeScopeSet());
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
       const msg = makeRawMessage();
 
-      // Not revealed -> dropped
-      const result = projectMessage(msg, view, allowlist, false);
+      const result = projectMessage(
+        msg,
+        scopes,
+        ["conv_deadbeeffeedbabe"],
+        allowlist,
+        false,
+      );
       expect(result.action).toBe("drop");
-
-      // Revealed -> passes
-      const revealed = projectMessage(msg, view, allowlist, true);
-      expect(revealed.action).toBe("emit");
-      if (revealed.action !== "emit") return;
-      expect(revealed.event.visibility).toBe("revealed");
     });
 
-    test("thread-only mode drops messages from other groups", () => {
-      const view: ViewConfig = {
-        mode: "full",
-        threadScopes: [{ groupId: "other-group", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      };
-      const allowlist = computeAllowlist(view.contentTypes);
-      const msg = makeRawMessage({ groupId: GROUP_ID });
+    test("historical messages require read-history scope", () => {
+      const withoutHistory = resolveScopeSet({
+        allow: ["read-messages"],
+        deny: [],
+      });
+      const withHistory = resolveScopeSet({
+        allow: ["read-messages", "read-history"],
+        deny: [],
+      });
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
+      const msg = makeRawMessage({ isHistorical: true });
 
-      const result = projectMessage(msg, view, allowlist, false);
-      expect(result.action).toBe("drop");
+      const dropped = projectMessage(
+        msg,
+        withoutHistory,
+        [GROUP_ID],
+        allowlist,
+        false,
+      );
+      expect(dropped.action).toBe("drop");
+
+      const historical = projectMessage(
+        msg,
+        withHistory,
+        [GROUP_ID],
+        allowlist,
+        false,
+      );
+      expect(historical.action).toBe("emit");
+      if (historical.action !== "emit") return;
+      expect(historical.event.visibility).toBe("historical");
     });
   });
 
   describe("content type filtering", () => {
     test("allowed content type passes", () => {
-      const view = makeView();
-      const allowlist = computeAllowlist(view.contentTypes);
+      const scopes = resolveScopeSet(makeScopeSet());
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
       const msg = makeRawMessage({ contentType: "xmtp.org/text:1.0" });
 
-      const result = projectMessage(msg, view, allowlist, false);
+      const result = projectMessage(msg, scopes, [GROUP_ID], allowlist, false);
       expect(result.action).toBe("emit");
     });
 
     test("disallowed content type is dropped", () => {
-      const view = makeView();
-      const allowlist = computeAllowlist(view.contentTypes);
+      const scopes = resolveScopeSet(makeScopeSet());
+      const allowlist = computeAllowlist(["xmtp.org/text:1.0"]);
       const msg = makeRawMessage({
         contentType: "xmtp.org/readReceipt:1.0",
       });
 
-      const result = projectMessage(msg, view, allowlist, false);
+      const result = projectMessage(msg, scopes, [GROUP_ID], allowlist, false);
       expect(result.action).toBe("drop");
     });
   });
 
-  describe("grant enforcement", () => {
-    test("send allowed when grant.messaging.send is true", () => {
-      const grant = makeGrant({ send: true });
-      const view = makeView();
-      const result = validateSendMessage(
-        { groupId: GROUP_ID, contentType: "xmtp.org/text:1.0" },
-        grant,
-        view,
-      );
+  describe("scope enforcement", () => {
+    test("send allowed when send scope is present", () => {
+      const scopes = resolveScopeSet(makeScopeSet());
+      const result = validateSendMessage({ groupId: GROUP_ID }, scopes, [
+        GROUP_ID,
+      ]);
       expect(result.isOk()).toBe(true);
     });
 
-    test("send denied when grant.messaging.send is false", () => {
-      const grant = makeGrant({ send: false });
-      const view = makeView();
-      const result = validateSendMessage(
-        { groupId: GROUP_ID, contentType: "xmtp.org/text:1.0" },
-        grant,
-        view,
-      );
+    test("send denied when send scope is absent", () => {
+      const scopes = resolveScopeSet({
+        allow: ["read-messages"],
+        deny: [],
+      });
+      const result = validateSendMessage({ groupId: GROUP_ID }, scopes, [
+        GROUP_ID,
+      ]);
       expect(result.isErr()).toBe(true);
       if (!result.isErr()) return;
-      expect(result.error._tag).toBe("GrantDeniedError");
+      expect(result.error._tag).toBe("PermissionError");
     });
 
-    test("react allowed when grant.messaging.react is true", () => {
-      const grant = makeGrant({ react: true });
-      const view = makeView();
-      const result = validateSendReaction(
-        { groupId: GROUP_ID, messageId: "msg-1" },
-        grant,
-        view,
-      );
+    test("reaction allowed when react scope is present", () => {
+      const scopes = resolveScopeSet(makeScopeSet());
+      const result = validateSendReaction({ groupId: GROUP_ID }, scopes, [
+        GROUP_ID,
+      ]);
       expect(result.isOk()).toBe(true);
     });
 
-    test("react denied when grant.messaging.react is false", () => {
-      const grant = makeGrant({ react: false });
-      const view = makeView();
-      const result = validateSendReaction(
-        { groupId: GROUP_ID, messageId: "msg-1" },
-        grant,
-        view,
-      );
-      expect(result.isErr()).toBe(true);
-    });
-
-    test("group management denied when not granted", () => {
-      const grant = makeGrant();
-      const view = makeView();
+    test("group management denied when scope is absent", () => {
+      const scopes = resolveScopeSet(makeScopeSet());
       const result = validateGroupManagement(
-        "addMembers",
+        "add-member",
         { groupId: GROUP_ID },
-        grant,
-        view,
+        scopes,
+        [GROUP_ID],
       );
       expect(result.isErr()).toBe(true);
       if (!result.isErr()) return;
-      expect(result.error._tag).toBe("GrantDeniedError");
+      expect(result.error._tag).toBe("PermissionError");
     });
   });
 
   describe("materiality detection", () => {
-    test("view mode escalation is material", () => {
+    test("scope addition is material and requires reauthorization", () => {
       const result = checkMateriality(
-        makeView("redacted"),
-        makeGrant(),
-        makeView("full"),
-        makeGrant(),
+        { allow: ["read-messages"], deny: [] },
+        { allow: ["read-messages", "send"], deny: [] },
       );
       expect(result.isMaterial).toBe(true);
-    });
-
-    test("grant escalation (false -> true) is material", () => {
-      const result = checkMateriality(
-        makeView(),
-        makeGrant({ send: false }),
-        makeView(),
-        makeGrant({ send: true }),
-      );
-      expect(result.isMaterial).toBe(true);
+      expect(result.requiresReauthorization).toBe(true);
     });
 
     test("no change is not material", () => {
-      const view = makeView();
-      const grant = makeGrant();
-      const result = checkMateriality(view, grant, view, grant);
+      const scopes = {
+        allow: ["read-messages"],
+        deny: [],
+      } satisfies ScopeSetType;
+      const result = checkMateriality(scopes, scopes);
       expect(result.isMaterial).toBe(false);
+      expect(result.requiresReauthorization).toBe(false);
     });
 
-    test("policy isMaterialChange recognizes escalation deltas", () => {
+    test("policy delta helpers classify escalations", () => {
       const delta: PolicyDelta = {
-        viewChanges: [{ field: "view.mode", from: "redacted", to: "full" }],
-        grantChanges: [],
-        contentTypeChanges: { added: [], removed: [] },
+        added: ["send"],
+        removed: [],
+        changed: [{ scope: "read-messages", from: "deny", to: "allow" }],
       };
-      expect(isMaterialChange([delta])).toBe(true);
-      expect(requiresReauthorization([delta])).toBe(true);
+      expect(isMaterialChange(delta)).toBe(true);
+      expect(requiresReauthorization(delta)).toBe(true);
     });
   });
 });

@@ -27,24 +27,24 @@ export class ConnectionRegistry {
     return this.connections.get(connectionId);
   }
 
-  getBySessionId(
-    sessionId: string,
+  getByCredentialId(
+    credentialId: string,
   ): readonly ServerWebSocket<ConnectionData>[] {
     const result: ServerWebSocket<ConnectionData>[] = [];
     for (const ws of this.connections.values()) {
-      if (ws.data.sessionId === sessionId) {
+      if (ws.data.credentialId === credentialId) {
         result.push(ws);
       }
     }
     return result;
   }
 
-  getByAgentInboxId(
-    agentInboxId: string,
+  getByOperatorId(
+    operatorId: string,
   ): readonly ServerWebSocket<ConnectionData>[] {
     const result: ServerWebSocket<ConnectionData>[] = [];
     for (const ws of this.connections.values()) {
-      if (ws.data.agentInboxId === agentInboxId) {
+      if (ws.data.operatorId === operatorId) {
         result.push(ws);
       }
     }

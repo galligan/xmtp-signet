@@ -8,9 +8,9 @@ import {
 function makeAction(overrides: Partial<PendingAction> = {}): PendingAction {
   return {
     actionId: "act_1",
-    sessionId: "sess_1",
+    credentialId: "cred_abc12345feedbabe",
     actionType: "send_message",
-    payload: { groupId: "g1", content: "hello" },
+    payload: { chatId: "conv_g1", content: "hello" },
     createdAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-01T00:05:00Z",
     ...overrides,
@@ -65,10 +65,12 @@ describe("createPendingActionStore", () => {
     });
     store.add(expired);
     store.add(
-      makeAction({ actionId: "act_valid", expiresAt: "2024-01-01T00:10:00Z" }),
+      makeAction({
+        actionId: "act_valid",
+        expiresAt: "2024-01-01T00:10:00Z",
+      }),
     );
 
-    // Now is after act_expired but before act_valid
     const removed = store.expireStale(new Date("2024-01-01T00:05:00Z"));
     expect(removed).toHaveLength(1);
     expect(removed[0]!.actionId).toBe("act_expired");
@@ -82,20 +84,35 @@ describe("createPendingActionStore", () => {
     expect(removed).toHaveLength(0);
   });
 
-  test("listBySession filters by sessionId", () => {
-    store.add(makeAction({ actionId: "act_a", sessionId: "sess_1" }));
-    store.add(makeAction({ actionId: "act_b", sessionId: "sess_2" }));
-    store.add(makeAction({ actionId: "act_c", sessionId: "sess_1" }));
+  test("listByCredential filters by credentialId", () => {
+    store.add(
+      makeAction({
+        actionId: "act_a",
+        credentialId: "cred_abc12345feedbabe",
+      }),
+    );
+    store.add(
+      makeAction({
+        actionId: "act_b",
+        credentialId: "cred_xyz67890",
+      }),
+    );
+    store.add(
+      makeAction({
+        actionId: "act_c",
+        credentialId: "cred_abc12345feedbabe",
+      }),
+    );
 
-    const sess1Actions = store.listBySession("sess_1");
-    expect(sess1Actions).toHaveLength(2);
-    expect(sess1Actions.map((a) => a.actionId).sort()).toEqual([
+    const credActions = store.listByCredential("cred_abc12345feedbabe");
+    expect(credActions).toHaveLength(2);
+    expect(credActions.map((a) => a.actionId).sort()).toEqual([
       "act_a",
       "act_c",
     ]);
   });
 
-  test("listBySession returns empty array for unknown session", () => {
-    expect(store.listBySession("unknown")).toEqual([]);
+  test("listByCredential returns empty array for unknown credential", () => {
+    expect(store.listByCredential("unknown")).toEqual([]);
   });
 });

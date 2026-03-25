@@ -31,7 +31,7 @@ describe("schema_compliance check", () => {
     const check = createSchemaComplianceCheck();
     const badSeal = {
       ...createTestSeal(),
-      viewMode: "invalid-mode",
+      chatId: "group-001",
     };
 
     const result = await check.execute(

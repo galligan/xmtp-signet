@@ -8,6 +8,7 @@ import {
 } from "@xmtp/signet-contracts";
 import {
   AuthError,
+  CredentialExpiredError,
   InternalError,
   PermissionError,
   type SignetError,
@@ -282,6 +283,49 @@ describe("AdminSocket round-trip", () => {
     expect(response.error.category).toBe("permission");
     expect(response.error.message).toBe("Operation denied");
     expect(response.error.context).toEqual({ grant: "messaging.send" });
+  });
+
+  test("client preserves credential expiry context from JSON-RPC failures", async () => {
+    const socketPath = testSocketPath();
+    const registry = createActionRegistry();
+    const spec = makeTestSpec(
+      "credential.lookup",
+      async () => Result.err(CredentialExpiredError.create("cred_deadbeeffeedbabe")),
+      "credential.lookup",
+    );
+    registry.register(spec);
+    const dispatcher = createAdminDispatcher(registry);
+
+    server = createAdminServer(
+      { socketPath, authMode: "admin-key" },
+      {
+        keyManager: makeKeyManager(),
+        dispatcher,
+        signetId: "test-signet",
+        signerProvider: makeStubSignerProvider(),
+      },
+    );
+    await server.start();
+
+    client = createAdminClient(socketPath);
+    await client.connect("valid-jwt-token");
+
+    const response = await client.request("credential.lookup", {
+      credentialId: "cred_deadbeeffeedbabe",
+    });
+
+    expect(response.isErr()).toBe(true);
+    if (response.isOk()) {
+      return;
+    }
+    expect(response.error._tag).toBe("CredentialExpiredError");
+    expect(response.error.category).toBe("auth");
+    expect(response.error.message).toBe(
+      "Credential 'cred_deadbeeffeedbabe' has expired",
+    );
+    expect(response.error.context).toEqual({
+      credentialId: "cred_deadbeeffeedbabe",
+    });
   });
 
   test("server stop cleans up socket file", async () => {

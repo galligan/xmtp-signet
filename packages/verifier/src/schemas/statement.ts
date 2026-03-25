@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { TrustTier } from "@xmtp/signet-schemas";
-import type { TrustTier as TrustTierType } from "@xmtp/signet-schemas";
+import { TrustTier } from "./trust-tier.js";
+import type { TrustTier as TrustTierType } from "./trust-tier.js";
 import { VerificationCheck } from "./check.js";
 
 /** Overall outcome emitted by the verifier. */

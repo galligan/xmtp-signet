@@ -1,72 +1,54 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { Result } from "better-result";
 import type { RevealGrant } from "@xmtp/signet-schemas";
-import type { SessionManager, RevealStateStore } from "@xmtp/signet-contracts";
-import { createSessionManager } from "../session-manager.js";
-import { createSessionService } from "../service.js";
+import type { CredentialManager } from "@xmtp/signet-contracts";
+import { createCredentialManager } from "../session-manager.js";
+import { createCredentialService } from "../service.js";
 import { createRevealActions } from "../reveal-actions.js";
 import type { RevealActionDeps } from "../reveal-actions.js";
-import { createTestSessionConfig } from "./fixtures.js";
-import type { InternalSessionManager } from "../session-manager.js";
+import { createTestCredentialConfig } from "./fixtures.js";
+import type { InternalCredentialManager } from "../session-manager.js";
 
-let manager: InternalSessionManager;
-let sessionService: SessionManager;
+let manager: InternalCredentialManager;
+let credentialService: CredentialManager;
 let deps: RevealActionDeps;
-let sessionId: string;
+let credentialId: string;
 
 beforeEach(async () => {
-  manager = createSessionManager({
+  manager = createCredentialManager({
     defaultTtlSeconds: 60,
-    maxConcurrentPerAgent: 3,
+    maxConcurrentPerOperator: 3,
     renewalWindowSeconds: 10,
     heartbeatGracePeriod: 3,
   });
 
-  sessionService = createSessionService({
-    manager,
-    keyManager: {
-      async issueSessionKey(sid) {
-        return Result.ok({ fingerprint: `fp_${sid}` });
-      },
-    },
-  });
+  credentialService = createCredentialService({ manager });
 
-  deps = { sessionManager: sessionService };
+  deps = {
+    credentialManager: credentialService,
+    internalManager: manager,
+  };
 
-  // Create a session for tests
-  const config = createTestSessionConfig({
-    view: {
-      mode: "redacted",
-      threadScopes: [
-        { groupId: "group-1", threadId: null },
-        { groupId: "group-2", threadId: "thread-1" },
-      ],
-      contentTypes: ["text"],
-    },
+  // Create a credential for tests
+  const config = createTestCredentialConfig({
+    chatIds: ["conv_group1", "conv_group2"],
   });
-  const issued = await sessionService.issue(config);
+  const issued = await credentialService.issue(config);
   expect(issued.isOk()).toBe(true);
-  if (!issued.isOk()) throw new Error("Failed to create session");
+  if (!issued.isOk()) throw new Error("Failed to create credential");
 
-  // Look up the sessionId
-  const sessions = await sessionService.list();
-  expect(sessions.isOk()).toBe(true);
-  if (!sessions.isOk()) throw new Error("Failed to list sessions");
-  const session = sessions.value[0];
-  if (!session) throw new Error("No session found");
-  sessionId = session.sessionId;
+  credentialId = issued.value.credential.id;
 });
 
 describe("reveal.request action", () => {
-  test("creates a reveal grant for a group in session scope", async () => {
+  test("creates reveal access for a chat in credential scope", async () => {
     const actions = createRevealActions(deps);
     const requestAction = actions.find((a) => a.id === "reveal.request");
     expect(requestAction).toBeDefined();
     if (!requestAction) return;
 
     const input = {
-      sessionId,
-      groupId: "group-1",
+      credentialId,
+      chatId: "conv_group1",
       scope: "message" as const,
       targetId: "msg-123",
       requestedBy: "member-1",
@@ -85,15 +67,15 @@ describe("reveal.request action", () => {
     expect(grant.expiresAt).toBeNull();
   });
 
-  test("rejects a group not in session threadScopes", async () => {
+  test("rejects a chat not in credential chatIds", async () => {
     const actions = createRevealActions(deps);
     const requestAction = actions.find((a) => a.id === "reveal.request");
     expect(requestAction).toBeDefined();
     if (!requestAction) return;
 
     const input = {
-      sessionId,
-      groupId: "group-unknown",
+      credentialId,
+      chatId: "conv_unknown",
       scope: "message" as const,
       targetId: "msg-123",
       requestedBy: "member-1",
@@ -106,7 +88,7 @@ describe("reveal.request action", () => {
     expect(result.error.category).toBe("permission");
   });
 
-  test("stores the grant in the session reveal state", async () => {
+  test("stores the access record in the credential reveal state", async () => {
     const actions = createRevealActions(deps);
     const requestAction = actions.find((a) => a.id === "reveal.request");
     expect(requestAction).toBeDefined();
@@ -114,8 +96,8 @@ describe("reveal.request action", () => {
 
     await requestAction.handler(
       {
-        sessionId,
-        groupId: "group-1",
+        credentialId,
+        chatId: "conv_group1",
         scope: "message" as const,
         targetId: "msg-1",
         requestedBy: "member-1",
@@ -125,17 +107,17 @@ describe("reveal.request action", () => {
     );
 
     // Verify via the store
-    const storeResult = sessionService.getRevealState(sessionId);
+    const storeResult = manager.getRevealState(credentialId);
     expect(storeResult.isOk()).toBe(true);
     if (!storeResult.isOk()) return;
 
     const snapshot = storeResult.value.snapshot();
     expect(snapshot.activeReveals).toHaveLength(1);
     expect(snapshot.activeReveals[0]?.grant.grantedBy).toBe("member-1");
-    expect(snapshot.activeReveals[0]?.request.groupId).toBe("group-1");
+    expect(snapshot.activeReveals[0]?.request.groupId).toBe("conv_group1");
   });
 
-  test("rejects when session does not exist", async () => {
+  test("rejects when credential does not exist", async () => {
     const actions = createRevealActions(deps);
     const requestAction = actions.find((a) => a.id === "reveal.request");
     expect(requestAction).toBeDefined();
@@ -143,8 +125,8 @@ describe("reveal.request action", () => {
 
     const result = await requestAction.handler(
       {
-        sessionId: "nonexistent",
-        groupId: "group-1",
+        credentialId: "nonexistent",
+        chatId: "conv_group1",
         scope: "message" as const,
         targetId: "msg-1",
         requestedBy: "member-1",
@@ -154,16 +136,47 @@ describe("reveal.request action", () => {
     );
     expect(result.isOk()).toBe(false);
   });
+
+  test("rejects when a credential-scoped caller targets another credential", async () => {
+    const issued = await credentialService.issue(
+      createTestCredentialConfig({
+        chatIds: ["conv_group1"],
+      }),
+    );
+    expect(issued.isOk()).toBe(true);
+    if (!issued.isOk()) return;
+
+    const actions = createRevealActions(deps);
+    const requestAction = actions.find((a) => a.id === "reveal.request");
+    expect(requestAction).toBeDefined();
+    if (!requestAction) return;
+
+    const result = await requestAction.handler(
+      {
+        credentialId: issued.value.credential.id,
+        chatId: "conv_group1",
+        scope: "message" as const,
+        targetId: "msg-1",
+        requestedBy: "member-1",
+        expiresAt: null,
+      },
+      stubContext({ credentialId }),
+    );
+
+    expect(result.isOk()).toBe(false);
+    if (result.isOk()) return;
+    expect(result.error.category).toBe("permission");
+  });
 });
 
 describe("reveal.list action", () => {
-  test("returns empty snapshot for session with no reveals", async () => {
+  test("returns empty snapshot for credential with no reveals", async () => {
     const actions = createRevealActions(deps);
     const listAction = actions.find((a) => a.id === "reveal.list");
     expect(listAction).toBeDefined();
     if (!listAction) return;
 
-    const result = await listAction.handler({ sessionId }, stubContext());
+    const result = await listAction.handler({ credentialId }, stubContext());
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
 
@@ -179,11 +192,10 @@ describe("reveal.list action", () => {
     expect(listAction).toBeDefined();
     if (!requestAction || !listAction) return;
 
-    // Grant two reveals
     await requestAction.handler(
       {
-        sessionId,
-        groupId: "group-1",
+        credentialId,
+        chatId: "conv_group1",
         scope: "message" as const,
         targetId: "msg-1",
         requestedBy: "member-1",
@@ -193,8 +205,8 @@ describe("reveal.list action", () => {
     );
     await requestAction.handler(
       {
-        sessionId,
-        groupId: "group-2",
+        credentialId,
+        chatId: "conv_group2",
         scope: "thread" as const,
         targetId: "thread-1",
         requestedBy: "member-2",
@@ -203,7 +215,7 @@ describe("reveal.list action", () => {
       stubContext(),
     );
 
-    const result = await listAction.handler({ sessionId }, stubContext());
+    const result = await listAction.handler({ credentialId }, stubContext());
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
 
@@ -211,23 +223,48 @@ describe("reveal.list action", () => {
     expect(snapshot.activeReveals).toHaveLength(2);
   });
 
-  test("rejects when session does not exist", async () => {
+  test("rejects when credential does not exist", async () => {
     const actions = createRevealActions(deps);
     const listAction = actions.find((a) => a.id === "reveal.list");
     expect(listAction).toBeDefined();
     if (!listAction) return;
 
     const result = await listAction.handler(
-      { sessionId: "nonexistent" },
+      { credentialId: "nonexistent" },
       stubContext(),
     );
     expect(result.isOk()).toBe(false);
   });
+
+  test("rejects when a credential-scoped caller lists another credential's reveals", async () => {
+    const issued = await credentialService.issue(
+      createTestCredentialConfig({
+        chatIds: ["conv_group1"],
+      }),
+    );
+    expect(issued.isOk()).toBe(true);
+    if (!issued.isOk()) return;
+
+    const actions = createRevealActions(deps);
+    const listAction = actions.find((a) => a.id === "reveal.list");
+    expect(listAction).toBeDefined();
+    if (!listAction) return;
+
+    const result = await listAction.handler(
+      { credentialId: issued.value.credential.id },
+      stubContext({ credentialId }),
+    );
+
+    expect(result.isOk()).toBe(false);
+    if (result.isOk()) return;
+    expect(result.error.category).toBe("permission");
+  });
 });
 
-function stubContext() {
+function stubContext(overrides: Partial<{ credentialId: string }> = {}) {
   return {
     requestId: "test-req",
     signal: new AbortController().signal,
+    ...overrides,
   };
 }

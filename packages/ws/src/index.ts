@@ -18,7 +18,7 @@ export {
 export {
   type ConnectionPhase,
   type ConnectionData,
-  type SessionReplayState,
+  type CredentialReplayState,
   createConnectionState,
   canTransition,
   transition,
@@ -48,4 +48,5 @@ export {
   type WsServer,
   type WsServerState,
   type WsServerDeps,
+  type CredentialLookup,
 } from "./server.js";

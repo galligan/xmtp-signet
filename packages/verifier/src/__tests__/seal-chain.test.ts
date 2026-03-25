@@ -18,31 +18,28 @@ describe("seal_chain check", () => {
 
   test("validates initial seal (null previous)", async () => {
     const check = createSealChainCheck();
-    const result = await check.execute(
-      createTestVerificationRequest({
-        seal: createTestSeal({
-          previousSealId: null,
-        }),
-      }),
-    );
+    const result = await check.execute(createTestVerificationRequest());
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("skip");
-      expect(result.value.reason).toContain("Initial seal");
+      expect(result.value.reason).toContain("structurally valid");
       const evidence = result.value.evidence as Record<string, unknown>;
-      expect(evidence["isInitial"]).toBe(true);
+      expect(evidence["sealId"]).toBe("seal_a1b2c3d4feedbabe");
+      expect(evidence["chainValid"]).toBe(true);
       expect(evidence["chainWalked"]).toBe(false);
     }
   });
 
-  test("validates seal with valid previous ID", async () => {
+  test("validates seal with custom valid ids", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
         seal: createTestSeal({
-          sealId: "att-002",
-          previousSealId: "att-001",
+          sealId: "seal_beef1234cafefeed",
+          chatId: "conv_aabbccddeeff0011",
+          operatorId: "op_cafebabefeedbabe",
+          credentialId: "cred_deadbeeffeedbabe",
         }),
       }),
     );
@@ -52,18 +49,18 @@ describe("seal_chain check", () => {
       expect(result.value.verdict).toBe("skip");
       expect(result.value.reason).toContain("structurally valid");
       const evidence = result.value.evidence as Record<string, unknown>;
-      expect(evidence["previousSealId"]).toBe("att-001");
+      expect(evidence["sealId"]).toBe("seal_beef1234cafefeed");
+      expect(evidence["chainValid"]).toBe(true);
       expect(evidence["chainWalked"]).toBe(false);
     }
   });
 
-  test("fails when seal references itself", async () => {
+  test("fails when sealId is empty", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
         seal: createTestSeal({
-          sealId: "att-001",
-          previousSealId: "att-001",
+          sealId: "",
         }),
       }),
     );
@@ -71,37 +68,52 @@ describe("seal_chain check", () => {
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("fail");
-      expect(result.value.reason).toContain("references itself");
+      expect(result.value.reason).toContain("sealId");
     }
   });
 
-  test("fails when groupId is empty", async () => {
+  test("fails when chatId is empty", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
-        seal: createTestSeal({ groupId: "" }),
+        seal: createTestSeal({ chatId: "" }),
       }),
     );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("fail");
-      expect(result.value.reason).toContain("groupId");
+      expect(result.value.reason).toContain("chatId");
     }
   });
 
-  test("fails when agentInboxId is empty", async () => {
+  test("fails when operatorId is empty", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(
       createTestVerificationRequest({
-        seal: createTestSeal({ agentInboxId: "" }),
+        seal: createTestSeal({ operatorId: "" }),
       }),
     );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.verdict).toBe("fail");
-      expect(result.value.reason).toContain("agentInboxId");
+      expect(result.value.reason).toContain("operatorId");
+    }
+  });
+
+  test("fails when credentialId is empty", async () => {
+    const check = createSealChainCheck();
+    const result = await check.execute(
+      createTestVerificationRequest({
+        seal: createTestSeal({ credentialId: "" }),
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.verdict).toBe("fail");
+      expect(result.value.reason).toContain("credentialId");
     }
   });
 });

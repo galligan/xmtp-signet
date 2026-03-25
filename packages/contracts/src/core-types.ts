@@ -35,7 +35,7 @@ export interface RawMessage {
   readonly sentAt: string;
 }
 
-/** Union of raw XMTP events before view filtering. */
+/** Union of raw XMTP events before policy projection. */
 export type RawEvent =
   | {
       readonly type: "message";

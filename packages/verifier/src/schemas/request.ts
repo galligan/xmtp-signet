@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { SealSchema, TrustTier } from "@xmtp/signet-schemas";
-import type { Seal, TrustTier as TrustTierType } from "@xmtp/signet-schemas";
+import { SealPayload } from "@xmtp/signet-schemas";
+import type { SealPayloadType } from "@xmtp/signet-schemas";
+import { TrustTier } from "./trust-tier.js";
+import type { TrustTier as TrustTierType } from "./trust-tier.js";
 
 /** Verification request sent to the verifier. */
 export type VerificationRequest = {
@@ -8,7 +10,7 @@ export type VerificationRequest = {
   agentInboxId: string;
   signetInboxId: string;
   groupId: string | null;
-  seal: Seal | null;
+  seal: SealPayloadType | null;
   artifactDigest: string;
   buildProvenanceBundle: string | null;
   sourceRepoUrl: string;
@@ -31,7 +33,7 @@ export const VerificationRequestSchema: z.ZodType<VerificationRequest> = z
       .string()
       .nullable()
       .describe("Group context for verification, null for signet-wide"),
-    seal: SealSchema.nullable().describe(
+    seal: SealPayload.nullable().describe(
       "Seal to verify, null if only checking provenance",
     ),
     artifactDigest: z

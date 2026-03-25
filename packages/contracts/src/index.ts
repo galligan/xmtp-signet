@@ -7,21 +7,15 @@ export type {
   RawEvent,
 } from "./core-types.js";
 
-// Session types
-export type { SessionRecord, MaterialityCheck } from "./session-types.js";
+// Credential types
+export type { CredentialRecord, MaterialityCheck } from "./credential-types.js";
 
 // Policy types
 export type { PolicyDelta, GrantError } from "./policy-types.js";
 
 // Seal types and wire format schemas
-export {
-  SealEnvelopeSchema,
-  SignedRevocationEnvelope,
-} from "./seal-envelope.js";
-export type {
-  MessageProvenanceMetadata,
-  SealEnvelope,
-} from "./seal-envelope.js";
+export { SignedRevocationEnvelope } from "./seal-envelope.js";
+export type { MessageProvenanceMetadata } from "./seal-envelope.js";
 
 // Handler types
 export type {
@@ -47,7 +41,14 @@ export { toActionResult } from "./result-envelope.js";
 export type { ActionResult } from "./result-envelope.js";
 
 // Service interfaces
-export type { SignetCore, SessionManager, SealManager } from "./services.js";
+export type {
+  SignetCore,
+  CredentialManager,
+  OperatorManager,
+  PolicyManager,
+  ScopeGuard,
+  SealManager,
+} from "./services.js";
 
 // Provider interfaces
 export type {

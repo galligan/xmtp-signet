@@ -1,33 +1,60 @@
 /**
  * Contract verification tests.
  *
- * Validates that concrete implementations satisfy their contract interfaces
- * at the type level. These are compile-time checks -- if this file compiles,
- * the contracts are satisfied.
+ * Validates that concrete implementations satisfy their public contract
+ * interfaces at the type level. If this file compiles, the contracts match.
  */
 
 import { describe, test, expect } from "bun:test";
 import { Result } from "better-result";
 import type {
-  SignetCore,
-  SessionManager,
+  CredentialManager,
+  CredentialRecord,
   SealManager,
-  SignerProvider,
   SealStamper,
+  SignerProvider,
+  SignetCore,
 } from "@xmtp/signet-contracts";
-import type { SignetError } from "@xmtp/signet-schemas";
 import {
-  ValidationError,
-  SealError,
+  AuthError,
+  CancelledError,
+  CredentialExpiredError,
+  InternalError,
   NotFoundError,
   PermissionError,
-  GrantDeniedError,
-  AuthError,
-  SessionExpiredError,
-  InternalError,
+  SealError,
   TimeoutError,
-  CancelledError,
+  ValidationError,
+  type CredentialConfigType,
 } from "@xmtp/signet-schemas";
+
+function makeCredentialRecord(
+  overrides: Partial<CredentialRecord> = {},
+): CredentialRecord {
+  return {
+    id: "cred_1234abcdfeedbabe",
+    config: {
+      operatorId: "op_1234abcdfeedbabe",
+      chatIds: ["conv_1234abcdfeedbabe"],
+      allow: ["send", "read-messages"],
+      deny: [],
+    },
+    inboxIds: [],
+    credentialId: "cred_1234abcdfeedbabe",
+    operatorId: "op_1234abcdfeedbabe",
+    effectiveScopes: {
+      allow: ["send", "read-messages"],
+      deny: [],
+    },
+    status: "active",
+    issuedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    issuedBy: "op_1234abcdfeedbabe",
+    isExpired: false,
+    lastHeartbeat: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 describe("contract-verification", () => {
   test("all error types are constructable and have correct categories", () => {
@@ -53,19 +80,14 @@ describe("contract-verification", () => {
         tag: "PermissionError",
       },
       {
-        instance: GrantDeniedError.create("op", "grant"),
-        category: "permission",
-        tag: "GrantDeniedError",
-      },
-      {
         instance: AuthError.create("auth failed"),
         category: "auth",
         tag: "AuthError",
       },
       {
-        instance: SessionExpiredError.create("session-id"),
+        instance: CredentialExpiredError.create("cred_1234abcdfeedbabe"),
         category: "auth",
-        tag: "SessionExpiredError",
+        tag: "CredentialExpiredError",
       },
       {
         instance: InternalError.create("internal"),
@@ -93,7 +115,7 @@ describe("contract-verification", () => {
     }
   });
 
-  test("error instances extend Error and have SignetError shape", () => {
+  test("error instances extend Error and expose SignetError fields", () => {
     const err = ValidationError.create("test", "reason");
     expect(err instanceof Error).toBe(true);
     expect(err._tag).toBe("ValidationError");
@@ -111,23 +133,12 @@ describe("contract-verification", () => {
     expect(err.message).toContain("send_message");
   });
 
-  test("SessionExpiredError contains sessionId context", () => {
-    const err = SessionExpiredError.create("sess-123");
-    expect(err.context.sessionId).toBe("sess-123");
+  test("CredentialExpiredError contains credentialId context", () => {
+    const err = CredentialExpiredError.create("cred_123");
+    expect(err.context.credentialId).toBe("cred_123");
   });
 
-  /**
-   * Type-level contract checks.
-   *
-   * These assignments verify that a concrete object can be used where
-   * the contract interface is expected. If the assignment compiles,
-   * the contract is satisfied.
-   */
-  test("type-level: implementations satisfy contract interfaces", () => {
-    // This is a compile-time check. If the file compiles, the contracts
-    // are satisfied. We use type assertions to verify compatibility.
-
-    // SignetCore contract
+  test("type-level: implementations satisfy current contract interfaces", () => {
     const _signetCore: SignetCore = {
       get state() {
         return "ready" as const;
@@ -141,144 +152,112 @@ describe("contract-verification", () => {
       async shutdown() {
         return Result.ok(undefined);
       },
-      async sendMessage(_groupId, _contentType, _content) {
-        return Result.ok({ messageId: "msg-1" });
+      async sendMessage(_groupId: string, _contentType: string, _content) {
+        return Result.ok({ messageId: "msg_1234abcdfeedbabe" });
       },
       async getGroupInfo(_groupId: string) {
         return Result.ok({
-          groupId: "g1",
-          identityKeyFingerprint: "fp",
+          groupId: "conv_1234abcdfeedbabe",
+          identityKeyFingerprint: "fp_test",
           memberInboxIds: [] as readonly string[],
           createdAt: new Date().toISOString(),
         });
       },
     };
 
-    // SessionManager contract
-    const _sessionManager: SessionManager = {
-      async issue(_config) {
+    const config: CredentialConfigType = {
+      operatorId: "op_1234abcdfeedbabe",
+      chatIds: ["conv_1234abcdfeedbabe"],
+      allow: ["send", "read-messages"],
+      deny: [],
+      ttlSeconds: 60,
+    };
+
+    const _credentialManager: CredentialManager = {
+      async issue(_config: CredentialConfigType) {
         return Result.ok({
           token: "token",
-          session: {
-            sessionId: "s1",
-            agentInboxId: "a1",
-            sessionKeyFingerprint: "fp",
+          credential: {
+            id: "cred_1234abcdfeedbabe",
+            config,
+            inboxIds: [],
+            status: "active",
             issuedAt: new Date().toISOString(),
-            expiresAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            issuedBy: "op_1234abcdfeedbabe",
           },
         });
       },
-      async list() {
-        return Result.ok([]);
+      async list(_operatorId?: string) {
+        return Result.ok([makeCredentialRecord()]);
       },
-      async lookup(_sessionId) {
+      async lookup(_credentialId: string) {
+        return Result.ok(makeCredentialRecord());
+      },
+      async lookupByToken(_token: string) {
+        return Result.ok(makeCredentialRecord());
+      },
+      async revoke(_credentialId: string, _reason) {
+        return Result.ok(undefined);
+      },
+      async update(_credentialId: string, _changes) {
+        return Result.ok(makeCredentialRecord());
+      },
+      async renew(_credentialId: string) {
         return Result.ok({
-          sessionId: "s1",
-          agentInboxId: "a1",
-          sessionKeyFingerprint: "fp",
-          view: {
-            mode: "full" as const,
-            threadScopes: [{ groupId: "g1", threadId: null }],
-            contentTypes: ["xmtp.org/text:1.0"],
-          },
-          grant: {
-            messaging: {
-              send: true,
-              reply: true,
-              react: true,
-              draftOnly: false,
-            },
-            groupManagement: {
-              addMembers: false,
-              removeMembers: false,
-              updateMetadata: false,
-              inviteUsers: false,
-            },
-            tools: { scopes: [] },
-            egress: {
-              storeExcerpts: false,
-              useForMemory: false,
-              forwardToProviders: false,
-              quoteRevealed: false,
-              summarize: false,
-            },
-          },
-          state: "active" as const,
+          credentialId: "cred_1234abcdfeedbabe",
+          operatorId: "op_1234abcdfeedbabe",
+          fingerprint: "fp_test",
           issuedAt: new Date().toISOString(),
-          expiresAt: new Date().toISOString(),
-          lastHeartbeat: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
         });
-      },
-      async lookupByToken(_token) {
-        return Result.err(InternalError.create("stub"));
-      },
-      async revoke(_sessionId, _reason) {
-        return Result.ok(undefined);
-      },
-      async heartbeat(_sessionId) {
-        return Result.ok(undefined);
-      },
-      async isActive(_sessionId) {
-        return Result.ok(true);
-      },
-      getRevealState(_sessionId) {
-        return Result.err(InternalError.create("stub"));
       },
     };
 
-    // SealManager contract
     const _sealManager: SealManager = {
-      async issue(_sessionId, _groupId) {
+      async issue(_credentialId: string, _chatId: string) {
         return Result.err(InternalError.create("stub"));
       },
-      async refresh(_sealId) {
+      async refresh(_sealId: string) {
         return Result.err(InternalError.create("stub"));
       },
-      async revoke(_sealId, _reason) {
+      async revoke(_sealId: string, _reason) {
         return Result.ok(undefined);
       },
-      async current(_agentInboxId, _groupId) {
+      async current(_credentialId: string, _chatId: string) {
         return Result.ok(null);
       },
-      needsRenewal(_seal) {
-        return false;
-      },
     };
 
-    // SignerProvider contract
     const _signerProvider: SignerProvider = {
-      async sign(_data) {
-        return Result.ok(new Uint8Array(64));
+      async sign(_data: Uint8Array) {
+        return Result.ok(new Uint8Array([1, 2, 3]));
       },
       async getPublicKey() {
-        return Result.ok(new Uint8Array(32));
+        return Result.ok(new Uint8Array([4, 5, 6]));
       },
       async getFingerprint() {
-        return Result.ok("fp");
+        return Result.ok("fp_mock");
       },
       async getDbEncryptionKey() {
         return Result.ok(new Uint8Array(32));
       },
       async getXmtpIdentityKey() {
-        return Result.ok(
-          "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const,
-        );
+        return Result.ok(`0x${"11".repeat(32)}` as const);
       },
     };
 
-    // SealStamper contract
     const _sealStamper: SealStamper = {
       async sign(_payload) {
-        return Result.err(InternalError.create("stub") as SignetError);
+        return Result.err(InternalError.create("stub"));
       },
       async signRevocation(_payload) {
-        return Result.err(InternalError.create("stub") as SignetError);
+        return Result.err(InternalError.create("stub"));
       },
     };
 
-    // If we reach here without type errors, all contracts are satisfied
     expect(_signetCore).toBeDefined();
-    expect(_sessionManager).toBeDefined();
+    expect(_credentialManager).toBeDefined();
     expect(_sealManager).toBeDefined();
     expect(_signerProvider).toBeDefined();
     expect(_sealStamper).toBeDefined();

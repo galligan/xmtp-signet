@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import {
   AuthError,
   CancelledError,
+  CredentialExpiredError,
   GrantDeniedError,
   InternalError,
   NetworkError,
   NotFoundError,
   PermissionError,
-  SessionExpiredError,
   TimeoutError,
   ValidationError,
   type ActionError,
@@ -99,11 +99,11 @@ function toSignetErrorFromActionError(error: ActionError): SignetError {
       return new PermissionError(error.message, context ?? null);
     case "AuthError":
       return new AuthError(error.message, context ?? null);
-    case "SessionExpiredError":
-      return new SessionExpiredError(error.message, {
-        sessionId:
-          typeof context?.["sessionId"] === "string"
-            ? context["sessionId"]
+    case "CredentialExpiredError":
+      return new CredentialExpiredError(error.message, {
+        credentialId:
+          typeof context?.["credentialId"] === "string"
+            ? context["credentialId"]
             : "unknown",
         ...context,
       });

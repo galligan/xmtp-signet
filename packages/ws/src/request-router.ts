@@ -4,16 +4,16 @@ import type {
   RequestResponse,
   SignetError,
 } from "@xmtp/signet-schemas";
-import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { CredentialRecord } from "@xmtp/signet-contracts";
 
 /**
  * Callback to handle a validated harness request.
  * Injected by the server -- the router doesn't know about
- * core/policy/sessions directly.
+ * core/policy/credentials directly.
  */
 export type RequestHandler = (
   request: HarnessRequest,
-  session: SessionRecord,
+  credential: CredentialRecord,
 ) => Promise<Result<unknown, SignetError>>;
 
 /**
@@ -22,10 +22,10 @@ export type RequestHandler = (
  */
 export async function routeRequest(
   request: HarnessRequest,
-  session: SessionRecord,
+  credential: CredentialRecord,
   handler: RequestHandler,
 ): Promise<RequestResponse> {
-  const result = await handler(request, session);
+  const result = await handler(request, credential);
 
   if (result.isOk()) {
     return {

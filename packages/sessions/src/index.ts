@@ -1,19 +1,19 @@
-export { generateToken, generateSessionId } from "./token.js";
+export { generateToken, generateCredentialId } from "./token.js";
 export { computePolicyHash } from "./policy-hash.js";
 export { checkMateriality } from "./materiality.js";
 export type { DetailedMaterialityCheck } from "./materiality.js";
-export { createSessionManager } from "./session-manager.js";
-export { createSessionService } from "./service.js";
-export { createSessionActions } from "./actions.js";
+export { createCredentialManager } from "./session-manager.js";
+export { createCredentialService } from "./service.js";
+export { createCredentialActions } from "./actions.js";
 export { createRevealActions } from "./reveal-actions.js";
 export type {
-  SessionManagerConfig,
-  SessionManagerOptions,
-  InternalSessionRecord,
-  InternalSessionManager,
+  CredentialManagerConfig,
+  CredentialManagerOptions,
+  InternalCredentialRecord,
+  InternalCredentialManager,
 } from "./session-manager.js";
-export type { SessionServiceDeps } from "./service.js";
-export type { SessionActionDeps } from "./actions.js";
+export type { CredentialServiceDeps } from "./service.js";
+export type { CredentialActionDeps } from "./actions.js";
 export type { RevealActionDeps } from "./reveal-actions.js";
 export { createUpdateActions } from "./update-actions.js";
 export type { UpdateActionDeps } from "./update-actions.js";

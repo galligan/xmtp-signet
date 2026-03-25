@@ -1,145 +1,300 @@
+/**
+ * Credential service -- public API over the internal credential manager.
+ *
+ * Maps internal records to contract types for consumption by
+ * transports (CLI, WS, MCP, HTTP). Optionally resolves scopes
+ * from a policy manager when a `policyId` is present.
+ */
+
 import { Result } from "better-result";
 import type {
+  CredentialConfigType,
+  CredentialRecordType,
+  CredentialIssuerType,
+  IssuedCredentialType,
+  CredentialRevocationReason,
   SignetError,
-  IssuedSession,
-  SessionConfig,
-  SessionRevocationReason,
+  PermissionScopeType,
+  ScopeSetType,
 } from "@xmtp/signet-schemas";
-import type { SessionManager, SessionRecord } from "@xmtp/signet-contracts";
-import { generateSessionId } from "./token.js";
-import { computePolicyHash } from "./policy-hash.js";
+import {
+  resolvePolicy,
+  NotFoundError,
+  ValidationError,
+} from "@xmtp/signet-schemas";
 import type {
-  InternalSessionManager,
-  InternalSessionRecord,
+  CredentialManager,
+  CredentialRecord,
+  PolicyManager,
+} from "@xmtp/signet-contracts";
+import { fingerprintToken, generateCredentialId } from "./token.js";
+import type {
+  InternalCredentialManager,
+  InternalCredentialRecord,
 } from "./session-manager.js";
 
-/** Dependencies required by the session service. */
-export interface SessionServiceDeps {
-  readonly manager: InternalSessionManager;
-  readonly keyManager: {
-    issueSessionKey(
-      sessionId: string,
-      ttlSeconds: number,
-    ): Promise<Result<{ fingerprint: string }, SignetError>>;
-    revokeSessionKey?(keyId: string): Result<void, SignetError>;
+/** Dependencies required by the credential service. */
+export interface CredentialServiceDeps {
+  /** The internal credential manager for storage and lifecycle. */
+  readonly manager: InternalCredentialManager;
+  /** Optional policy manager for resolving policyId references. */
+  readonly policyManager?: PolicyManager;
+}
+
+/** Optional provenance supplied at credential issuance time. */
+export interface CredentialServiceIssueOptions {
+  /** Actor that issued the credential. Defaults to `"owner"` when omitted. */
+  readonly issuedBy?: CredentialIssuerType;
+}
+
+/** Map internal record to the schema credential record. */
+function toSchemaCredentialRecord(
+  record: InternalCredentialRecord,
+): CredentialRecordType {
+  return {
+    id: record.credentialId,
+    config: {
+      operatorId: record.operatorId,
+      chatIds: [...record.chatIds],
+      allow: [...record.effectiveScopes.allow],
+      deny: [...record.effectiveScopes.deny],
+    },
+    inboxIds: [],
+    status: record.status,
+    issuedAt: record.issuedAt,
+    expiresAt: record.expiresAt,
+    issuedBy: record.issuedBy,
   };
 }
 
-function toSessionRecord(record: InternalSessionRecord): SessionRecord {
+/** Map internal record to the runtime-enriched credential contract. */
+function toCredentialRecord(
+  record: InternalCredentialRecord,
+): CredentialRecord {
+  const baseRecord = toSchemaCredentialRecord(record);
   return {
-    sessionId: record.sessionId,
-    agentInboxId: record.agentInboxId,
-    sessionKeyFingerprint: record.sessionKeyFingerprint,
-    view: record.view,
-    grant: record.grant,
-    state: record.state,
-    issuedAt: record.issuedAt,
-    expiresAt: record.expiresAt,
+    ...baseRecord,
+    credentialId: record.credentialId,
+    operatorId: record.operatorId,
+    effectiveScopes: {
+      allow: [...record.effectiveScopes.allow],
+      deny: [...record.effectiveScopes.deny],
+    },
+    isExpired:
+      record.status === "expired" ||
+      new Date(record.expiresAt).getTime() <= Date.now(),
     lastHeartbeat: record.lastHeartbeat,
   };
 }
 
-function toIssuedSession(record: InternalSessionRecord): IssuedSession {
+/** Map internal record to the issued credential response. */
+function toIssuedCredential(
+  record: InternalCredentialRecord,
+): IssuedCredentialType {
   return {
     token: record.token,
-    session: {
-      sessionId: record.sessionId,
-      agentInboxId: record.agentInboxId,
-      sessionKeyFingerprint: record.sessionKeyFingerprint,
-      issuedAt: record.issuedAt,
-      expiresAt: record.expiresAt,
-    },
+    credential: toSchemaCredentialRecord(record),
   };
 }
 
-/** Create the public session service implementation. */
-export function createSessionService(deps: SessionServiceDeps): SessionManager {
+/**
+ * Resolve scopes by looking up a policy and merging with inline overrides.
+ *
+ * @returns Ok with merged scope set, or Err if policy lookup fails.
+ */
+async function resolvePolicyScopes(
+  policyManager: PolicyManager | undefined,
+  policyId: string,
+  inlineAllow?: PermissionScopeType[],
+  inlineDeny?: PermissionScopeType[],
+): Promise<Result<ScopeSetType, SignetError>> {
+  if (policyManager === undefined) {
+    return Result.err(NotFoundError.create("policy", policyId));
+  }
+  const policyResult = await policyManager.lookup(policyId);
+  if (Result.isError(policyResult)) {
+    return policyResult;
+  }
+  return Result.ok(
+    resolvePolicy(policyResult.value.config, inlineAllow, inlineDeny),
+  );
+}
+
+/** Create the public credential service implementation. */
+export function createCredentialService(
+  deps: CredentialServiceDeps,
+): CredentialManager {
   return {
-    async issue(config: SessionConfig) {
+    async issue(
+      config: CredentialConfigType,
+      options?: CredentialServiceIssueOptions,
+    ) {
       deps.manager.sweepExpired();
 
-      const policyHash = computePolicyHash(config.view, config.grant);
-      const existing = deps.manager
-        .getActiveSessions(config.agentInboxId)
-        .find((record) => record.policyHash === policyHash);
-      if (existing) {
-        return Result.ok(toIssuedSession(existing));
+      // Resolve scopes from policy if policyId is specified
+      let resolvedConfig = config;
+      if (config.policyId !== undefined) {
+        const scopeResult = await resolvePolicyScopes(
+          deps.policyManager,
+          config.policyId,
+          config.allow,
+          config.deny,
+        );
+        if (Result.isError(scopeResult)) {
+          return scopeResult;
+        }
+        resolvedConfig = {
+          ...config,
+          allow: scopeResult.value.allow,
+          deny: scopeResult.value.deny,
+        };
       }
 
-      const sessionId = generateSessionId();
-      const ttlSeconds = config.ttlSeconds ?? 3600;
+      const credentialId = generateCredentialId();
+      const issueOptions =
+        options?.issuedBy !== undefined
+          ? {
+              credentialId,
+              issuedBy: options.issuedBy,
+            }
+          : { credentialId };
 
-      const sessionKey = await deps.keyManager.issueSessionKey(
-        sessionId,
-        ttlSeconds,
-      );
-      if (Result.isError(sessionKey)) {
-        return sessionKey;
-      }
-
-      const created = await deps.manager.createSession(
-        config,
-        sessionKey.value.fingerprint,
-        { sessionId },
+      const created = await deps.manager.issueCredential(
+        resolvedConfig,
+        issueOptions,
       );
       if (Result.isError(created)) {
         return created;
       }
 
-      return Result.ok(toIssuedSession(created.value));
+      return Result.ok(toIssuedCredential(created.value));
     },
 
-    async list(agentInboxId?: string) {
+    async list(operatorId?: string) {
       deps.manager.sweepExpired();
       return Result.ok(
-        deps.manager.listSessions(agentInboxId).map(toSessionRecord),
+        deps.manager.listCredentials(operatorId).map(toCredentialRecord),
       );
     },
 
-    async lookup(sessionId: string) {
+    async lookup(credentialId: string) {
       deps.manager.sweepExpired();
-      const result = deps.manager.getSessionById(sessionId);
+      const result = deps.manager.getCredentialById(credentialId);
       if (Result.isError(result)) {
         return result;
       }
-      return Result.ok(toSessionRecord(result.value));
+      return Result.ok(toCredentialRecord(result.value));
     },
 
     async lookupByToken(token: string) {
-      const result = deps.manager.getSessionByToken(token);
+      const result = deps.manager.getCredentialByToken(token);
       if (Result.isError(result)) {
         return result;
       }
-      return Result.ok(toSessionRecord(result.value));
+      return Result.ok(toCredentialRecord(result.value));
     },
 
-    async revoke(sessionId: string, reason: SessionRevocationReason) {
-      const result = deps.manager.revokeSession(sessionId, reason);
-      if (Result.isError(result)) {
-        return result;
-      }
-      return Result.ok(undefined);
-    },
-
-    async heartbeat(sessionId: string) {
-      const result = deps.manager.recordHeartbeat(sessionId);
+    async revoke(credentialId: string, reason: CredentialRevocationReason) {
+      const result = deps.manager.revokeCredential(credentialId, reason);
       if (Result.isError(result)) {
         return result;
       }
       return Result.ok(undefined);
     },
 
-    getRevealState(sessionId: string) {
-      return deps.manager.getRevealState(sessionId);
+    async update(credentialId: string, changes: Partial<CredentialConfigType>) {
+      const current = deps.manager.getCredentialById(credentialId);
+      if (Result.isError(current)) {
+        return current;
+      }
+
+      if (
+        changes.operatorId !== undefined ||
+        changes.chatIds !== undefined ||
+        changes.ttlSeconds !== undefined
+      ) {
+        return Result.err(
+          ValidationError.create(
+            "changes",
+            "Credential updates only support allow/deny/policyId changes",
+          ),
+        );
+      }
+
+      const hasScopeChanges =
+        changes.allow !== undefined ||
+        changes.deny !== undefined ||
+        changes.policyId !== undefined;
+
+      if (!hasScopeChanges) {
+        return Result.ok(toCredentialRecord(current.value));
+      }
+
+      // Resolve policy if policyId is changing
+      let effectiveAllow = changes.allow ?? current.value.effectiveScopes.allow;
+      let effectiveDeny = changes.deny ?? current.value.effectiveScopes.deny;
+
+      if (changes.policyId !== undefined) {
+        const scopeResult = await resolvePolicyScopes(
+          deps.policyManager,
+          changes.policyId,
+          changes.allow,
+          changes.deny,
+        );
+        if (Result.isError(scopeResult)) {
+          return scopeResult;
+        }
+        effectiveAllow = scopeResult.value.allow;
+        effectiveDeny = scopeResult.value.deny;
+      }
+
+      const nextScopes = {
+        allow: effectiveAllow,
+        deny: effectiveDeny,
+      } satisfies ScopeSetType;
+
+      const materialityResult = deps.manager.checkMateriality(
+        credentialId,
+        nextScopes,
+      );
+      if (Result.isError(materialityResult)) {
+        return materialityResult;
+      }
+
+      if (materialityResult.value.requiresReauthorization) {
+        const revokeResult = deps.manager.revokeCredential(
+          credentialId,
+          "reauthorization-required",
+        );
+        if (Result.isError(revokeResult)) {
+          return revokeResult;
+        }
+        return Result.ok(toCredentialRecord(revokeResult.value));
+      }
+
+      const updateResult = deps.manager.updateCredentialScopes(
+        credentialId,
+        nextScopes,
+      );
+      if (Result.isError(updateResult)) {
+        return updateResult;
+      }
+      return Result.ok(toCredentialRecord(updateResult.value));
     },
 
-    async isActive(sessionId: string) {
-      deps.manager.sweepExpired();
-      const result = deps.manager.getSessionById(sessionId);
+    async renew(credentialId: string) {
+      const result = await deps.manager.renewCredential(credentialId);
       if (Result.isError(result)) {
         return result;
       }
-      return Result.ok(result.value.state === "active");
+      const fingerprint = await fingerprintToken(result.value.token);
+      return Result.ok({
+        credentialId: result.value.credentialId,
+        operatorId: result.value.operatorId,
+        fingerprint,
+        issuedAt: result.value.issuedAt,
+        expiresAt: result.value.expiresAt,
+      });
     },
   };
 }

@@ -1,50 +1,44 @@
 import type {
-  SessionConfig,
-  ViewConfig,
-  GrantConfig,
+  CredentialConfigType,
+  ScopeSetType,
+  PermissionScopeType,
 } from "@xmtp/signet-schemas";
 
-export const baseView: ViewConfig = {
-  mode: "redacted",
-  threadScopes: [{ groupId: "group-1", threadId: null }],
-  contentTypes: ["text"],
+export const baseScopes: ScopeSetType = {
+  allow: ["read-messages", "list-conversations"] as PermissionScopeType[],
+  deny: [] as PermissionScopeType[],
 };
 
-export const baseGrant: GrantConfig = {
-  messaging: { send: false, reply: false, react: false, draftOnly: true },
-  groupManagement: {
-    addMembers: false,
-    removeMembers: false,
-    updateMetadata: false,
-    inviteUsers: false,
-  },
-  tools: { scopes: [] },
-  egress: {
-    storeExcerpts: false,
-    useForMemory: false,
-    forwardToProviders: false,
-    quoteRevealed: false,
-    summarize: false,
-  },
+export const restrictedScopes: ScopeSetType = {
+  allow: ["read-messages"] as PermissionScopeType[],
+  deny: ["send"] as PermissionScopeType[],
 };
 
-export function createTestSessionConfig(
-  overrides?: Partial<SessionConfig>,
-): SessionConfig {
+export const escalatedScopes: ScopeSetType = {
+  allow: [
+    "read-messages",
+    "list-conversations",
+    "send",
+    "reply",
+  ] as PermissionScopeType[],
+  deny: [] as PermissionScopeType[],
+};
+
+export function createTestCredentialConfig(
+  overrides?: Partial<CredentialConfigType>,
+): CredentialConfigType {
   return {
-    agentInboxId: "agent-inbox-1",
-    view: baseView,
-    grant: baseGrant,
+    operatorId: "op_test1234",
+    chatIds: ["conv_group1"],
+    allow: baseScopes.allow,
+    deny: baseScopes.deny,
     ttlSeconds: 3600,
-    heartbeatInterval: 30,
     ...overrides,
   };
 }
 
-export function createTestView(overrides?: Partial<ViewConfig>): ViewConfig {
-  return { ...baseView, ...overrides };
-}
-
-export function createTestGrant(overrides?: Partial<GrantConfig>): GrantConfig {
-  return { ...baseGrant, ...overrides };
+export function createTestScopes(
+  overrides?: Partial<ScopeSetType>,
+): ScopeSetType {
+  return { ...baseScopes, ...overrides };
 }

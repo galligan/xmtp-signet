@@ -89,7 +89,7 @@ describe("SequencedFrame", () => {
       seq: 1,
       event: {
         type: "heartbeat",
-        sessionId: "sess_123",
+        credentialId: "cred_123",
         timestamp: "2024-01-01T00:00:00Z",
       },
     });
@@ -105,7 +105,7 @@ describe("SequencedFrame", () => {
       seq: 0,
       event: {
         type: "heartbeat",
-        sessionId: "sess_123",
+        credentialId: "cred_123",
         timestamp: "2024-01-01T00:00:00Z",
       },
     });
@@ -117,7 +117,7 @@ describe("SequencedFrame", () => {
       seq: -1,
       event: {
         type: "heartbeat",
-        sessionId: "sess_123",
+        credentialId: "cred_123",
         timestamp: "2024-01-01T00:00:00Z",
       },
     });
@@ -130,39 +130,16 @@ describe("AuthenticatedFrame", () => {
     const result = AuthenticatedFrame.safeParse({
       type: "authenticated",
       connectionId: "conn_abc",
-      session: {
-        sessionId: "sess_123",
-        agentInboxId: "agent_1",
-        sessionKeyFingerprint: "fp_abc",
+      credential: {
+        credentialId: "cred_deadbeeffeedbabe",
+        operatorId: "op_cafe1234feedbabe",
+        fingerprint: "fp_abc",
         issuedAt: "2024-01-01T00:00:00Z",
         expiresAt: "2024-01-02T00:00:00Z",
       },
-      view: {
-        mode: "full",
-        threadScopes: [{ groupId: "g1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
-      },
-      grant: {
-        messaging: {
-          send: true,
-          reply: true,
-          react: true,
-          draftOnly: false,
-        },
-        groupManagement: {
-          addMembers: false,
-          removeMembers: false,
-          updateMetadata: false,
-          inviteUsers: false,
-        },
-        tools: { scopes: [] },
-        egress: {
-          storeExcerpts: false,
-          useForMemory: false,
-          forwardToProviders: false,
-          quoteRevealed: false,
-          summarize: false,
-        },
+      effectiveScopes: {
+        allow: ["send", "reply"],
+        deny: [],
       },
       resumedFromSeq: null,
     });

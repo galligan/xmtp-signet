@@ -1,14 +1,14 @@
 /**
  * In-memory store for pending actions awaiting owner confirmation.
  *
- * Actions are queued when a draft-only session attempts a side-effecting
+ * Actions are queued when a draft-only credential attempts a side-effecting
  * operation. The owner confirms or denies via `confirm_action` requests.
  */
 
 /** A queued action awaiting explicit owner approval. */
 export interface PendingAction {
   readonly actionId: string;
-  readonly sessionId: string;
+  readonly credentialId: string;
   readonly actionType: string;
   readonly payload: unknown;
   readonly createdAt: string;
@@ -32,8 +32,8 @@ export interface PendingActionStore {
   /** Remove all expired actions. Returns the removed actions for logging. */
   expireStale(now: Date): readonly PendingAction[];
 
-  /** List all pending actions for a given session. */
-  listBySession(sessionId: string): readonly PendingAction[];
+  /** List all pending actions for a given credential. */
+  listByCredential(credentialId: string): readonly PendingAction[];
 }
 
 /** Create an in-memory store for pending actions. */
@@ -76,10 +76,10 @@ export function createPendingActionStore(): PendingActionStore {
       return expired;
     },
 
-    listBySession(sessionId: string): readonly PendingAction[] {
+    listByCredential(credentialId: string): readonly PendingAction[] {
       const result: PendingAction[] = [];
       for (const action of actions.values()) {
-        if (action.sessionId === sessionId) {
+        if (action.credentialId === credentialId) {
           result.push(action);
         }
       }

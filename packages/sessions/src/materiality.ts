@@ -1,162 +1,104 @@
 /**
- * Materiality check logic.
+ * Materiality check logic for scope-based credentials.
  *
- * Determines whether a policy change between two view/grant
- * configurations constitutes a material escalation (requiring
- * session reauthorization) or a non-material update (applied
- * in-place).
+ * Determines whether a scope change between two scope sets
+ * constitutes a material escalation (requiring reauthorization)
+ * or a non-material update (applied in-place).
+ *
+ * A change is material if any scope was added or moved from
+ * deny to allow. Requires reauthorization if scopes were
+ * added (escalation).
  */
 
-import type { ViewConfig, GrantConfig, ViewMode } from "@xmtp/signet-schemas";
-import type { MaterialityCheck } from "@xmtp/signet-contracts";
+import type { ScopeSetType, PermissionScopeType } from "@xmtp/signet-schemas";
+import type { MaterialityCheck, PolicyDelta } from "@xmtp/signet-contracts";
 
-/** Extended materiality result with changed field names for diagnostics. */
+/** Extended materiality result with policy delta for diagnostics. */
 export interface DetailedMaterialityCheck extends MaterialityCheck {
-  readonly changedFields: readonly string[];
+  readonly delta: PolicyDelta;
+  readonly requiresReauthorization: boolean;
 }
 
-/**
- * View mode access levels, ordered from least to most access.
- * Escalation = moving to a higher index.
- */
-const VIEW_MODE_LEVEL: Record<ViewMode, number> = {
-  "reveal-only": 0,
-  redacted: 1,
-  "thread-only": 2,
-  full: 3,
-};
-
-/** Check whether a policy change is material. */
+/** Check whether a scope change is material. */
 export function checkMateriality(
-  oldView: ViewConfig,
-  oldGrant: GrantConfig,
-  newView: ViewConfig,
-  newGrant: GrantConfig,
+  oldScopes: ScopeSetType,
+  newScopes: ScopeSetType,
 ): DetailedMaterialityCheck {
-  const changedFields: string[] = [];
+  const oldAllowSet = new Set<PermissionScopeType>(oldScopes.allow);
+  const oldDenySet = new Set<PermissionScopeType>(oldScopes.deny);
+  const newAllowSet = new Set<PermissionScopeType>(newScopes.allow);
+  const newDenySet = new Set<PermissionScopeType>(newScopes.deny);
 
-  // View mode escalation
-  if (oldView.mode !== newView.mode) {
-    const oldLevel = VIEW_MODE_LEVEL[oldView.mode];
-    const newLevel = VIEW_MODE_LEVEL[newView.mode];
-    if (newLevel > oldLevel) {
-      changedFields.push("view.mode");
+  const added: PermissionScopeType[] = [];
+  const removed: PermissionScopeType[] = [];
+  const changed: Array<{
+    scope: PermissionScopeType;
+    from: "allow" | "deny";
+    to: "allow" | "deny";
+  }> = [];
+
+  const allScopes = new Set<PermissionScopeType>([
+    ...oldAllowSet,
+    ...oldDenySet,
+    ...newAllowSet,
+    ...newDenySet,
+  ]);
+
+  for (const scope of allScopes) {
+    const oldAllowed = oldAllowSet.has(scope) && !oldDenySet.has(scope);
+    const newAllowed = newAllowSet.has(scope) && !newDenySet.has(scope);
+
+    if (oldAllowed === newAllowed) {
+      continue;
+    }
+
+    if (!oldAllowed && newAllowed) {
+      if (oldAllowSet.has(scope) || oldDenySet.has(scope)) {
+        changed.push({ scope, from: "deny", to: "allow" });
+      } else {
+        added.push(scope);
+      }
+      continue;
+    }
+
+    if (newDenySet.has(scope)) {
+      changed.push({ scope, from: "allow", to: "deny" });
+    } else {
+      removed.push(scope);
     }
   }
 
-  // Messaging grant escalation
-  checkBoolEscalation(
-    oldGrant.messaging.send,
-    newGrant.messaging.send,
-    "grant.messaging.send",
-    changedFields,
-  );
-  // draftOnly: true -> false is escalation (removing guardrail)
-  if (oldGrant.messaging.draftOnly && !newGrant.messaging.draftOnly) {
-    changedFields.push("grant.messaging.draftOnly");
-  }
+  const delta: PolicyDelta = { added, removed, changed };
 
-  // Group management escalation (any false -> true)
-  checkBoolEscalation(
-    oldGrant.groupManagement.addMembers,
-    newGrant.groupManagement.addMembers,
-    "grant.groupManagement.addMembers",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.groupManagement.removeMembers,
-    newGrant.groupManagement.removeMembers,
-    "grant.groupManagement.removeMembers",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.groupManagement.updateMetadata,
-    newGrant.groupManagement.updateMetadata,
-    "grant.groupManagement.updateMetadata",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.groupManagement.inviteUsers,
-    newGrant.groupManagement.inviteUsers,
-    "grant.groupManagement.inviteUsers",
-    changedFields,
-  );
+  const isMaterial =
+    added.length > 0 || removed.length > 0 || changed.length > 0;
 
-  // Egress escalation (any false -> true)
-  checkBoolEscalation(
-    oldGrant.egress.storeExcerpts,
-    newGrant.egress.storeExcerpts,
-    "grant.egress.storeExcerpts",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.egress.useForMemory,
-    newGrant.egress.useForMemory,
-    "grant.egress.useForMemory",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.egress.forwardToProviders,
-    newGrant.egress.forwardToProviders,
-    "grant.egress.forwardToProviders",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.egress.quoteRevealed,
-    newGrant.egress.quoteRevealed,
-    "grant.egress.quoteRevealed",
-    changedFields,
-  );
-  checkBoolEscalation(
-    oldGrant.egress.summarize,
-    newGrant.egress.summarize,
-    "grant.egress.summarize",
-    changedFields,
-  );
+  // Requires reauthorization only if scopes were added or escalated
+  const escalations = changed.filter((c) => c.to === "allow");
+  const requiresReauthorization = added.length > 0 || escalations.length > 0;
 
-  // Tool scope escalation
-  if (hasToolEscalation(oldGrant.tools.scopes, newGrant.tools.scopes)) {
-    changedFields.push("grant.tools.scopes");
-  }
+  const reason = isMaterial ? buildReason(delta) : null;
 
-  const isMaterial = changedFields.length > 0;
   return {
     isMaterial,
-    reason: isMaterial
-      ? `Material change in: ${changedFields.join(", ")}`
-      : null,
-    delta: null,
-    changedFields,
+    reason,
+    delta,
+    requiresReauthorization,
   };
 }
 
-/** Check if a boolean field escalated from false to true. */
-function checkBoolEscalation(
-  oldVal: boolean,
-  newVal: boolean,
-  field: string,
-  out: string[],
-): void {
-  if (!oldVal && newVal) {
-    out.push(field);
+/** Build a human-readable reason string from a policy delta. */
+function buildReason(delta: PolicyDelta): string {
+  const parts: string[] = [];
+  if (delta.added.length > 0) {
+    parts.push(`added: ${delta.added.join(", ")}`);
   }
-}
-
-/** Check if any tool scope was added or escalated from disallowed to allowed. */
-function hasToolEscalation(
-  oldScopes: GrantConfig["tools"]["scopes"],
-  newScopes: GrantConfig["tools"]["scopes"],
-): boolean {
-  const oldMap = new Map(oldScopes.map((s) => [s.toolId, s.allowed]));
-  for (const newScope of newScopes) {
-    const oldAllowed = oldMap.get(newScope.toolId);
-    // New tool added, or existing tool escalated from false to true
-    if (oldAllowed === undefined && newScope.allowed) {
-      return true;
-    }
-    if (oldAllowed === false && newScope.allowed) {
-      return true;
-    }
+  if (delta.removed.length > 0) {
+    parts.push(`removed: ${delta.removed.join(", ")}`);
   }
-  return false;
+  if (delta.changed.length > 0) {
+    const descs = delta.changed.map((c) => `${c.scope} (${c.from} -> ${c.to})`);
+    parts.push(`changed: ${descs.join(", ")}`);
+  }
+  return `Material change: ${parts.join("; ")}`;
 }

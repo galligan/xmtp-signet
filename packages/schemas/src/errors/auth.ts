@@ -19,23 +19,26 @@ export class AuthError extends Error implements SignetError {
   }
 }
 
-/** Raised when a session has expired and can no longer be used. */
-export class SessionExpiredError extends Error implements SignetError {
-  readonly _tag = "SessionExpiredError" as const;
+/** Raised when a credential has expired and can no longer be used. */
+export class CredentialExpiredError extends Error implements SignetError {
+  readonly _tag = "CredentialExpiredError" as const;
   readonly code = 1310;
   readonly category = "auth" as const;
 
   constructor(
     message: string,
-    readonly context: { sessionId: string } & Record<string, unknown>,
+    readonly context: { credentialId: string } & Record<string, unknown>,
   ) {
     super(message);
-    this.name = "SessionExpiredError";
+    this.name = "CredentialExpiredError";
   }
 
-  static create(sessionId: string): SessionExpiredError {
-    return new SessionExpiredError(`Session '${sessionId}' has expired`, {
-      sessionId,
-    });
+  static create(credentialId: string): CredentialExpiredError {
+    return new CredentialExpiredError(
+      `Credential '${credentialId}' has expired`,
+      {
+        credentialId,
+      },
+    );
   }
 }

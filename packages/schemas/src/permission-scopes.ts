@@ -138,6 +138,12 @@ export const SCOPES_BY_CATEGORY: Record<
   ],
 };
 
+/**
+ * Zod schema for a scope set with explicit allow and deny lists.
+ *
+ * Deny always wins: a scope present in both `allow` and `deny`
+ * is effectively denied.
+ */
 /** An allow/deny scope set for a credential. */
 export type ScopeSetType = {
   allow: PermissionScopeType[];
