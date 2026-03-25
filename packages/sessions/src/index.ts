@@ -19,3 +19,5 @@ export { createUpdateActions } from "./update-actions.js";
 export type { UpdateActionDeps } from "./update-actions.js";
 export { createPendingActionStore } from "./pending-actions.js";
 export type { PendingAction, PendingActionStore } from "./pending-actions.js";
+export { createOperatorManager } from "./operator-manager.js";
+export type { OperatorManagerInternal } from "./operator-manager.js";
