@@ -173,6 +173,46 @@ describe("HttpServer", () => {
     expect(body.error.category).toBe("not_found");
   });
 
+  test("session-prefixed credential method is rejected", async () => {
+    const deps = makeDeps({
+      credentialManager: {
+        lookupByToken: async () =>
+          Result.ok({
+            id: "cred_123",
+            config: {
+              operatorId: "op_123",
+              chatIds: [],
+              allow: [],
+              deny: [],
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            issuedBy: "owner",
+          }),
+      } as HttpServerDeps["credentialManager"],
+    });
+    const port = randomPort();
+    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
+    await server.start();
+
+    const res = await fetch(
+      `http://127.0.0.1:${port}/v1/credential/session.info`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer credential-token",
+        },
+      },
+    );
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.category).toBe("not_found");
+  });
+
   test("POST /v1/admin with invalid method returns not_found from dispatcher", async () => {
     const dispatcher = makeDispatcher({
       dispatch: async () => ({
