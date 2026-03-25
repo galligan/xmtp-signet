@@ -11,9 +11,9 @@ import {
 describe("validateCredential", () => {
   test("valid token resolves to credential record", async () => {
     const record = makeCredentialRecord();
-    const lookups = createMockCredentialLookups("valid_token", record);
+    const { tokenLookup } = createMockCredentialLookups("valid_token", record);
 
-    const result = await validateCredential("valid_token", lookups.tokenLookup);
+    const result = await validateCredential("valid_token", tokenLookup);
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -22,9 +22,9 @@ describe("validateCredential", () => {
   });
 
   test("invalid token returns auth error", async () => {
-    const lookups = createMockCredentialLookups("valid_token");
+    const { tokenLookup } = createMockCredentialLookups("valid_token");
 
-    const result = await validateCredential("bad_token", lookups.tokenLookup);
+    const result = await validateCredential("bad_token", tokenLookup);
 
     expect(result.isOk()).toBe(false);
     if (!result.isOk()) {
@@ -39,12 +39,12 @@ describe("checkCredentialLiveness", () => {
       expiresAt: "2099-01-01T00:00:00Z",
       status: "active",
     });
-    const lookups = createMockCredentialLookups("valid_token", record);
-
-    const result = await checkCredentialLiveness(
+    const { credentialLookup } = createMockCredentialLookups(
+      "valid_token",
       record,
-      lookups.credentialLookup,
     );
+
+    const result = await checkCredentialLiveness(record, credentialLookup);
 
     expect(result.isOk()).toBe(true);
   });
@@ -54,12 +54,12 @@ describe("checkCredentialLiveness", () => {
       expiresAt: "2020-01-01T00:00:00Z",
       status: "active",
     });
-    const lookups = createMockCredentialLookups("valid_token", record);
-
-    const result = await checkCredentialLiveness(
+    const { credentialLookup } = createMockCredentialLookups(
+      "valid_token",
       record,
-      lookups.credentialLookup,
     );
+
+    const result = await checkCredentialLiveness(record, credentialLookup);
 
     expect(result.isOk()).toBe(false);
     if (!result.isOk()) {
@@ -72,13 +72,12 @@ describe("checkCredentialLiveness", () => {
       expiresAt: "2099-01-01T00:00:00Z",
       status: "revoked",
     });
-    const lookups = createMockCredentialLookups("valid_token", record);
-    lookups._state.credentials.set(record.credentialId, record);
-
-    const result = await checkCredentialLiveness(
+    const { credentialLookup } = createMockCredentialLookups(
+      "valid_token",
       record,
-      lookups.credentialLookup,
     );
+
+    const result = await checkCredentialLiveness(record, credentialLookup);
 
     expect(result.isOk()).toBe(false);
     if (!result.isOk()) {
@@ -86,14 +85,34 @@ describe("checkCredentialLiveness", () => {
     }
   });
 
-  test("credential check uses mock credential lookup", async () => {
+  test("credential check re-fetches from lookup", async () => {
     const record = makeCredentialRecord();
-    const lookups = createMockCredentialLookups("valid_token", record);
-
-    const result = await checkCredentialLiveness(
+    const { credentialLookup } = createMockCredentialLookups(
+      "valid_token",
       record,
-      lookups.credentialLookup,
     );
+
+    const result = await checkCredentialLiveness(record, credentialLookup);
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  test("uses the refreshed credential expiry after renewal", async () => {
+    const cached = makeCredentialRecord({
+      expiresAt: "2020-01-01T00:00:00Z",
+      status: "active",
+    });
+    const renewed = makeCredentialRecord({
+      expiresAt: "2099-01-01T00:00:00Z",
+      status: "active",
+    });
+    const { credentialLookup, _state } = createMockCredentialLookups(
+      "valid_token",
+      cached,
+    );
+    _state.credentials.set(cached.credentialId, renewed);
+
+    const result = await checkCredentialLiveness(cached, credentialLookup);
 
     expect(result.isOk()).toBe(true);
   });

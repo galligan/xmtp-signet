@@ -180,6 +180,15 @@ describe("HeartbeatRequest", () => {
     };
     expect(HeartbeatRequest.safeParse(valid).success).toBe(true);
   });
+
+  it("rejects legacy sessionId heartbeats", () => {
+    const legacy = {
+      type: "heartbeat",
+      requestId: "req-1",
+      sessionId: "sess-1",
+    };
+    expect(HeartbeatRequest.safeParse(legacy).success).toBe(false);
+  });
 });
 
 describe("HarnessRequest discriminated union", () => {

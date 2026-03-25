@@ -43,8 +43,10 @@ export async function checkCredentialLiveness(
   credential: CredentialRecord,
   credentialLookup: CredentialLookup,
 ): Promise<Result<void, AuthError>> {
-  const expiresAt = new Date(credential.expiresAt).getTime();
-  if (Date.now() >= expiresAt) {
+  // Re-fetch to check current status and expiry. This ensures renewals that
+  // extend expiresAt on an existing credential ID are respected immediately.
+  const lookupResult = await credentialLookup(credential.credentialId);
+  if (!lookupResult.isOk()) {
     return Result.err(
       AuthError.create("Credential check failed", {
         credentialId: credential.credentialId,
@@ -52,8 +54,7 @@ export async function checkCredentialLiveness(
     );
   }
 
-  const lookupResult = await credentialLookup(credential.credentialId);
-  if (!lookupResult.isOk()) {
+  if (lookupResult.value.status !== "active") {
     return Result.err(
       AuthError.create(`Credential is ${lookupResult.value.status}`, {
         credentialId: credential.credentialId,
