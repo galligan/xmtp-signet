@@ -13,6 +13,16 @@ export type {
 // Types
 export type { RootKeyHandle, OperationalKey, SessionKey } from "./types.js";
 
+// Key backend interface
+export type {
+  KeyBackend,
+  WalletProvider,
+  WalletInfo,
+  AccountInfo,
+  SigningResult,
+  ApiKeyInfo,
+} from "./key-backend.js";
+
 // Platform detection
 export {
   detectPlatform,
