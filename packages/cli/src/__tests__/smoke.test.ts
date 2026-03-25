@@ -116,22 +116,28 @@ async function waitForHealthyStart(
   process: Bun.Subprocess,
   adminSocket: string,
 ): Promise<void> {
-  await waitFor(async () => existsSync(adminSocket));
+  await waitFor(async () => {
+    if (existsSync(adminSocket)) {
+      return true;
+    }
 
-  const state = await Promise.race([
-    process.exited.then((exitCode) => ({ exited: true as const, exitCode })),
-    Bun.sleep(250).then(() => ({ exited: false as const, exitCode: null })),
-  ]);
-
-  if (state.exited) {
-    const [stdout, stderr] = await Promise.all([
-      new Response(process.stdout).text(),
-      new Response(process.stderr).text(),
+    const state = await Promise.race([
+      process.exited.then((exitCode) => ({ exited: true as const, exitCode })),
+      Bun.sleep(50).then(() => ({ exited: false as const, exitCode: null })),
     ]);
-    throw new Error(
-      `Daemon exited early (${state.exitCode})\nstdout:\n${stdout}\nstderr:\n${stderr}`,
-    );
-  }
+
+    if (state.exited) {
+      const [stdout, stderr] = await Promise.all([
+        new Response(process.stdout).text(),
+        new Response(process.stderr).text(),
+      ]);
+      throw new Error(
+        `Daemon exited early (${state.exitCode})\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+      );
+    }
+
+    return false;
+  });
 }
 
 async function waitForOpen(ws: WebSocket, timeoutMs = 5000): Promise<void> {
@@ -172,6 +178,7 @@ describe("Phase 2B smoke tests", () => {
   test("start boots from an empty directory without creating admin credentials", async () => {
     const workspace = await makeWorkspace();
     const daemon = startDaemon([
+      "daemon",
       "start",
       "--config",
       workspace.configPath,
@@ -180,16 +187,16 @@ describe("Phase 2B smoke tests", () => {
 
     await waitForHealthyStart(daemon, workspace.adminSocket);
 
-    const tokenResult = await runCli([
-      "admin",
-      "token",
+    const statusResult = await runCli([
+      "status",
       "--config",
       workspace.configPath,
       "--json",
     ]);
 
-    expect(tokenResult.exitCode).not.toBe(0);
-    expect(tokenResult.stderr).toContain("No admin key found");
+    expect(statusResult.exitCode).not.toBe(0);
+    expect(statusResult.stderr).toContain("No admin key found");
+    expect(statusResult.stderr).toContain("xs init");
 
     daemon.kill("SIGTERM");
     expect(await daemon.exited).toBe(0);
@@ -202,7 +209,6 @@ describe("Phase 2B smoke tests", () => {
     const operatorId = "op_deadbeeffeedbabe";
 
     const initResult = await runCli([
-      "identity",
       "init",
       "--config",
       workspace.configPath,
@@ -211,6 +217,7 @@ describe("Phase 2B smoke tests", () => {
     expect(initResult.exitCode).toBe(0);
 
     const daemon = startDaemon([
+      "daemon",
       "start",
       "--config",
       workspace.configPath,
@@ -333,6 +340,7 @@ describe("Phase 2B smoke tests", () => {
     ws.close();
 
     const stopResult = await runCli([
+      "daemon",
       "stop",
       "--config",
       workspace.configPath,
