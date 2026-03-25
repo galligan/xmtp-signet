@@ -332,13 +332,14 @@ describe("credential renewal", () => {
     const originalExpiry = issued.value.credential.expiresAt;
 
     // Renew
+    await Bun.sleep(5);
     const renewed = await shortService.renew(credId);
     expect(renewed.isOk()).toBe(true);
     if (renewed.isOk()) {
       // New expiry should be later than original
-      expect(
-        new Date(renewed.value.expiresAt).getTime(),
-      ).toBeGreaterThanOrEqual(new Date(originalExpiry).getTime());
+      expect(new Date(renewed.value.expiresAt).getTime()).toBeGreaterThan(
+        new Date(originalExpiry).getTime(),
+      );
     }
 
     // Credential still accessible after renewal
