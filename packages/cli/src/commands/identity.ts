@@ -22,141 +22,7 @@ export function createIdentityCommands(): Command {
     "XMTP identity and key management",
   );
 
-  cmd
-    .command("init")
-    .description("Create a new XMTP identity and key hierarchy")
-    .option("--config <path>", "Path to config file")
-    .option("--json", "JSON output")
-    .option("--env <env>", "XMTP environment (local|dev|production)")
-    .option("--label <name>", "Human-readable label for this identity")
-    .action(async (options) => {
-      const json = Boolean(options.json);
-      const print = (data: unknown) =>
-        process.stdout.write(formatOutput(data, { json }) + "\n");
-      const printErr = (data: unknown) =>
-        process.stderr.write(formatOutput(data, { json }) + "\n");
-
-      // 1. Load config
-      const configResult = await loadConfig(
-        typeof options.config === "string"
-          ? { configPath: options.config }
-          : {},
-      );
-      if (configResult.isErr()) {
-        printErr({ error: configResult.error.message });
-        process.exit(exitCodeFromCategory(configResult.error.category));
-      }
-      const config = configResult.value;
-      const paths = resolvePaths(config);
-
-      // 2. Ensure data directory
-      mkdirSync(paths.dataDir, { recursive: true });
-
-      // 3. Create key manager
-      if (!json) process.stdout.write("Initializing key hierarchy...\n");
-      const kmResult = await createKeyManager({
-        rootKeyPolicy: config.keys.rootKeyPolicy,
-        operationalKeyPolicy: config.keys.operationalKeyPolicy,
-        dataDir: paths.dataDir,
-      });
-      if (Result.isError(kmResult)) {
-        printErr({
-          error: `Key manager creation failed: ${kmResult.error.message}`,
-        });
-        process.exit(5);
-      }
-      const km = kmResult.value;
-
-      // 4. Initialize root key
-      const initResult = await km.initialize();
-      if (Result.isError(initResult)) {
-        printErr({
-          error: `Root key initialization failed: ${initResult.error.message}`,
-        });
-        process.exit(5);
-      }
-      const rootPublicKey = initResult.value.publicKey;
-
-      // 5. Create default operational key
-      const opResult = await km.createOperationalKey("default", null);
-      if (Result.isError(opResult)) {
-        printErr({
-          error: `Operational key creation failed: ${opResult.error.message}`,
-        });
-        process.exit(5);
-      }
-      const opKey = opResult.value;
-
-      // 6. Create admin key
-      const adminResult = await km.admin.create();
-      if (Result.isError(adminResult)) {
-        // Already exists is OK — just get it
-        const existing = await km.admin.get();
-        if (Result.isError(existing)) {
-          printErr({
-            error: `Admin key access failed: ${existing.error.message}`,
-          });
-          process.exit(5);
-        }
-
-        // 7. Register XMTP identity (skip for local env)
-        const env = resolveEnv(options.env, config.signet.env);
-        if (env !== "local") {
-          await registerXmtpIdentity({
-            km,
-            paths,
-            env,
-            label:
-              typeof options.label === "string" ? options.label : "default",
-            rootPublicKey,
-            operationalKeyId: opKey.identityId,
-            adminKeyFingerprint: existing.value.fingerprint,
-            platform: km.platform,
-            print,
-            printErr,
-          });
-          return;
-        }
-
-        print({
-          initialized: true,
-          alreadyExisted: true,
-          rootPublicKey: rootPublicKey,
-          operationalKeyId: opKey.identityId,
-          adminKeyFingerprint: existing.value.fingerprint,
-          platform: km.platform,
-          dataDir: paths.dataDir,
-        });
-        return;
-      }
-
-      // 7. Register XMTP identity (skip for local env)
-      const env = resolveEnv(options.env, config.signet.env);
-      if (env !== "local") {
-        await registerXmtpIdentity({
-          km,
-          paths,
-          env,
-          label: typeof options.label === "string" ? options.label : "default",
-          rootPublicKey,
-          operationalKeyId: opKey.identityId,
-          adminKeyFingerprint: adminResult.value.fingerprint,
-          platform: km.platform,
-          print,
-          printErr,
-        });
-        return;
-      }
-
-      print({
-        initialized: true,
-        rootPublicKey: rootPublicKey,
-        operationalKeyId: opKey.identityId,
-        adminKeyFingerprint: adminResult.value.fingerprint,
-        platform: km.platform,
-        dataDir: paths.dataDir,
-      });
-    });
+  cmd.addCommand(createIdentityInitCommand());
 
   cmd
     .command("list")
@@ -218,6 +84,110 @@ export function createIdentityCommands(): Command {
     });
 
   return cmd;
+}
+
+/** Create the direct-mode identity bootstrap command used by `identity init` and `xs init`. */
+export function createIdentityInitCommand(): Command {
+  return new Command("init")
+    .description("Create a new XMTP identity and key hierarchy")
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .option("--env <env>", "XMTP environment (local|dev|production)")
+    .option("--label <name>", "Human-readable label for this identity")
+    .action(async (options) => {
+      const json = Boolean(options.json);
+      const print = (data: unknown) =>
+        process.stdout.write(formatOutput(data, { json }) + "\n");
+      const printErr = (data: unknown) =>
+        process.stderr.write(formatOutput(data, { json }) + "\n");
+
+      const configResult = await loadConfig(
+        typeof options.config === "string"
+          ? { configPath: options.config }
+          : {},
+      );
+      if (configResult.isErr()) {
+        printErr({ error: configResult.error.message });
+        process.exit(exitCodeFromCategory(configResult.error.category));
+      }
+      const config = configResult.value;
+      const paths = resolvePaths(config);
+
+      mkdirSync(paths.dataDir, { recursive: true });
+
+      if (!json) process.stdout.write("Initializing key hierarchy...\n");
+      const kmResult = await createKeyManager({
+        rootKeyPolicy: config.keys.rootKeyPolicy,
+        operationalKeyPolicy: config.keys.operationalKeyPolicy,
+        dataDir: paths.dataDir,
+      });
+      if (Result.isError(kmResult)) {
+        printErr({
+          error: `Key manager creation failed: ${kmResult.error.message}`,
+        });
+        process.exit(5);
+      }
+      const km = kmResult.value;
+
+      const initResult = await km.initialize();
+      if (Result.isError(initResult)) {
+        printErr({
+          error: `Root key initialization failed: ${initResult.error.message}`,
+        });
+        process.exit(5);
+      }
+      const rootPublicKey = initResult.value.publicKey;
+
+      const opResult = await km.createOperationalKey("default", null);
+      if (Result.isError(opResult)) {
+        printErr({
+          error: `Operational key creation failed: ${opResult.error.message}`,
+        });
+        process.exit(5);
+      }
+      const opKey = opResult.value;
+
+      const adminResult = await km.admin.create();
+      let adminKeyFingerprint: string;
+      if (Result.isError(adminResult)) {
+        const existing = await km.admin.get();
+        if (Result.isError(existing)) {
+          printErr({
+            error: `Admin key access failed: ${existing.error.message}`,
+          });
+          process.exit(5);
+        }
+        adminKeyFingerprint = existing.value.fingerprint;
+      } else {
+        adminKeyFingerprint = adminResult.value.fingerprint;
+      }
+
+      const env = resolveEnv(options.env, config.signet.env);
+      if (env !== "local") {
+        await registerXmtpIdentity({
+          km,
+          paths,
+          env,
+          label: typeof options.label === "string" ? options.label : "default",
+          rootPublicKey,
+          operationalKeyId: opKey.identityId,
+          adminKeyFingerprint,
+          platform: km.platform,
+          print,
+          printErr,
+        });
+        return;
+      }
+
+      print({
+        initialized: true,
+        rootPublicKey,
+        operationalKeyId: opKey.identityId,
+        adminKeyFingerprint,
+        platform: km.platform,
+        dataDir: paths.dataDir,
+      });
+    });
 }
 
 // -- Internal helpers --

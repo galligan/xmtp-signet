@@ -70,7 +70,7 @@ export function createAdminCommands(): Command {
 
       // 4. Check admin key exists
       if (!km.admin.exists()) {
-        printErr({ error: "No admin key found. Run 'identity init' first." });
+        printErr({ error: "No admin key found. Run 'xs init' first." });
         process.exit(2);
       }
 

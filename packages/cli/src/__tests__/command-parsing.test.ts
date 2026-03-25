@@ -232,17 +232,22 @@ describe("all commands on program", () => {
   test("public commands are wired into the program", async () => {
     const { program } = await import("../index.js");
     const names = program.commands.map((c) => c.name());
-    expect(names).toContain("start");
-    expect(names).toContain("stop");
+    expect(names).toContain("init");
     expect(names).toContain("status");
-    expect(names).toContain("config");
-    expect(names).toContain("identity");
-    expect(names).toContain("session");
-    expect(names).toContain("grant");
+    expect(names).toContain("reset");
+    expect(names).toContain("daemon");
+    expect(names).toContain("operator");
+    expect(names).toContain("cred");
+    expect(names).toContain("chat");
+    expect(names).toContain("msg");
+    expect(names).toContain("policy");
     expect(names).toContain("seal");
-    expect(names).toContain("message");
-    expect(names).toContain("conversation");
-    expect(names).toContain("admin");
+    expect(names).toContain("wallet");
+    expect(names).toContain("key");
+    expect(names).toContain("logs");
+    expect(names).toContain("lookup");
+    expect(names).toContain("search");
+    expect(names).toContain("consent");
   });
 
   test("every leaf command supports --json", () => {
