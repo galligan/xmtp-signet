@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { Result } from "better-result";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { createVault, type Vault } from "../vault.js";
 import type { KeyBackend } from "../key-backend.js";
 
@@ -137,6 +138,24 @@ describe("createInternalKeyBackend", () => {
       const result = await backend.deriveAccount("nonexistent", "evm");
       expect(Result.isError(result)).toBe(true);
     });
+
+    test("reloads persisted wallet state in a fresh backend instance", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      await backend.deriveAccount(created.value.id, "evm");
+      await backend.deriveAccount(created.value.id, "ed25519");
+
+      const reloaded = createInternalKeyBackend(vault, PASSPHRASE);
+      const listed = await reloaded.listAccounts(created.value.id);
+      expect(Result.isOk(listed)).toBe(true);
+      if (Result.isError(listed)) throw new Error("reload list failed");
+      expect(listed.value).toHaveLength(2);
+
+      const next = await reloaded.deriveAccount(created.value.id, "evm");
+      expect(Result.isOk(next)).toBe(true);
+      if (Result.isError(next)) throw new Error("reload derive failed");
+      expect(next.value.index).toBe(2);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -196,6 +215,24 @@ describe("createInternalKeyBackend", () => {
         new Uint8Array([1]),
       );
       expect(Result.isError(result)).toBe(true);
+    });
+
+    test("returns the EVM private key for XMTP identity registration", async () => {
+      const created = await backend.createWallet("W1", PASSPHRASE);
+      if (Result.isError(created)) throw new Error("create failed");
+      const derived = await backend.deriveAccount(created.value.id, "evm");
+      if (Result.isError(derived)) throw new Error("derive failed");
+
+      const key = await backend.getXmtpIdentityKey(
+        created.value.id,
+        derived.value.index,
+      );
+      expect(Result.isOk(key)).toBe(true);
+      if (Result.isError(key)) throw new Error("identity key failed");
+      expect(key.value).toMatch(/^0x[0-9a-f]{64}$/);
+      const privateKeyBytes = Buffer.from(key.value.slice(2), "hex");
+      const publicKey = secp256k1.getPublicKey(privateKeyBytes, false);
+      expect(bytesToHex(publicKey)).toBe(derived.value.publicKey);
     });
   });
 

@@ -78,6 +78,11 @@ interface WalletState {
   accounts: readonly AccountEntry[];
 }
 
+type LoadedWalletState = {
+  readonly state: WalletState;
+  readonly seed: Uint8Array;
+};
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -108,6 +113,45 @@ export function createInternalKeyBackend(
       mnemonic: result.value,
       seed: mnemonicToSeed(result.value),
     });
+  }
+
+  async function ensureWalletState(
+    walletId: string,
+  ): Promise<Result<LoadedWalletState, SignetError>> {
+    const existing = walletStates.get(walletId);
+    const seedResult = await getSeed(walletId);
+    if (Result.isError(seedResult)) return seedResult;
+
+    if (existing !== undefined) {
+      return Result.ok({ state: existing, seed: seedResult.value.seed });
+    }
+
+    const walletResult = await vault.listWallets();
+    if (Result.isError(walletResult)) return walletResult;
+
+    const wallet = walletResult.value.find((entry) => entry.id === walletId);
+    if (wallet === undefined) {
+      return Result.err(NotFoundError.create("Wallet", walletId));
+    }
+
+    const accountsResult = await vault.getWalletAccounts(walletId);
+    if (Result.isError(accountsResult)) return accountsResult;
+
+    const nextIndex =
+      accountsResult.value.reduce(
+        (maxIndex, entry) => Math.max(maxIndex, entry.index),
+        -1,
+      ) + 1;
+
+    const state: WalletState = {
+      id: wallet.id,
+      label: wallet.label,
+      createdAt: wallet.createdAt,
+      nextIndex,
+      accounts: [...accountsResult.value],
+    };
+    walletStates.set(walletId, state);
+    return Result.ok({ state, seed: seedResult.value.seed });
   }
 
   /** Look up the chain for an account at a given index. */
@@ -239,9 +283,7 @@ export function createInternalKeyBackend(
         const publicKeyHex =
           e.chain === "evm"
             ? bytesToHex(deriveEvmKey(seed, e.index).publicKey)
-            : bytesToHex(
-                deriveEd25519Key(seed, e.index).publicKey,
-              );
+            : bytesToHex(deriveEd25519Key(seed, e.index).publicKey);
         return {
           index: e.index,
           address: e.address,
@@ -250,6 +292,27 @@ export function createInternalKeyBackend(
         };
       });
       return Result.ok(infos);
+    },
+
+    async getXmtpIdentityKey(walletId, accountIndex) {
+      const walletState = await ensureWalletState(walletId);
+      if (Result.isError(walletState)) return walletState;
+
+      const { state, seed } = walletState.value;
+      const account = state.accounts.find(
+        (entry) => entry.index === accountIndex && entry.chain === "evm",
+      );
+      if (account === undefined) {
+        return Result.err(
+          NotFoundError.create(
+            "EvmAccount",
+            `${walletId}/${String(accountIndex)}`,
+          ),
+        );
+      }
+
+      const derived = deriveEvmKey(seed, accountIndex);
+      return Result.ok(`0x${bytesToHex(derived.privateKey)}` as `0x${string}`);
     },
 
     // -- Signing -----------------------------------------------------------
