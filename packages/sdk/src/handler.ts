@@ -11,7 +11,7 @@ import type { SignetHandlerConfig } from "./config.js";
 import type {
   SignetHandler,
   HandlerState,
-  SessionInfo,
+  CredentialInfo,
   MessageContent,
   MessageSent,
   ReactionSent,
@@ -33,15 +33,14 @@ import type { HeartbeatMonitor } from "./heartbeat-monitor.js";
 interface AuthenticatedFrameData {
   type: "authenticated";
   connectionId: string;
-  session: {
-    sessionId: string;
-    agentInboxId: string;
-    sessionKeyFingerprint: string;
+  credential: {
+    credentialId: string;
+    operatorId: string;
+    fingerprint: string;
     issuedAt: string;
     expiresAt: string;
   };
-  view: Record<string, unknown>;
-  grant: Record<string, unknown>;
+  effectiveScopes: Record<string, unknown>;
   resumedFromSeq: number | null;
 }
 
@@ -100,7 +99,7 @@ export function createSignetHandler(
 ): SignetHandler {
   let state: HandlerState = "disconnected";
   let ws: WebSocket | null = null;
-  let sessionInfo: SessionInfo | null = null;
+  let credentialInfo: CredentialInfo | null = null;
   let lastSeenSeq: number | null = null;
   let eventStream: EventStream = createEventStream();
   const requestTracker: RequestTracker = createRequestTracker(
@@ -305,13 +304,12 @@ export function createSignetHandler(
             authHandled = true;
             clearTimeout(authTimeout);
             const authData = data as unknown as AuthenticatedFrameData;
-            sessionInfo = {
+            credentialInfo = {
               connectionId: authData.connectionId,
-              sessionId: authData.session.sessionId,
-              agentInboxId: authData.session.agentInboxId,
-              view: authData.view,
-              grant: authData.grant,
-              expiresAt: authData.session.expiresAt,
+              credentialId: authData.credential.credentialId,
+              operatorId: authData.credential.operatorId,
+              scopes: authData.effectiveScopes,
+              expiresAt: authData.credential.expiresAt,
             };
 
             // Start heartbeat monitoring
@@ -563,8 +561,8 @@ export function createSignetHandler(
       return Result.ok(result.value as ConversationInfo);
     },
 
-    get session(): SessionInfo | null {
-      return sessionInfo;
+    get credential(): CredentialInfo | null {
+      return credentialInfo;
     },
 
     get state(): HandlerState {

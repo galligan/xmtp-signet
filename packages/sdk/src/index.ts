@@ -1,6 +1,6 @@
 /**
  * Harness-facing handler SDK. Provides `SignetHandler`, a WebSocket client
- * that connects to the signet, authenticates with a session token, receives
+ * that connects to the signet, authenticates with a credential token, receives
  * events, and sends requests through a typed interface.
  * @module
  */
@@ -11,7 +11,7 @@ export type { SignetHandlerConfig } from "./config.js";
 export type {
   SignetHandler,
   HandlerState,
-  SessionInfo,
+  CredentialInfo,
   StateChangeCallback,
   ErrorCallback,
   MessageContent,

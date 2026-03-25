@@ -161,24 +161,16 @@ export function createMockServer(options: MockServerOptions = {}): {
             JSON.stringify({
               type: "authenticated",
               connectionId: ws.data.connectionId,
-              session: {
-                sessionId: "sess_test",
-                agentInboxId: "agent_inbox_1",
-                sessionKeyFingerprint: "fp_test",
+              credential: {
+                credentialId: "cred_test",
+                operatorId: "operator_1",
+                fingerprint: "fp_test",
                 issuedAt: "2024-01-01T00:00:00Z",
                 expiresAt: "2025-01-01T00:00:00Z",
               },
-              view: {
-                mode: "full",
-                contentTypeAllowlist: ["xmtp.org/text:1.0"],
-              },
-              grant: {
-                messaging: {
-                  send: true,
-                  reply: true,
-                  react: true,
-                  draftOnly: false,
-                },
+              effectiveScopes: {
+                messaging: ["send", "reply", "react"],
+                conversations: ["read", "list"],
               },
               resumedFromSeq: authData.lastSeenSeq,
             }),

@@ -19,13 +19,12 @@ export type StateChangeCallback = (
 /** Callback fired for connection/protocol errors. */
 export type ErrorCallback = (error: SignetError) => void;
 
-/** Read-only session info derived from AuthenticatedFrame. */
-export interface SessionInfo {
+/** Read-only credential info derived from the authenticated frame. */
+export interface CredentialInfo {
   readonly connectionId: string;
-  readonly sessionId: string;
-  readonly agentInboxId: string;
-  readonly view: Record<string, unknown>;
-  readonly grant: Record<string, unknown>;
+  readonly credentialId: string;
+  readonly operatorId: string;
+  readonly scopes: Record<string, unknown>;
   readonly expiresAt: string;
 }
 
@@ -93,7 +92,7 @@ export interface SignetHandler {
     reaction: string,
   ): Promise<Result<ReactionSent, SignetError>>;
 
-  /** List conversations visible to this session. */
+  /** List conversations visible to this credential. */
   listConversations(): Promise<Result<Conversation[], SignetError>>;
 
   /** Get detailed info about a conversation. */
@@ -101,8 +100,8 @@ export interface SignetHandler {
     groupId: string,
   ): Promise<Result<ConversationInfo, SignetError>>;
 
-  /** Current session info. */
-  readonly session: SessionInfo | null;
+  /** Current authenticated credential info. */
+  readonly credential: CredentialInfo | null;
 
   /** Current connection state. */
   readonly state: HandlerState;

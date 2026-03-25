@@ -87,7 +87,7 @@ describe("Integration: full round-trip", () => {
     // Emit one event before dropping
     harness.emitEvent({
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_test",
       timestamp: "2024-01-01T00:00:00Z",
     });
 
@@ -108,7 +108,7 @@ describe("Integration: full round-trip", () => {
 
     harness.emitEvent({
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_test",
       timestamp: "2024-01-01T00:00:00Z",
     });
 

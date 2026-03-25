@@ -48,7 +48,7 @@ export const SignetHandlerConfigSchema: z.ZodType<
     token: z
       .string()
       .min(1)
-      .describe("Session bearer token obtained from signet admin"),
+      .describe("Credential bearer token obtained from signet admin"),
     reconnect: z
       .object({
         enabled: z
