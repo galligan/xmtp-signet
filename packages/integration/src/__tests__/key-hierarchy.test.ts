@@ -13,7 +13,7 @@ import { join } from "node:path";
 import {
   createKeyManager,
   type KeyManager,
-  createSignerProviderCompat,
+  createSignerProvider,
   detectPlatform,
 } from "@xmtp/signet-keys";
 
@@ -135,7 +135,7 @@ describe("key-hierarchy", () => {
     await km.createOperationalKey("provider-id", null);
 
     // SignerProvider
-    const signer = createSignerProviderCompat(km, "provider-id");
+    const signer = createSignerProvider(km, "provider-id");
     const signResult = await signer.sign(new TextEncoder().encode("data"));
     expect(signResult.isOk()).toBe(true);
 
