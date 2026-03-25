@@ -15,13 +15,13 @@ from a Zod schema in this package.
 - Permission scopes: `ScopeCategory`, `PermissionScope`, `SCOPES_BY_CATEGORY`, `ScopeSet`, `resolveScopeSet`
 - Identity/runtime: `OperatorRole`, `ScopeMode`, `OperatorStatus`, `OperatorConfig`, `OperatorRecord`, `PolicyConfig`, `PolicyRecord`, `CredentialStatus`, `CredentialConfig`, `CredentialIssuer`, `CredentialRecord`, `CredentialToken`, `IssuedCredential`
 - Seal + revocation: `SealPayload`, `SealDelta`, `SealChain`, `MessageSealBinding`, `SealEnvelope`, `RevocationSeal`
-- Reveal: `RevealScope`, `RevealRequest`, `RevealGrant`, `RevealState`
+- Reveal: `RevealScope`, `RevealRequest`, `RevealAccess`, `RevealState`
 - Revocation: `AgentRevocationReason`, `CredentialRevocationReason`, `IdMapping`
 - Events: `MessageEvent`, `CredentialIssuedEvent`, `CredentialExpiredEvent`, `CredentialReauthRequiredEvent`, `RevealEvent`, `SignetEvent`
 - Requests: `SendMessageRequest`, `SendReactionRequest`, `SendReplyRequest`, `UpdateScopesRequest`, `RevealContentRequest`, `ConfirmActionRequest`, `HeartbeatRequest`
 - Responses: `RequestSuccess`, `RequestFailure`, `RequestResponse`
 - Action results: `ActionResultMetaSchema`, `ActionErrorSchema`, `PaginationSchema`, `ActionResultSchema`, `ActionErrorResultSchema` (and inferred types)
-- Errors: `ErrorCategory`, `ErrorCategoryMetaSchema`, `ErrorCategoryMeta`, `ERROR_CATEGORY_META`, `errorCategoryMeta`, `SignetError` (union), `AnySignetError`, `matchError`, `ValidationError`, `NotFoundError`, `PermissionError`, `GrantDeniedError`, `AuthError`, `CredentialExpiredError`, `InternalError`, `TimeoutError`, `CancelledError`, `NetworkError`
+- Errors: `ErrorCategory`, `ErrorCategoryMetaSchema`, `ErrorCategoryMeta`, `ERROR_CATEGORY_META`, `errorCategoryMeta`, `SignetError` (union), `AnySignetError`, `matchError`, `ValidationError`, `NotFoundError`, `PermissionError`, `AuthError`, `CredentialExpiredError`, `InternalError`, `TimeoutError`, `CancelledError`, `NetworkError`
 
 **Dependencies:** `zod`, `better-result`
 
@@ -66,19 +66,19 @@ The XMTP client abstraction layer. Defines the `XmtpClient` interface for client
 
 ### @xmtp/signet-keys
 
-Key hierarchy with encrypted vault. Three tiers (root, operational, session) plus admin keys.
+Key hierarchy with encrypted vault. Three tiers (root, operational,
+credential) plus admin keys.
 
 **Exports:**
 - Config: `KeyPolicySchema`, `PlatformCapabilitySchema`, `KeyManagerConfigSchema`
-- Types: `RootKeyHandle`, `OperationalKey`, `SessionKey`
+- Types: `RootKeyHandle`, `OperationalKey`, `CredentialKey`
 - Platform: `detectPlatform`, `platformToTrustTier`
 - Manager: `createKeyManager` (central orchestrator, `KeyManager` has `.admin` property)
 - Vault: `createVault`
-- Signers: `createSignerProvider`, `createAttestationSigner`
-- Sub-managers: `createOperationalKeyManager`, `createSessionKeyManager`
-- Admin keys: `createAdminKeyManager`, `AdminKeyManager`, `AdminKeyRecord`, `AdminAuthContext`, `AdminAuthMethod`, `AdminJwtOptions`
+- Signers: `createSignerProvider`, `createSealStamper`
+- Admin keys: `AdminKeyManager`
 - JWT: `AdminJwtConfigSchema`, `AdminJwtPayloadSchema`, `base64urlEncode`, `base64urlDecode`
-- Root key: `initializeRootKey`, `signWithRootKey`
+- Backends: `createInternalKeyBackend`, `KeyBackend`
 - Crypto: P-256/Ed25519 key gen, signing, verification, import/export, `fingerprint`, `toHex`
 
 **Dependencies:** `@xmtp/signet-contracts`, `@xmtp/signet-schemas`
@@ -152,7 +152,7 @@ WebSocket transport built on `Bun.serve()`.
 - Frames: `AuthFrame`, `AuthenticatedFrame`, `AuthErrorFrame`, `BackpressureFrame`, `SequencedFrame`, `InboundFrame`
 - Connection: `createConnectionState`, `canTransition`, `transition` (state machine: connecting → authenticating → active → draining → closed)
 - Registry: `ConnectionRegistry`
-- Replay: `CircularBuffer` (for session resumption)
+- Replay: `CircularBuffer` (for event replay and reconnect support)
 - Backpressure: `BackpressureTracker`
 - Auth: `handleAuth`, `TokenLookup`
 - Routing: `routeRequest`, `RequestHandler`
@@ -163,7 +163,7 @@ WebSocket transport built on `Bun.serve()`.
 
 ### @xmtp/signet-mcp
 
-MCP transport. Converts ActionSpecs to MCP tools with session-scoped auth.
+MCP transport. Converts ActionSpecs to MCP tools with credential-scoped auth.
 
 **Exports:**
 - Config: `McpServerConfigSchema`, `McpServerConfig`
@@ -213,6 +213,6 @@ Harness-facing client SDK. WebSocket wrapper with typed events and Result-based 
 
 Test-only package (private, not published). Cross-package integration tests.
 
-**Test suites:** key-hierarchy, session-lifecycle, contract-verification, policy-enforcement, happy-path, attestation-lifecycle, ws-edge-cases
+**Test suites:** key-hierarchy, session-lifecycle (credential coverage), contract-verification, policy-enforcement, happy-path, seal-lifecycle, ws-edge-cases
 
 **Dependencies:** All Phase 1 runtime and transport packages

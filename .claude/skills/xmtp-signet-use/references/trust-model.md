@@ -8,12 +8,12 @@ whether it has raw credentials, or whether its claimed limits are real.
 
 The signet model doesn't solve trust by decree. It moves from **opaque trust**
 (take the agent's word for it) to **inspectable trust** (verify what it can
-actually do via signed attestations).
+actually do via signed seals).
 
 **The honesty clause:** A signet doesn't magically make an agent trustworthy.
 It makes the system auditable and constrainable in a way today's pattern is
 not. A determined operator could still lie — but they'd have to sign a false
-attestation, which creates a verifiable record.
+seal, which creates a verifiable record.
 
 ## Verification service
 
@@ -82,7 +82,7 @@ The verifier is a standalone service that can run independently of the signet.
 It:
 
 - Accepts verification requests via XMTP content types
-- Runs checks against the attestation and external evidence
+- Runs checks against the seal and external evidence
 - Publishes verification statements back to the group
 - Rate-limits requests to prevent abuse
 - Caches statements to avoid redundant verification
@@ -91,25 +91,24 @@ It:
 Multiple verifiers can operate in the same group, providing independent
 assessments. This avoids single points of trust.
 
-## Materiality and attestation noise
+## Materiality and seal noise
 
 Not every signet state change warrants a group-visible seal. The
 system classifies changes as material or routine:
 
 **Material** (produces seal):
-- View mode or scope changes
-- Grant additions or removals
+- Credential chat-scope changes
+- Policy or inline scope changes
 - Egress or inference policy changes
 - Agent addition or revocation
 - Ownership or hosting mode changes
 - Verifier statement updates
 
 **Routine** (stays silent):
-- Session rotation within the same view and grant
+- Credential rotation within the same operator/policy/chat scope
 - Heartbeat and liveness signals
 - Internal signet housekeeping
 
-Changes that expand the security boundary (e.g., upgrading from `reveal-only`
-to `full` visibility) also require **session reauthorization** — the signet
-terminates the current session and requires the harness to re-authenticate
-under the updated policy.
+Changes that expand the security boundary also require **credential
+reauthorization** — the signet revokes the old credential and requires the
+harness to authenticate under the updated scope.

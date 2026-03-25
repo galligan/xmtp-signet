@@ -16,8 +16,7 @@ description: >
 
 > [!NOTE]
 > The current local stack implements the v1 operator/policy/credential/seal
-> model. A few compatibility surfaces still use `session` and `grant` names,
-> but they now map to credential lifecycle and effective scope inspection.
+> model. The public CLI and transport surfaces are credential-native.
 
 The signet is the primary way to connect agents to XMTP without handing the
 agent raw signer material, database access, or direct SDK control.
@@ -174,15 +173,13 @@ The verifier pipeline checks things like:
 - seal chain integrity
 - schema compliance
 
-## CLI compatibility
+## CLI surfaces
 
-The current CLI still exposes these compatibility groups:
+The current CLI exposes the v1 model directly:
 
-- `xs session ...` for credential lifecycle
-- `xs grant ...` for effective scope inspection
-
-That naming is transitional. The underlying model is credential and policy
-based.
+- `xs credential ...` for credential lifecycle
+- `xs seal ...` for seal inspection and verification
+- `xs admin ...` for management-plane auth and audit flows
 
 ## When to recommend direct XMTP access instead
 

@@ -8,7 +8,7 @@ Enclave patterns. Each tier has a different lifetime and security posture.
 ```
 Root Key (platform-bound, long-lived)
   └─ Operational Key (daily signing, rotatable)
-       └─ Session Key (per-connection, ephemeral)
+       └─ Credential Key (credential-bound, ephemeral)
 
 Admin Key (standalone, peer to root — not derived from it)
 ```
@@ -29,27 +29,26 @@ detects platform capabilities and creates the appropriate key handle.
 ### Operational keys
 
 Derived from the root key. Handle day-to-day signing:
-- Attestation signing
+- Seal signing
 - Message provenance metadata
-- Key agreement for session establishment
+- Operator-bound runtime signing
 
-Operational keys can be rotated without changing the root. The
-`createOperationalKeyManager` handles rotation, storage, and signing.
+Operational keys can be rotated without changing the root.
 
-### Session keys
+### Credential keys
 
-Generated per harness connection. Scoped to a single session:
-- Encrypt/decrypt session-specific data
-- Sign session tokens
-- Automatically discarded when the session ends
+Generated for issued credentials. Scoped to a single credential:
+- Bind harness auth to a credential token
+- Sign credential-scoped operations when needed by the runtime adapter
+- Expire or revoke with the credential lifecycle
 
-The `createSessionKeyManager` handles creation and cleanup.
+The current key-manager adapter handles creation and cleanup.
 
 ## Encrypted vault
 
 All key material at rest is stored in an encrypted vault managed by
-`createVault`. The vault uses the root key to encrypt operational and session
-key material before persisting to disk.
+`createVault`. The vault is used for persisted key and wallet state; ephemeral
+credential keys remain runtime-scoped.
 
 ## Platform detection
 
@@ -62,8 +61,8 @@ key material before persisting to disk.
 ## Key manager
 
 `createKeyManager` is the central orchestrator. It initializes the root key,
-manages operational and session key lifecycles, and provides the
-`SignerProvider` and `AttestationSigner` interfaces that other packages consume.
+manages operational and credential key lifecycles, and provides the
+`SignerProvider` and `SealStamper` interfaces that other packages consume.
 
 Packages never interact with raw key material directly — they receive
 signing/verification capabilities through the provider interfaces defined in
@@ -78,7 +77,7 @@ operations. They are **peers** to the root key, not derived from it.
 
 - Authenticate CLI commands against the signet daemon
 - Sign JWTs for admin socket JSON-RPC requests
-- Separate management auth from message signing and harness session auth
+- Separate management auth from message signing and harness credential auth
 
 ### JWT flow
 

@@ -13,11 +13,11 @@ If the user doesn't specify which tracer bullet to run, use `AskUserQuestion` to
 
 | Option | Story | Needs |
 |--------|-------|-------|
-| **Admin flow** | identity init → signet start → admin token → session issue/list/inspect/revoke → signet stop | Keys + daemon |
+| **Admin flow** | identity init → signet start → admin token → credential issue/list/inspect/revoke → signet stop | Keys + daemon |
 | **Empty-dir boot** | signet start from empty data dir → verify listening → verify no implicit credentials → stop | Nothing |
-| **WebSocket harness** | (after admin flow) connect WS with session token → denied send → allowed send → disconnect | Session token |
+| **WebSocket harness** | (after admin flow) connect WS with credential token → denied send → allowed send → disconnect | Credential token |
 | **Full journey** | All of the above in sequence | Nothing |
-| **Dev network** | dual-identity init → signet start → create group → session issue → WS send → receive → stop | Network access |
+| **Dev network** | dual-identity init → signet start → create group → credential issue → WS send → receive → stop | Network access |
 | **Production** | identity init (prod) → signet start → create group → invite QR → operator joins → exchange messages → stop | Network + external XMTP app |
 | **Convos: join** | Operator shares Convos invite → signet joins via invite protocol → exchange messages | Production + Convos app |
 | **Convos: host** | Signet creates group → generates Convos invite URL + QR → operator joins from Convos → exchange messages | Production + Convos app |
@@ -139,12 +139,14 @@ After all requested stories finish:
 4. Wait for admin socket + WS port
 5. admin token --config {config} --json
 6. signet status --config {config} --json
-7. session issue --config {config} --agent test-agent --view @{view_file} --grant @{grant_file} --json
-8. session list --config {config} --agent test-agent --json
-9. session inspect --config {config} {session_id} --json
-10. session revoke --config {config} {session_id} --json
-11. signet stop --config {config} --json
-12. Verify: PID file cleaned up, port released, audit log has entries
+7. Write credential.json with:
+   { "chatIds": ["conv_c0ffee12"], "allow": ["send"], "deny": [] }
+8. credential issue --config {config} --operator {operator_id} --credential @credential.json --json
+9. credential list --config {config} --operator {operator_id} --json
+10. credential inspect --config {config} {credential_id} --json
+11. credential revoke --config {config} {credential_id} --json
+12. signet stop --config {config} --json
+13. Verify: PID file cleaned up, port released, audit log has entries
 ```
 
 ### Empty-Dir Boot
@@ -162,15 +164,15 @@ After all requested stories finish:
 
 ### WebSocket Harness
 
-Depends on a session token from Admin Flow (run Admin Flow first, or reuse existing test env).
+Depends on a credential token from Admin Flow (run Admin Flow first, or reuse existing test env).
 
 ```
 1. Create test environment (or reuse from Admin Flow)
-2. identity init + signet start + session issue (if not already done)
-3. Connect WebSocket to ws://127.0.0.1:{port} with session token
+2. identity init + signet start + credential issue (if not already done)
+3. Connect WebSocket to ws://127.0.0.1:{port} with credential token
 4. Send auth frame, verify AuthenticatedFrame received
-5. Send send_message for group NOT in session scope → expect permission error
-6. Send send_message for group IN session scope → expect routed response
+5. Send send_message for group NOT in credential chat scope → expect permission error
+6. Send send_message for group IN credential chat scope → expect routed response
 7. Send heartbeat → expect success
 8. Disconnect WebSocket
 9. signet stop --config {config} --json
@@ -192,18 +194,16 @@ Run Admin Flow → Empty-Dir Boot → WebSocket Harness in sequence. Each gets i
  7. signet status --config {config} --json → verify 2 identities connected
  8. conversation create --name "tracer-test" --members {bob_inbox_id} --as alice --config {config} --json
  9. conversation list --config {config} --json → verify group exists
-10. Generate view.json scoped to the created group:
-    { "groups": ["{group_id}"], "contentTypes": ["xmtp.org/text:1.0"] }
-11. Generate grant.json allowing send_message:
-    { "actions": ["send_message"], "rateLimit": null }
-12. session issue --config {config} --agent {alice_inbox_id} --view @view.json --grant @grant.json --json
-13. Connect WebSocket with session token
-14. Send auth frame → verify authenticated
-15. Send send_message to the created group → expect success with messageId
-16. Verify: message appears in signet's event stream (or poll conversation)
-17. session issue for bob → connect second WS → verify bob receives the message
-18. signet stop --config {config} --json
-19. Verify: clean shutdown, PID file removed
+10. Generate credential.json scoped to the created group:
+    { "chatIds": ["{group_id}"], "allow": ["send"], "deny": [] }
+11. credential issue --config {config} --operator {alice_operator_id} --credential @credential.json --json
+12. Connect WebSocket with credential token
+13. Send auth frame → verify authenticated
+14. Send send_message to the created group → expect success with messageId
+15. Verify: message appears in signet's event stream (or poll conversation)
+16. Issue a second credential for bob → connect second WS → verify bob receives the message
+17. signet stop --config {config} --json
+18. Verify: clean shutdown, PID file removed
 ```
 
 **Config template for dev network:**
@@ -235,8 +235,8 @@ state_dir = "{test_dir}/state"
  7. conversation invite {group_id} --format both --config {config}
     → Displays QR code and group info
     → Operator sees the group appear in their XMTP app automatically
- 8. session issue --config {config} --agent {signet_inbox_id} --view @{view} --grant @{grant} --json
- 9. Connect WebSocket with session token
+ 8. credential issue --config {config} --operator {signet_operator_id} --credential @credential.json --json
+ 9. Connect WebSocket with credential token
 10. Send send_message "Hello from the signet!" to the group
     → Operator sees the message in their XMTP app
 11. PAUSE: Operator sends a reply from their XMTP app
@@ -260,9 +260,9 @@ Interactive story requiring an operator with the Convos app. The operator shares
  6. conversation join {invite_url} --label convos-joiner --config {config} --json --timeout 120
     → Signet parses invite, creates per-conversation identity, follows join protocol
     → Operator sees the signet appear as a new member in Convos
- 7. session issue --config {config} --agent {joiner_inbox_id} --view @{view} --grant @{grant} --json
-    (view scoped to the joined group)
- 8. Connect WebSocket with session token
+ 7. credential issue --config {config} --operator {joiner_operator_id} --credential @credential.json --json
+    (credential scoped to the joined group)
+ 8. Connect WebSocket with credential token
  9. Send send_message "Hello from the signet!" to the joined group
     → Operator sees the message in Convos
 10. PAUSE: Operator sends a reply
@@ -290,8 +290,8 @@ Interactive story requiring an operator with the Convos app. The signet creates 
  7. PAUSE: Operator scans QR or opens invite link in Convos
     → Poll conversation members until member count > 1 (120s timeout)
  8. Verify: operator appears as group member
- 9. session issue --config {config} --agent {host_inbox_id} --view @{view} --grant @{grant} --json
-10. Connect WebSocket with session token
+ 9. credential issue --config {config} --operator {host_operator_id} --credential @credential.json --json
+10. Connect WebSocket with credential token
 11. Send send_message "Welcome! You joined the signet's chat." to the group
     → Operator sees the message in Convos
 12. PAUSE: Operator sends a reply

@@ -18,9 +18,10 @@ description: >
 > the XMTP SDK directly. Every design decision flows from this.
 
 > [!NOTE]
-> The current runtime model is v1: operator, policy, credential, seal. Some
-> compatibility surfaces still use `session` and `grant` labels, but they now
-> wrap credential lifecycle and scope inspection.
+> The current runtime model is v1: operator, policy, credential, seal. The
+> public CLI and transport surfaces are credential-native. Do not reintroduce
+> `session` / `view` / `grant` language unless you are documenting historical
+> design work.
 
 ## Where does my code go?
 
@@ -203,11 +204,8 @@ CLI, MCP, and WebSocket consume the same action definitions.
 - `ws` is the primary harness-facing transport
 - `mcp` exposes the scoped tool surface
 - `cli` is the composition root and also owns the HTTP admin API
-
-Compatibility note:
-
-- `xs session ...` now manages credentials
-- `xs grant ...` now inspects effective scopes
+- `xs credential ...` is the public credential lifecycle surface
+- `xs seal ...` is the public seal inspection and verification surface
 
 Do not reintroduce a parallel v0 session/view/grant model when editing these
 surfaces.

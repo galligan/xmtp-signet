@@ -33,16 +33,17 @@ system, `HandlerContext`, and `ActionResult` envelope.
 responsibility. `core` is the only package that touches the XMTP SDK (now wired
 via `createSdkClientFactory`). `policy` handles all filtering and grant
 enforcement. `keys` manages the cryptographic hierarchy plus admin keys and JWT.
-`sessions` tracks ephemeral authorization state. `seals` manages the
+scope enforcement. `keys` manages the cryptographic hierarchy plus admin keys
+and JWT. `sessions` tracks credential authorization state. `seals` manages the
 lifecycle of group-visible permission declarations. `verifier` provides the
 6-check trust verification service.
 
 **Transport** — Protocol adapters. `ws` is the WebSocket transport (Bun.serve)
-with session resumption, frame sequencing, and backpressure tracking. `mcp`
-converts ActionSpecs to MCP tools with session-scoped auth. `cli` is the
+with replay sequencing and backpressure tracking. `mcp`
+converts ActionSpecs to MCP tools with credential-scoped auth. `cli` is the
 composition root with 8 command groups, daemon lifecycle, admin Unix socket
 (JSON-RPC 2.0), and direct mode fallback. `http` handles non-streaming
-admin/session/health routes via `Bun.serve()`.
+admin/credential/health routes via `Bun.serve()`.
 
 **Client** — `sdk` (`@xmtp/signet-sdk`) is the harness-facing SDK. WebSocket client with typed
 events, Result-based requests, automatic reconnection, exponential backoff.
@@ -59,8 +60,8 @@ Harness                          Broker
   │                                │
   ├─ WebSocket frame ────────────► │
   │                                ├─ Parse frame (Zod at boundary)
-  │                                ├─ Validate session token (sessions)
-  │                                ├─ Check grant (policy)
+  │                                ├─ Validate credential token (sessions)
+  │                                ├─ Check effective scopes (policy)
   │                                ├─ Execute handler (runtime)
   │                                ├─ Return Result<T, E>
   │  ◄──────────── Response frame ─┤
@@ -73,7 +74,7 @@ XMTP Network                     Broker                          Harness
   │                                │                                │
   ├─ Raw message ────────────────► │                                │
   │                                ├─ Decode message (core)         │
-  │                                ├─ View projection (policy)      │
+  │                                ├─ Projection pipeline (policy)  │
   │                                ├─ Sequence event (ws)           │
   │                                ├─ Event frame ────────────────► │
 ```
@@ -98,8 +99,8 @@ per-surface metadata (CLI flags, MCP tool name). The `ActionRegistry` collects
 specs; each transport reads the registry to generate its native representation.
 One spec = all transports.
 
-**View projection as pipeline.** Message filtering is a composable pipeline of
-independent stages (scope → content-type → visibility → content projection).
+**Projection as pipeline.** Message filtering is a composable pipeline of
+independent stages (chat scope → content-type → visibility → content projection).
 Each stage can reject. New filtering logic is a new stage, not a modification
 to an existing one.
 

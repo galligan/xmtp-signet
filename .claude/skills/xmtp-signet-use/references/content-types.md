@@ -30,15 +30,15 @@ agents the signet manages. For example, a signet might:
 - **Restrict:** Block `readReceipt` to reduce metadata leakage
 - **Expand:** Allow custom content types specific to the application
 
-### 3. Per-agent view configuration
+### 3. Credential-scoped projection configuration
 
-The agent owner can further scope what a specific agent sees, within what the
-signet allows. This is part of the view configuration.
+The signet can further scope what a specific credential is allowed to surface,
+within what the signet allows for the deployment.
 
 ## Effective allowlist resolution
 
 ```
-Effective = Baseline ∩ Broker Config ∩ Agent View Config
+Effective = Baseline ∩ Signet Config ∩ Credential Projection Config
 ```
 
 If a content type is not in the effective allowlist, the signet holds the
@@ -51,12 +51,12 @@ When the XMTP spec adds a new content type:
 
 1. The baseline list updates to include it
 2. Existing signet configurations are unchanged
-3. Existing agent views are unchanged
+3. Existing credential-scoped projection settings are unchanged
 4. **The agent does NOT automatically start seeing the new type**
 
-To receive the new type, the agent's view configuration must be updated to
-explicitly include it. This prevents agents from receiving unexpected content
-types after protocol updates.
+To receive the new type, the credential-scoped projection configuration must be
+updated to explicitly include it. This prevents agents from receiving
+unexpected content types after protocol updates.
 
 ## Content type schemas
 
