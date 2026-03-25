@@ -24,14 +24,13 @@ import type { XmtpDecodedMessage, XmtpGroupEvent } from "@xmtp/signet-core";
 import {
   createCredentialManager,
   createCredentialService,
-  createOperatorManager,
   type CredentialManagerConfig,
   type InternalCredentialManager,
 } from "@xmtp/signet-sessions";
 import {
   createKeyManager,
-  createSealStamperCompat,
-  createSignerProviderCompat,
+  createSealStamper,
+  createSignerProvider,
 } from "@xmtp/signet-keys";
 import type { KeyManager } from "@xmtp/signet-keys";
 import { createSealManager, type SealManagerDeps } from "@xmtp/signet-seals";
@@ -107,7 +106,7 @@ export interface TestRuntime {
   readonly factory: MockXmtpClientFactory;
   /** The XMTP identity ID created in the signet store. */
   readonly identityId: string;
-  /** The default operator seeded for test credentials. */
+  /** The default operator ID used for test credentials. */
   readonly operatorId: string;
   /** The default test group ID. */
   readonly groupId: string;
@@ -162,7 +161,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
   });
 
   const signerProviderFactory = (id: string) =>
-    createSignerProviderCompat(keyManager, id);
+    createSignerProvider(keyManager, id);
 
   const signet = new SignetCoreImpl(
     {
@@ -196,21 +195,8 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     );
   }
 
-  // 3. Seed a default operator for credentials
-  const operatorManager = createOperatorManager();
-  const operatorResult = await operatorManager.create({
-    label: "Integration Test Operator",
-    role: "operator",
-    scopeMode: "shared",
-    provider: "internal",
-    walletId: identityId,
-  });
-  if (Result.isError(operatorResult)) {
-    throw new Error(
-      `Failed to create operator: ${operatorResult.error.message}`,
-    );
-  }
-  const operatorId = operatorResult.value.id;
+  // 3. Use a stable operator ID for test credentials.
+  const operatorId = "op_deadbeeffeedbabe";
 
   // 4. Credential manager and public service
   const credentialManager = createCredentialManager({
@@ -224,7 +210,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
   });
 
   // 5. Seal manager
-  const sealStamper = createSealStamperCompat(keyManager, identityId);
+  const sealStamper = createSealStamper(keyManager, identityId);
   const publisher = createTestPublisher();
 
   const sealManagerDeps: SealManagerDeps = {
@@ -233,21 +219,14 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
     resolveInput: async (credentialId, chatId) => {
       const credential = credentialManager.getCredentialById(credentialId);
       if (!credential.isOk()) {
-        return Result.err(credential.error as SignetError);
-      }
-
-      const operator = await operatorManager.lookup(
-        credential.value.operatorId,
-      );
-      if (Result.isError(operator)) {
-        return Result.err(operator.error);
+        return Result.err(credential.error);
       }
 
       return Result.ok({
         credentialId: credential.value.credentialId,
         operatorId: credential.value.operatorId,
         chatId,
-        scopeMode: operator.value.config.scopeMode,
+        scopeMode: "shared",
         permissions: credential.value.effectiveScopes,
       });
     },
@@ -274,7 +253,7 @@ export async function createTestRuntime(options?: TestRuntimeOptions): Promise<{
 
       const hbResult = credentialManager.recordHeartbeat(request.credentialId);
       if (!hbResult.isOk()) {
-        return Result.err(hbResult.error as SignetError);
+        return Result.err(hbResult.error);
       }
       return Result.ok({ acknowledged: true });
     }
