@@ -1,6 +1,8 @@
-import type { TrustTier } from "@xmtp/signet-schemas";
 import type { PlatformCapability } from "./config.js";
 import { findSignerBinary } from "./se-bridge.js";
+
+/** Trust tiers exposed by the key manager's platform detection. */
+export type KeyTrustTier = "unverified" | "source-verified";
 
 /** Cached platform detection result. */
 let cachedPlatform: PlatformCapability | null = null;
@@ -51,7 +53,9 @@ export function resetPlatformCache(): void {
 }
 
 /** Map platform capability to the corresponding trust tier. */
-export function platformToTrustTier(platform: PlatformCapability): TrustTier {
+export function platformToTrustTier(
+  platform: PlatformCapability,
+): KeyTrustTier {
   switch (platform) {
     case "secure-enclave":
     case "keychain-software":

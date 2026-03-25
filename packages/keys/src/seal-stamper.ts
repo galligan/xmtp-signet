@@ -1,8 +1,12 @@
 import { Result } from "better-result";
-import type { Seal, SignetError, RevocationSeal } from "@xmtp/signet-schemas";
+import type {
+  SealEnvelopeType,
+  SealPayloadType,
+  SignetError,
+  RevocationSeal,
+} from "@xmtp/signet-schemas";
 import type {
   SealStamper,
-  SealEnvelope,
   SignedRevocationEnvelope,
 } from "@xmtp/signet-contracts";
 import type { KeyManager } from "./key-manager.js";
@@ -16,7 +20,9 @@ export function createSealStamper(
   identityId: string,
 ): SealStamper {
   return {
-    async sign(payload: Seal): Promise<Result<SealEnvelope, SignetError>> {
+    async sign(
+      payload: SealPayloadType,
+    ): Promise<Result<SealEnvelopeType, SignetError>> {
       const canonical = canonicalize(payload);
       const sig = await manager.signWithOperationalKey(identityId, canonical);
       if (Result.isError(sig)) return sig;
@@ -24,11 +30,14 @@ export function createSealStamper(
       const opKey = manager.getOperationalKey(identityId);
       if (Result.isError(opKey)) return opKey;
 
-      const signed: SealEnvelope = {
-        seal: payload,
+      const signed: SealEnvelopeType = {
+        chain: {
+          current: payload,
+          delta: { added: [], removed: [], changed: [] },
+        },
         signature: toBase64(sig.value),
-        signatureAlgorithm: "Ed25519",
-        signerKeyRef: opKey.value.fingerprint,
+        keyId: opKey.value.keyId,
+        algorithm: "Ed25519",
       };
       return Result.ok(signed);
     },

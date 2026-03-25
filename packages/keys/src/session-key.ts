@@ -1,5 +1,9 @@
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
+import {
+  InternalError,
+  NotFoundError,
+  createResourceId,
+} from "@xmtp/signet-schemas";
 import type { SessionKey } from "./types.js";
 import {
   generateEd25519KeyPair,
@@ -56,7 +60,7 @@ export function createSessionKeyManager(): SessionKeyManager {
       const fp = await computeFingerprint(keyPair.value.publicKey);
       if (Result.isError(fp)) return fp;
 
-      const keyId = crypto.randomUUID();
+      const keyId = createResourceId("key");
       const now = new Date();
       const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
 

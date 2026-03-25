@@ -1,5 +1,9 @@
 import { Result } from "better-result";
-import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
+import {
+  InternalError,
+  NotFoundError,
+  createResourceId,
+} from "@xmtp/signet-schemas";
 import type { Vault } from "./vault.js";
 import type { OperationalKey } from "./types.js";
 import {
@@ -106,7 +110,7 @@ export function createOperationalKeyManager(
       );
       if (Result.isError(storeResult)) return storeResult;
 
-      const keyId = crypto.randomUUID();
+      const keyId = createResourceId("key");
       const now = new Date().toISOString();
 
       const opKey: OperationalKey = {
@@ -172,7 +176,7 @@ export function createOperationalKeyManager(
 
       const rotated: OperationalKey = {
         ...existing,
-        keyId: crypto.randomUUID(),
+        keyId: createResourceId("key"),
         publicKey: toHex(pubBytes.value),
         fingerprint: fp.value,
         rotatedAt: new Date().toISOString(),

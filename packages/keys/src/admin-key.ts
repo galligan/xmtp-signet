@@ -4,6 +4,7 @@ import {
   NotFoundError,
   AuthError,
   ValidationError,
+  createResourceId,
 } from "@xmtp/signet-schemas";
 import type { Vault } from "./vault.js";
 import {
@@ -150,7 +151,7 @@ export function createAdminKeyManager(vault: Vault): AdminKeyManager {
     if (Result.isError(pubResult)) return pubResult;
 
     return Result.ok({
-      keyId: crypto.randomUUID(),
+      keyId: createResourceId("key"),
       publicKey: toHex(pubBytes.value),
       fingerprint: fp.value,
       createdAt: new Date().toISOString(),

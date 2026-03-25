@@ -9,7 +9,21 @@ function isDeltaArray(
 function normalizeDeltas(
   deltas: PolicyDelta | readonly PolicyDelta[],
 ): readonly PolicyDelta[] {
-  return isDeltaArray(deltas) ? deltas : [deltas];
+  if (isDeltaArray(deltas)) {
+    return deltas;
+  }
+
+  return [deltas];
+}
+
+/**
+ * Classifies whether any delta in a set of policy changes is material
+ * (triggers a new seal) or routine (silent).
+ */
+export function isMaterialChange(
+  deltas: PolicyDelta | readonly PolicyDelta[],
+): boolean {
+  return normalizeDeltas(deltas).some((delta) => isSingleDeltaMaterial(delta));
 }
 
 function isSingleDeltaMaterial(delta: PolicyDelta): boolean {
@@ -20,33 +34,21 @@ function isSingleDeltaMaterial(delta: PolicyDelta): boolean {
   );
 }
 
-function isSingleDeltaEscalation(delta: PolicyDelta): boolean {
-  if (delta.added.length > 0) {
-    return true;
-  }
-
-  return delta.changed.some((change) => change.to === "allow");
-}
-
-/**
- * Classifies whether any delta in a set of policy changes is material
- * (triggers a new seal) or routine (silent).
- */
-export function isMaterialChange(
-  deltas: PolicyDelta | readonly PolicyDelta[],
-): boolean {
-  return normalizeDeltas(deltas).some(isSingleDeltaMaterial);
-}
-
 /**
  * Classifies whether any delta in a set of policy changes requires
- * reauthorization.
- *
- * Within this branch, the policy delta is a scope-set diff, so
- * reauthorization only applies to new allow scopes or deny->allow moves.
+ * credential reauthorization (privilege escalation).
  */
 export function requiresReauthorization(
   deltas: PolicyDelta | readonly PolicyDelta[],
 ): boolean {
-  return normalizeDeltas(deltas).some(isSingleDeltaEscalation);
+  return normalizeDeltas(deltas).some((delta) =>
+    isSingleDeltaEscalation(delta),
+  );
+}
+
+function isSingleDeltaEscalation(delta: PolicyDelta): boolean {
+  return (
+    delta.added.length > 0 ||
+    delta.changed.some((change) => change.to === "allow")
+  );
 }

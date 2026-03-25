@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import type { TrustTier } from "@xmtp/signet-schemas";
 import {
   InternalError,
   NotFoundError,
@@ -10,7 +9,11 @@ import {
   type KeyManagerConfig,
   type PlatformCapability,
 } from "./config.js";
-import { detectPlatform, platformToTrustTier } from "./platform.js";
+import {
+  detectPlatform,
+  platformToTrustTier,
+  type KeyTrustTier,
+} from "./platform.js";
 import { createVault } from "./vault.js";
 import {
   createOperationalKeyManager,
@@ -32,7 +35,7 @@ export interface KeyManager {
   /** Detected platform capability for key storage and signing. */
   readonly platform: PlatformCapability;
   /** Trust tier inferred from the detected platform. */
-  readonly trustTier: TrustTier;
+  readonly trustTier: KeyTrustTier;
 
   /** Access admin key operations. */
   readonly admin: AdminKeyManager;
@@ -142,7 +145,7 @@ export async function createKeyManager(
       return activePlatform;
     },
 
-    get trustTier(): TrustTier {
+    get trustTier(): KeyTrustTier {
       return activeTrustTier;
     },
 

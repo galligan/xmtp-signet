@@ -43,7 +43,7 @@ describe("AdminKeyManager", () => {
       if (Result.isError(result)) throw new Error("create failed");
 
       const record = result.value;
-      expect(record.keyId).toBeDefined();
+      expect(record.keyId).toMatch(/^key_[0-9a-f]{8}$/);
       expect(record.publicKey).toMatch(/^[0-9a-f]{64}$/);
       expect(record.fingerprint).toMatch(/^[0-9a-f]{64}$/);
       expect(record.createdAt).toBeDefined();

@@ -34,7 +34,7 @@ describe("OperationalKeyManager", () => {
       if (Result.isError(result)) throw new Error("create failed");
 
       const key = result.value;
-      expect(key.keyId).toBeDefined();
+      expect(key.keyId).toMatch(/^key_[0-9a-f]{8}$/);
       expect(key.identityId).toBe("agent-1");
       expect(key.groupId).toBeNull();
       expect(key.publicKey).toMatch(/^[0-9a-f]+$/);

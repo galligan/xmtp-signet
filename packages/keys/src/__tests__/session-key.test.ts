@@ -19,7 +19,7 @@ describe("SessionKeyManager", () => {
       if (Result.isError(result)) throw new Error("issue failed");
 
       const key = result.value;
-      expect(key.keyId).toBeDefined();
+      expect(key.keyId).toMatch(/^key_[0-9a-f]{8}$/);
       expect(key.sessionId).toBe("ses_abc");
       expect(key.fingerprint).toMatch(/^[0-9a-f]{64}$/);
       expect(key.expiresAt).toBeDefined();

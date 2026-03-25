@@ -11,7 +11,10 @@
  */
 
 import type { ScopeSetType, PermissionScopeType } from "@xmtp/signet-schemas";
-import type { MaterialityCheck, PolicyDelta } from "@xmtp/signet-contracts";
+import type {
+  MaterialityCheck,
+  PolicyDelta,
+} from "@xmtp/signet-contracts";
 
 /** Extended materiality result with policy delta for diagnostics. */
 export interface DetailedMaterialityCheck extends MaterialityCheck {
