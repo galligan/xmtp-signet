@@ -1,7 +1,16 @@
 import { z } from "zod";
 
 /** Zod enum of the six permission scope categories. */
-export const ScopeCategory = z.enum([
+export const ScopeCategory: z.ZodEnum<
+  [
+    "messaging",
+    "group-management",
+    "metadata",
+    "access",
+    "observation",
+    "egress",
+  ]
+> = z.enum([
   "messaging",
   "group-management",
   "metadata",
@@ -53,7 +62,40 @@ const PERMISSION_SCOPE_VALUES = [
 ] as const;
 
 /** Zod enum of all 30 permission scope strings (kebab-case). */
-export const PermissionScope = z.enum(PERMISSION_SCOPE_VALUES);
+export const PermissionScope: z.ZodEnum<
+  [
+    "send",
+    "reply",
+    "react",
+    "read-receipt",
+    "attachment",
+    "add-member",
+    "remove-member",
+    "promote-admin",
+    "demote-admin",
+    "update-permission",
+    "update-name",
+    "update-description",
+    "update-image",
+    "invite",
+    "join",
+    "leave",
+    "create-group",
+    "create-dm",
+    "read-messages",
+    "read-history",
+    "list-members",
+    "list-conversations",
+    "read-permissions",
+    "stream-messages",
+    "stream-conversations",
+    "forward-to-provider",
+    "store-excerpts",
+    "use-for-memory",
+    "quote-revealed",
+    "summarize",
+  ]
+> = z.enum(PERMISSION_SCOPE_VALUES);
 
 /** A single permission scope identifier. */
 export type PermissionScopeType = z.infer<typeof PermissionScope>;
@@ -96,13 +138,14 @@ export const SCOPES_BY_CATEGORY: Record<
   ],
 };
 
-/**
- * Zod schema for a scope set with explicit allow and deny lists.
- *
- * Deny always wins: a scope present in both `allow` and `deny`
- * is effectively denied.
- */
-export const ScopeSet = z
+/** An allow/deny scope set for a credential. */
+export type ScopeSetType = {
+  allow: PermissionScopeType[];
+  deny: PermissionScopeType[];
+};
+
+/** Zod schema for {@link ScopeSetType}. */
+export const ScopeSet: z.ZodType<ScopeSetType> = z
   .object({
     allow: z.array(PermissionScope).describe("Scopes explicitly granted"),
     deny: z
@@ -110,9 +153,6 @@ export const ScopeSet = z
       .describe("Scopes explicitly denied (overrides allow)"),
   })
   .describe("Allow/deny scope set for a credential");
-
-/** An allow/deny scope set for a session. */
-export type ScopeSetType = z.infer<typeof ScopeSet>;
 
 /**
  * Resolves a scope set to the effective set of allowed scopes.
