@@ -36,14 +36,27 @@ export function createUtilityCommands(): Command[] {
     .option("--watch", "Watch for new entries")
     .option("--since <time>", "Show logs since time")
     .option("--limit <n>", "Limit number of entries")
-    .action((opts: { watch?: true; since?: string; limit?: string }) => {
+    .option("--json", "JSON output")
+    .action(
+      (opts: { watch?: true; since?: string; limit?: string; json?: true }) => {
+        const params: Record<string, unknown> = {};
+        if (opts.watch === true) params["watch"] = true;
+        if (opts.since !== undefined) params["since"] = opts.since;
+        if (opts.limit !== undefined) {
+          params["limit"] = Number.parseInt(opts.limit, 10);
+        }
+        process.stdout.write(stubOutput("logs", params, opts.json === true));
+      },
+    );
+  logs
+    .command("export")
+    .description("Export a full runtime state dump")
+    .option("--json", "JSON output")
+    .action((opts: { json?: true }) => {
       const params: Record<string, unknown> = {};
-      if (opts.watch === true) params["watch"] = true;
-      if (opts.since !== undefined) params["since"] = opts.since;
-      if (opts.limit !== undefined) {
-        params["limit"] = Number.parseInt(opts.limit, 10);
-      }
-      process.stdout.write(stubOutput("logs", params, false));
+      process.stdout.write(
+        stubOutput("logs.export", params, opts.json === true),
+      );
     });
   commands.push(logs);
 
@@ -52,8 +65,11 @@ export function createUtilityCommands(): Command[] {
   const lookup = new Command("lookup")
     .description("Look up an address or ID")
     .argument("<address>", "Address or ID to look up")
-    .action((address: string) => {
-      process.stdout.write(stubOutput("lookup", { address }, false));
+    .option("--json", "JSON output")
+    .action((address: string, opts: { json?: true }) => {
+      process.stdout.write(
+        stubOutput("lookup", { address }, opts.json === true),
+      );
     });
   commands.push(lookup);
 
@@ -65,15 +81,19 @@ export function createUtilityCommands(): Command[] {
     .option("--chat <id>", "Filter by conversation")
     .option("--op <id>", "Filter by operator")
     .option("--limit <n>", "Limit results")
+    .option("--json", "JSON output")
     .action(
-      (query: string, opts: { chat?: string; op?: string; limit?: string }) => {
+      (
+        query: string,
+        opts: { chat?: string; op?: string; limit?: string; json?: true },
+      ) => {
         const params: Record<string, unknown> = { query };
         if (opts.chat !== undefined) params["chatId"] = opts.chat;
         if (opts.op !== undefined) params["operatorId"] = opts.op;
         if (opts.limit !== undefined) {
           params["limit"] = Number.parseInt(opts.limit, 10);
         }
-        process.stdout.write(stubOutput("search", params, false));
+        process.stdout.write(stubOutput("search", params, opts.json === true));
       },
     );
   commands.push(search);

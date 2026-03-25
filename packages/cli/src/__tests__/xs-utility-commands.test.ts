@@ -329,7 +329,7 @@ describe("utility commands", () => {
     expect(commands.length).toBeGreaterThan(0);
   });
 
-  test("includes a logs command with --watch, --since, --limit options", async () => {
+  test("includes a logs command with --watch, --since, --limit, and --json options", async () => {
     const commands = await loadProgram();
     const logs = commands.find((c) => c.name() === "logs");
     expect(logs).toBeDefined();
@@ -337,18 +337,29 @@ describe("utility commands", () => {
     expect(flags).toContain("--watch");
     expect(flags).toContain("--since");
     expect(flags).toContain("--limit");
+    expect(flags).toContain("--json");
   });
 
-  test("includes a lookup command with an address argument", async () => {
+  test("logs command includes an export subcommand with --json", async () => {
+    const commands = await loadProgram();
+    const logs = commands.find((c) => c.name() === "logs");
+    expect(logs).toBeDefined();
+    const exportCmd = findSub(logs!, "export");
+    expect(exportCmd).toBeDefined();
+    expect(optionFlags(exportCmd!)).toContain("--json");
+  });
+
+  test("includes a lookup command with an address argument and --json", async () => {
     const commands = await loadProgram();
     const lookup = commands.find((c) => c.name() === "lookup");
     expect(lookup).toBeDefined();
     const args = lookup!.registeredArguments;
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("address");
+    expect(optionFlags(lookup!)).toContain("--json");
   });
 
-  test("includes a search command with query argument and filter options", async () => {
+  test("includes a search command with query argument, filter options, and --json", async () => {
     const commands = await loadProgram();
     const search = commands.find((c) => c.name() === "search");
     expect(search).toBeDefined();
@@ -359,6 +370,7 @@ describe("utility commands", () => {
     expect(flags).toContain("--chat");
     expect(flags).toContain("--op");
     expect(flags).toContain("--limit");
+    expect(flags).toContain("--json");
   });
 
   test("includes a consent command with check, allow, deny subcommands", async () => {
