@@ -101,6 +101,17 @@ describe("createCredentialService", () => {
     expect(result.value.token).toHaveLength(43);
     expect(result.value.credential.id).toMatch(/^cred_[0-9a-f]{16}$/);
     expect(result.value.credential.config.operatorId).toBe("op_test1234");
+    expect(result.value.credential.issuedBy).toBe("owner");
+  });
+
+  test("preserves explicit credential issuer provenance", async () => {
+    const result = await service.issue(createTestCredentialConfig(), {
+      issuedBy: "op_admin1234",
+    });
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.credential.issuedBy).toBe("op_admin1234");
   });
 
   test("preserves explicit credential issuer provenance", async () => {
