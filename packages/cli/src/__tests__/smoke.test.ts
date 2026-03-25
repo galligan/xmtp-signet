@@ -30,20 +30,14 @@ afterEach(async () => {
   );
 });
 
-function randomPort(): number {
-  return 35000 + Math.floor(Math.random() * 10000);
-}
-
 async function makeWorkspace(): Promise<{
   dir: string;
   configPath: string;
-  wsPort: number;
   adminSocket: string;
 }> {
   const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-smoke-"));
   tempDirs.push(dir);
 
-  const wsPort = randomPort();
   const dataDir = join(dir, "data");
   const adminSocket = join(dir, "admin.sock");
   const auditLog = join(dir, "audit.jsonl");
@@ -62,7 +56,7 @@ async function makeWorkspace(): Promise<{
       "",
       "[ws]",
       `host = "127.0.0.1"`,
-      `port = ${wsPort}`,
+      `port = 0`,
       "",
       "[admin]",
       `socketPath = "${adminSocket}"`,
@@ -73,7 +67,7 @@ async function makeWorkspace(): Promise<{
     ].join("\n"),
   );
 
-  return { dir, configPath, wsPort, adminSocket };
+  return { dir, configPath, adminSocket };
 }
 
 async function runCli(
@@ -231,12 +225,17 @@ describe("Phase 2B smoke tests", () => {
       "--json",
     ]);
     expect(statusResult.exitCode).toBe(0);
-    expect(JSON.parse(statusResult.stdout)).toMatchObject({
+    const status = JSON.parse(statusResult.stdout) as {
+      state: string;
+      wsPort: number;
+    };
+    expect(status).toMatchObject({
       state: "running",
     });
+    expect(status.wsPort).toBeGreaterThan(0);
 
     const issueResult = await runCli([
-      "session",
+      "cred",
       "issue",
       "--config",
       workspace.configPath,
@@ -256,7 +255,7 @@ describe("Phase 2B smoke tests", () => {
     };
     expect(issuedCredential.token).toBeTruthy();
 
-    const ws = new WebSocket(`ws://127.0.0.1:${workspace.wsPort}/v1/agent`);
+    const ws = new WebSocket(`ws://127.0.0.1:${status.wsPort}/v1/agent`);
     await waitForOpen(ws);
     ws.send(
       JSON.stringify({
