@@ -17,7 +17,7 @@ export interface SourceAvailableConfig {
 
 /**
  * Checks that the agent's source code repository is accessible.
- * v0: performs an HTTP GET against sourceRepoUrl, expects 200.
+ * Performs an HTTP GET against sourceRepoUrl and expects a successful response.
  */
 export function createSourceAvailableCheck(
   config?: SourceAvailableConfig,

@@ -16,7 +16,7 @@ import type { VerifierConfig } from "./config.js";
 import type { CheckHandler } from "./checks/handler.js";
 import type { RateLimiter } from "./rate-limiter.js";
 import { createRateLimiter } from "./rate-limiter.js";
-import { canonicalizeStatement } from "./canonicalize.js";
+import { canonicalize, canonicalizeStatement } from "./canonicalize.js";
 import { determineVerdict, determineVerifiedTier } from "./verdict.js";
 import { createSourceAvailableCheck } from "./checks/source-available.js";
 import { createBuildProvenanceCheck } from "./checks/build-provenance.js";
@@ -39,6 +39,8 @@ const ALL_CHECK_IDS = [
   "seal_chain",
   "schema_compliance",
 ] as const;
+
+const SUPPORTED_VERIFIER_TIERS = ["source-verified"] as const;
 
 /** Options used to construct the verifier service. */
 export interface VerifierServiceOptions {
@@ -66,7 +68,7 @@ export interface VerifierService {
       ValidationError | InternalError | TimeoutError
     >
   >;
-  selfSeal(): VerifierSelfSeal;
+  selfSeal(): Promise<Result<VerifierSelfSeal, InternalError>>;
 }
 
 /** Create the verifier service with the configured checks and signer. */
@@ -98,7 +100,9 @@ export function createVerifierService(
   const ttlSeconds =
     config.statementTtlSeconds ?? DEFAULT_STATEMENT_TTL_SECONDS;
 
-  let cachedSelfSeal: VerifierSelfSeal | undefined;
+  let cachedSelfSeal:
+    | Promise<Result<VerifierSelfSeal, InternalError>>
+    | undefined;
 
   return {
     async handleRequest(
@@ -190,27 +194,34 @@ export function createVerifierService(
       );
     },
 
-    selfSeal(): VerifierSelfSeal {
+    selfSeal(): Promise<Result<VerifierSelfSeal, InternalError>> {
       if (cachedSelfSeal !== undefined) {
         return cachedSelfSeal;
       }
 
-      // Build a self-seal (signature is a placeholder in v0).
-      cachedSelfSeal = {
-        verifierInboxId: config.verifierInboxId,
-        capabilities: {
-          supportedTiers: ["unverified"],
-          supportedChecks: [...ALL_CHECK_IDS],
-          maxRequestsPerHour:
-            config.maxRequestsPerRequesterPerHour ??
-            DEFAULT_MAX_REQUESTS_PER_HOUR,
+      const inFlight = buildAndSignSelfSeal(
+        {
+          verifierInboxId: config.verifierInboxId,
+          capabilities: {
+            supportedTiers: [...SUPPORTED_VERIFIER_TIERS],
+            supportedChecks: [...ALL_CHECK_IDS],
+            maxRequestsPerHour:
+              config.maxRequestsPerRequesterPerHour ??
+              DEFAULT_MAX_REQUESTS_PER_HOUR,
+          },
+          sourceRepoUrl: config.sourceRepoUrl,
+          issuedAt: new Date(getNow()).toISOString(),
         },
-        sourceRepoUrl: config.sourceRepoUrl,
-        issuedAt: new Date(getNow()).toISOString(),
-        signature: "",
-      };
+        sign,
+      ).then((result) => {
+        if (Result.isError(result)) {
+          cachedSelfSeal = undefined;
+        }
+        return result;
+      });
 
-      return cachedSelfSeal;
+      cachedSelfSeal = inFlight;
+      return inFlight;
     },
   };
 }
@@ -234,6 +245,25 @@ async function buildAndSignStatement(
     const message = error instanceof Error ? error.message : String(error);
     return Result.err(
       InternalErrorClass.create(`Failed to sign statement: ${message}`),
+    );
+  }
+}
+
+async function buildAndSignSelfSeal(
+  fields: Omit<VerifierSelfSeal, "signature">,
+  sign: (bytes: Uint8Array) => Promise<string>,
+): Promise<Result<VerifierSelfSeal, InternalError>> {
+  try {
+    const signature = await sign(canonicalize(fields));
+
+    return Result.ok({
+      ...fields,
+      signature,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return Result.err(
+      InternalErrorClass.create(`Failed to sign self-seal: ${message}`),
     );
   }
 }

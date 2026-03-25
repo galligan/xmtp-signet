@@ -27,7 +27,7 @@ export function determineVerdict(
 
 /**
  * Determines the highest verified trust tier based on check results.
- * For v0, the maximum achievable tier is "source-verified".
+ * The current verifier implementation supports up to "source-verified".
  * Returns "unverified" if any required check fails.
  */
 export function determineVerifiedTier(
@@ -38,7 +38,6 @@ export function determineVerifiedTier(
     return "unverified";
   }
 
-  // v0 caps at source-verified regardless of what was requested
   const tierRank: Record<TrustTier, number> = {
     unverified: 0,
     "source-verified": 1,

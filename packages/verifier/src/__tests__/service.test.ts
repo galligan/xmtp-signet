@@ -271,26 +271,57 @@ describe("VerifierService", () => {
   });
 
   describe("selfSeal", () => {
-    test("returns verifier capabilities", () => {
+    test("returns signed verifier capabilities", async () => {
       const service = createTestService();
-      const selfSeal = service.selfSeal();
+      const result = await service.selfSeal();
 
-      expect(selfSeal.verifierInboxId).toBe("verifier-inbox-001");
-      expect(selfSeal.capabilities.supportedTiers).toEqual(["unverified"]);
-      expect(selfSeal.capabilities.supportedChecks).toContain(
-        "source_available",
-      );
-      expect(selfSeal.capabilities.maxRequestsPerHour).toBe(10);
-      expect(selfSeal.sourceRepoUrl).toBe(
-        "https://github.com/xmtp/xmtp-verifier",
-      );
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        const selfSeal = result.value;
+        expect(selfSeal.verifierInboxId).toBe("verifier-inbox-001");
+        expect(selfSeal.capabilities.supportedTiers).toEqual([
+          "source-verified",
+        ]);
+        expect(selfSeal.capabilities.supportedChecks).toContain(
+          "source_available",
+        );
+        expect(selfSeal.capabilities.maxRequestsPerHour).toBe(10);
+        expect(selfSeal.sourceRepoUrl).toBe(
+          "https://github.com/xmtp/xmtp-verifier",
+        );
+        expect(selfSeal.signature).toBe("bW9jay1zaWduYXR1cmU=");
+      }
     });
 
-    test("returns cached instance on subsequent calls", () => {
+    test("returns cached promise on subsequent calls", async () => {
       const service = createTestService();
       const a1 = service.selfSeal();
       const a2 = service.selfSeal();
-      expect(a1).toBe(a2); // same reference
+      expect(a1).toBe(a2);
+
+      const r1 = await a1;
+      const r2 = await a2;
+      expect(r1).toEqual(r2);
+    });
+
+    test("does not cache a failed self-seal forever", async () => {
+      let shouldFail = true;
+      const service = createVerifierService({
+        config: createTestConfig(),
+        sign: async () => {
+          if (shouldFail) {
+            throw new Error("transient signer failure");
+          }
+          return "bW9jay1zaWduYXR1cmU=";
+        },
+      });
+
+      const failed = await service.selfSeal();
+      expect(failed.isErr()).toBe(true);
+
+      shouldFail = false;
+      const retried = await service.selfSeal();
+      expect(retried.isOk()).toBe(true);
     });
   });
 });
