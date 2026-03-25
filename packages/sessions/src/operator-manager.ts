@@ -8,6 +8,7 @@
 
 import { Result } from "better-result";
 import type {
+  CredentialRevocationReason,
   OperatorConfigType,
   OperatorRecordType,
   SignetError,
@@ -25,6 +26,18 @@ import type { OperatorManager } from "@xmtp/signet-contracts";
 export interface OperatorManagerInternal {
   /** Get count of operators (including removed). */
   readonly size: number;
+}
+
+/** Optional lifecycle hooks used by higher-level compositions. */
+export interface OperatorManagerOptions {
+  /**
+   * Revoke active credentials before an operator is removed.
+   * When provided, a failing revocation aborts removal.
+   */
+  readonly revokeCredentials?: (
+    operatorId: string,
+    reason: CredentialRevocationReason,
+  ) => Result<void, SignetError> | Promise<Result<void, SignetError>>;
 }
 
 /**
@@ -52,9 +65,11 @@ function cloneRecord(record: OperatorRecordType): OperatorRecordType {
  *
  * @returns Combined OperatorManager and OperatorManagerInternal
  */
-export function createOperatorManager(): OperatorManager &
-  OperatorManagerInternal {
+export function createOperatorManager(
+  options?: OperatorManagerOptions,
+): OperatorManager & OperatorManagerInternal {
   const store = new Map<string, OperatorRecordType>();
+  const revokeCredentials = options?.revokeCredentials;
 
   return {
     get size(): number {
@@ -158,6 +173,16 @@ export function createOperatorManager(): OperatorManager &
       const existing = store.get(operatorId);
       if (existing === undefined) {
         return Result.err(NotFoundError.create("operator", operatorId));
+      }
+
+      if (revokeCredentials) {
+        const revokeResult = await revokeCredentials(
+          operatorId,
+          "admin-removed",
+        );
+        if (!revokeResult.isOk()) {
+          return revokeResult;
+        }
       }
 
       const removed: OperatorRecordType = {

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test, beforeEach } from "bun:test";
 import type { OperatorConfigType } from "@xmtp/signet-schemas";
 import {
@@ -222,11 +223,67 @@ describe("createOperatorManager", () => {
       if (!result.isErr()) return;
       expect(result.error).toBeInstanceOf(NotFoundError);
     });
+
+    test("revokes associated credentials before removing operator", async () => {
+      const revokeCalls: Array<{ operatorId: string; reason: string }> = [];
+      const managerWithRevoker = createOperatorManager({
+        revokeCredentials: async (operatorId, reason) => {
+          revokeCalls.push({ operatorId, reason });
+          return Result.ok(undefined);
+        },
+      });
+
+      const createResult = await managerWithRevoker.create(makeConfig());
+      expect(createResult.isOk()).toBe(true);
+      if (!createResult.isOk()) return;
+
+      const removeResult = await managerWithRevoker.remove(
+        createResult.value.id,
+      );
+      expect(removeResult.isOk()).toBe(true);
+      expect(revokeCalls).toEqual([
+        {
+          operatorId: createResult.value.id,
+          reason: "admin-removed",
+        },
+      ]);
+    });
+
+    test("does not remove operator when credential revocation fails", async () => {
+      const managerWithRevoker = createOperatorManager({
+        revokeCredentials: async (operatorId) =>
+          Result.err(
+            PermissionError.create("revocation failed", {
+              operatorId,
+            }),
+          ),
+      });
+
+      const createResult = await managerWithRevoker.create(makeConfig());
+      expect(createResult.isOk()).toBe(true);
+      if (!createResult.isOk()) return;
+
+      const removeResult = await managerWithRevoker.remove(
+        createResult.value.id,
+      );
+      expect(removeResult.isErr()).toBe(true);
+      if (!removeResult.isErr()) return;
+      expect(removeResult.error).toBeInstanceOf(PermissionError);
+
+      const lookupResult = await managerWithRevoker.lookup(
+        createResult.value.id,
+      );
+      expect(lookupResult.isOk()).toBe(true);
+      if (!lookupResult.isOk()) return;
+      expect(lookupResult.value.status).toBe("active");
+    });
   });
 
   describe("list", () => {
     test("returns defensive copies", async () => {
-      const createResult = await manager.create(makeConfig({ label: "List Me" }));
+      const createResult = await manager.create(
+        makeConfig({ label: "List Me" }),
+      );
       expect(createResult.isOk()).toBe(true);
       if (!createResult.isOk()) return;
 
