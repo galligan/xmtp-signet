@@ -1,4 +1,8 @@
-import type { PermissionScopeType } from "@xmtp/signet-schemas";
+import type {
+  GrantDeniedError,
+  PermissionError,
+  PermissionScopeType,
+} from "@xmtp/signet-schemas";
 
 /** Describes a change between two scope configurations. */
 export interface PolicyDelta {
@@ -10,3 +14,6 @@ export interface PolicyDelta {
     to: "allow" | "deny";
   }>;
 }
+
+/** Error union returned by the historical grant validators on this stack cut. */
+export type GrantError = PermissionError | GrantDeniedError;

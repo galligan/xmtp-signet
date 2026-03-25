@@ -225,9 +225,9 @@ export function createWsServer(
       if (fresh.status !== "active") {
         const closeCode =
           fresh.status === "revoked"
-            ? WS_CLOSE_CODES.SESSION_REVOKED
+            ? WS_CLOSE_CODES.CREDENTIAL_REVOKED
             : fresh.status === "expired"
-              ? WS_CLOSE_CODES.SESSION_EXPIRED
+              ? WS_CLOSE_CODES.CREDENTIAL_EXPIRED
               : WS_CLOSE_CODES.POLICY_CHANGE;
         ws.close(closeCode, `Credential is ${fresh.status}`);
         stopHeartbeat(ws);
@@ -378,9 +378,9 @@ export function createWsServer(
     if (credential.status !== "active") {
       const closeCode =
         credential.status === "revoked"
-          ? WS_CLOSE_CODES.SESSION_REVOKED
+          ? WS_CLOSE_CODES.CREDENTIAL_REVOKED
           : credential.status === "expired"
-            ? WS_CLOSE_CODES.SESSION_EXPIRED
+            ? WS_CLOSE_CODES.CREDENTIAL_EXPIRED
             : WS_CLOSE_CODES.POLICY_CHANGE;
       ws.close(closeCode, `Credential is ${credential.status}`);
       stopHeartbeat(ws);
@@ -579,9 +579,9 @@ export function createWsServer(
           if (fresh.status !== "active") {
             const closeCode =
               fresh.status === "revoked"
-                ? WS_CLOSE_CODES.SESSION_REVOKED
+                ? WS_CLOSE_CODES.CREDENTIAL_REVOKED
                 : fresh.status === "expired"
-                  ? WS_CLOSE_CODES.SESSION_EXPIRED
+                  ? WS_CLOSE_CODES.CREDENTIAL_EXPIRED
                   : WS_CLOSE_CODES.POLICY_CHANGE;
             ws.close(closeCode, `Credential is ${fresh.status}`);
             stopHeartbeat(ws);
