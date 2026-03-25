@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { validateGroupManagement } from "../grant/validate-group-management.js";
+import { validateGroupManagement } from "../permissions/validate-group-management.js";
 import { Result } from "better-result";
 import {
   createFullScopes,

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { validateSendReaction } from "../grant/validate-reaction.js";
+import { validateSendReaction } from "../permissions/validate-reaction.js";
 import { Result } from "better-result";
 import {
   createFullScopes,

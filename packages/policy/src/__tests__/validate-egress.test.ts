@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { validateEgress } from "../grant/validate-egress.js";
+import { validateEgress } from "../permissions/validate-egress.js";
 import { Result } from "better-result";
 import { createFullScopes, createEmptyScopes } from "./fixtures.js";
 

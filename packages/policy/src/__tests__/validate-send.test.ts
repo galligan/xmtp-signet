@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import {
   validateSendMessage,
   validateSendReply,
-} from "../grant/validate-send.js";
+} from "../permissions/validate-send.js";
 import { Result } from "better-result";
 import {
   createFullScopes,
