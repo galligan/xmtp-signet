@@ -13,7 +13,14 @@ import {
  * so they can be referenced by sessions and grants without repeating
  * individual scopes.
  */
-export const PolicyConfig = z
+export type PolicyConfigType = {
+  label: string;
+  allow: PermissionScopeType[];
+  deny: PermissionScopeType[];
+};
+
+/** Zod schema for a reusable permission policy configuration. */
+export const PolicyConfig: z.ZodType<PolicyConfigType> = z
   .object({
     /** Human-readable name for this policy. */
     label: z.string().min(1),
@@ -24,13 +31,18 @@ export const PolicyConfig = z
   })
   .describe("Reusable permission policy configuration");
 
-/** Inferred type for {@link PolicyConfig}. */
-export type PolicyConfigType = z.infer<typeof PolicyConfig>;
-
 /**
  * Persisted policy record with identity and timestamps.
  */
-export const PolicyRecord = z
+export type PolicyRecordType = {
+  id: string;
+  config: PolicyConfigType;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Zod schema for a persisted policy record. */
+export const PolicyRecord: z.ZodType<PolicyRecordType> = z
   .object({
     /** Unique policy identifier (`policy_` prefix). */
     id: PolicyId,
@@ -42,9 +54,6 @@ export const PolicyRecord = z
     updatedAt: z.string().datetime(),
   })
   .describe("Persisted policy record");
-
-/** Inferred type for {@link PolicyRecord}. */
-export type PolicyRecordType = z.infer<typeof PolicyRecord>;
 
 /**
  * Merges a policy's scopes with optional inline overrides into a
