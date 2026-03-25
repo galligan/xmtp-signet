@@ -1,7 +1,7 @@
 /**
  * Key hierarchy integration tests.
  *
- * Validates the three-tier key hierarchy: root -> operational -> session.
+ * Validates the three-tier key hierarchy: root -> operational -> credential.
  * Platform-aware: uses Secure Enclave on macOS with signer, otherwise software-vault.
  */
 
@@ -160,6 +160,7 @@ describe("key-hierarchy", () => {
     const km = await setup();
     await km.initialize();
 
+<<<<<<< HEAD
     const keyResult = await km.issueCredentialKey("cred-1", 300);
     expect(keyResult.isOk()).toBe(true);
     if (!keyResult.isOk()) return;
@@ -169,6 +170,19 @@ describe("key-hierarchy", () => {
     expect(credentialKey.fingerprint).toBeTruthy();
 
     // Sign with credential key
+=======
+    const credentialKeyResult = await km.issueCredentialKey(
+      "cred_1a2b3c4dfeedbabe",
+      300,
+    );
+    expect(credentialKeyResult.isOk()).toBe(true);
+    if (!credentialKeyResult.isOk()) return;
+
+    const credentialKey = credentialKeyResult.value;
+    expect(credentialKey.credentialId).toBe("cred_1a2b3c4dfeedbabe");
+    expect(credentialKey.fingerprint).toBeTruthy();
+
+>>>>>>> 86b48365 (fix(integration): update key hierarchy naming for credentials)
     const sigResult = await km.signWithCredentialKey(
       credentialKey.keyId,
       new TextEncoder().encode("credential data"),
