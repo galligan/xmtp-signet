@@ -250,14 +250,15 @@ async function registerXmtpIdentity(opts: {
   // Dynamic imports — keeps @xmtp/node-sdk out of the critical path
   const { registerIdentity, SqliteIdentityStore, createSdkClientFactory } =
     await import("@xmtp/signet-core");
-  const { createSignerProvider } = await import("@xmtp/signet-keys");
+  const { createSignerProvider: createSignerProviderFn } =
+    await import("@xmtp/signet-keys");
 
   const identityStore = new SqliteIdentityStore(
     `${paths.dataDir}/identities.db`,
   );
   const clientFactory = createSdkClientFactory();
   const signerProviderFactory = (identityId: string) =>
-    createSignerProvider(km, identityId);
+    createSignerProviderFn(km, identityId);
 
   const regResult = await registerIdentity(
     {

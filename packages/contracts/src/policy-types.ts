@@ -1,8 +1,4 @@
-import type {
-  GrantDeniedError,
-  PermissionError,
-  PermissionScopeType,
-} from "@xmtp/signet-schemas";
+import type { PermissionScopeType } from "@xmtp/signet-schemas";
 
 /** A scope moved between allow and deny within a scope-set diff. */
 export interface ScopePolicyChange {
@@ -17,6 +13,3 @@ export interface PolicyDelta {
   readonly removed: readonly PermissionScopeType[];
   readonly changed: ReadonlyArray<ScopePolicyChange>;
 }
-
-/** Error union returned by the historical grant validators on this stack cut. */
-export type GrantError = PermissionError | GrantDeniedError;

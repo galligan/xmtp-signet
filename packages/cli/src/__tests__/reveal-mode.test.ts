@@ -81,8 +81,8 @@ describe("reveal mode integration", () => {
 
   test("credential with read-messages passes revealed messages", () => {
     const store = createRevealStateStore();
-    // Grant a reveal for the sender
-    store.grant(
+    // Record reveal access for the sender
+    store.record(
       {
         revealId: "rev_1",
         grantedAt: "2024-01-01T00:00:00Z",
@@ -126,10 +126,10 @@ describe("reveal mode integration", () => {
     expect(result).not.toBeNull();
   });
 
-  test("reveal grant/revoke cycle: grant passes, new store drops", () => {
-    // Phase 1: grant a reveal -> message passes
+  test("reveal access cycle: record passes, new store drops", () => {
+    // Phase 1: record reveal access -> message passes
     const store1 = createRevealStateStore();
-    store1.grant(
+    store1.record(
       {
         revealId: "rev_2",
         grantedAt: "2024-01-01T00:00:00Z",

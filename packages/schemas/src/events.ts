@@ -52,7 +52,7 @@ const _MessageEvent = z
         "Thread anchor ID -- derived from Reply referenceId. Null for non-reply messages",
       ),
   })
-  .describe("A message projected to the agent according to its view");
+  .describe("A message projected to the agent according to credential scope");
 
 /** Zod schema for `message.visible` events. */
 export const MessageEvent: z.ZodType<MessageEvent> = _MessageEvent;
@@ -167,7 +167,7 @@ const _RevealEvent = z
     groupId: z.string().describe("Group the message belongs to"),
     contentType: ContentTypeId.describe("Content type of the revealed message"),
     content: z.unknown().describe("Decoded message payload"),
-    revealId: z.string().describe("Reveal grant that authorized this"),
+    revealId: z.string().describe("Reveal access record that authorized this"),
   })
   .describe("Previously hidden content revealed to the agent");
 
@@ -255,7 +255,7 @@ const _SignetRecoveryEvent = z
 export const SignetRecoveryEvent: z.ZodType<SignetRecoveryEvent> =
   _SignetRecoveryEvent;
 
-/** Union of all events the signet can emit to a harness session. */
+/** Union of all events the signet can emit to a harness credential. */
 export type SignetEvent =
   | MessageEvent
   | SealStampedEvent

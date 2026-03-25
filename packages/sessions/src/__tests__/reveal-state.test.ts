@@ -25,7 +25,7 @@ describe("getRevealState", () => {
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
     expect(result.value).toBeDefined();
-    expect(typeof result.value.grant).toBe("function");
+    expect(typeof result.value.record).toBe("function");
     expect(typeof result.value.snapshot).toBe("function");
     expect(typeof result.value.isRevealed).toBe("function");
   });
@@ -84,7 +84,7 @@ describe("getRevealState", () => {
     expect(storeResult.isOk()).toBe(true);
     if (!storeResult.isOk()) return;
 
-    storeResult.value.grant(
+    storeResult.value.record(
       {
         revealId: "r1",
         grantedAt: new Date().toISOString(),

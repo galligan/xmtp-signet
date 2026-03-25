@@ -30,20 +30,14 @@ afterEach(async () => {
   );
 });
 
-function randomPort(): number {
-  return 35000 + Math.floor(Math.random() * 10000);
-}
-
 async function makeWorkspace(): Promise<{
   dir: string;
   configPath: string;
-  wsPort: number;
   adminSocket: string;
 }> {
   const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-smoke-"));
   tempDirs.push(dir);
 
-  const wsPort = randomPort();
   const dataDir = join(dir, "data");
   const adminSocket = join(dir, "admin.sock");
   const auditLog = join(dir, "audit.jsonl");
@@ -62,7 +56,7 @@ async function makeWorkspace(): Promise<{
       "",
       "[ws]",
       `host = "127.0.0.1"`,
-      `port = ${wsPort}`,
+      `port = 0`,
       "",
       "[admin]",
       `socketPath = "${adminSocket}"`,
@@ -73,7 +67,7 @@ async function makeWorkspace(): Promise<{
     ].join("\n"),
   );
 
-  return { dir, configPath, wsPort, adminSocket };
+  return { dir, configPath, adminSocket };
 }
 
 async function runCli(
@@ -122,22 +116,28 @@ async function waitForHealthyStart(
   process: Bun.Subprocess,
   adminSocket: string,
 ): Promise<void> {
-  await waitFor(async () => existsSync(adminSocket));
+  await waitFor(async () => {
+    if (existsSync(adminSocket)) {
+      return true;
+    }
 
-  const state = await Promise.race([
-    process.exited.then((exitCode) => ({ exited: true as const, exitCode })),
-    Bun.sleep(250).then(() => ({ exited: false as const, exitCode: null })),
-  ]);
-
-  if (state.exited) {
-    const [stdout, stderr] = await Promise.all([
-      new Response(process.stdout).text(),
-      new Response(process.stderr).text(),
+    const state = await Promise.race([
+      process.exited.then((exitCode) => ({ exited: true as const, exitCode })),
+      Bun.sleep(50).then(() => ({ exited: false as const, exitCode: null })),
     ]);
-    throw new Error(
-      `Daemon exited early (${state.exitCode})\nstdout:\n${stdout}\nstderr:\n${stderr}`,
-    );
-  }
+
+    if (state.exited) {
+      const [stdout, stderr] = await Promise.all([
+        new Response(process.stdout).text(),
+        new Response(process.stderr).text(),
+      ]);
+      throw new Error(
+        `Daemon exited early (${state.exitCode})\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+      );
+    }
+
+    return false;
+  });
 }
 
 async function waitForOpen(ws: WebSocket, timeoutMs = 5000): Promise<void> {
@@ -178,6 +178,7 @@ describe("Phase 2B smoke tests", () => {
   test("start boots from an empty directory without creating admin credentials", async () => {
     const workspace = await makeWorkspace();
     const daemon = startDaemon([
+      "daemon",
       "start",
       "--config",
       workspace.configPath,
@@ -186,16 +187,16 @@ describe("Phase 2B smoke tests", () => {
 
     await waitForHealthyStart(daemon, workspace.adminSocket);
 
-    const tokenResult = await runCli([
-      "admin",
-      "token",
+    const statusResult = await runCli([
+      "status",
       "--config",
       workspace.configPath,
       "--json",
     ]);
 
-    expect(tokenResult.exitCode).not.toBe(0);
-    expect(tokenResult.stderr).toContain("No admin key found");
+    expect(statusResult.exitCode).not.toBe(0);
+    expect(statusResult.stderr).toContain("No admin key found");
+    expect(statusResult.stderr).toContain("xs init");
 
     daemon.kill("SIGTERM");
     expect(await daemon.exited).toBe(0);
@@ -208,7 +209,6 @@ describe("Phase 2B smoke tests", () => {
     const operatorId = "op_deadbeeffeedbabe";
 
     const initResult = await runCli([
-      "identity",
       "init",
       "--config",
       workspace.configPath,
@@ -217,6 +217,7 @@ describe("Phase 2B smoke tests", () => {
     expect(initResult.exitCode).toBe(0);
 
     const daemon = startDaemon([
+      "daemon",
       "start",
       "--config",
       workspace.configPath,
@@ -231,12 +232,17 @@ describe("Phase 2B smoke tests", () => {
       "--json",
     ]);
     expect(statusResult.exitCode).toBe(0);
-    expect(JSON.parse(statusResult.stdout)).toMatchObject({
+    const status = JSON.parse(statusResult.stdout) as {
+      state: string;
+      wsPort: number;
+    };
+    expect(status).toMatchObject({
       state: "running",
     });
+    expect(status.wsPort).toBeGreaterThan(0);
 
     const issueResult = await runCli([
-      "session",
+      "cred",
       "issue",
       "--config",
       workspace.configPath,
@@ -256,7 +262,7 @@ describe("Phase 2B smoke tests", () => {
     };
     expect(issuedCredential.token).toBeTruthy();
 
-    const ws = new WebSocket(`ws://127.0.0.1:${workspace.wsPort}/v1/agent`);
+    const ws = new WebSocket(`ws://127.0.0.1:${status.wsPort}/v1/agent`);
     await waitForOpen(ws);
     ws.send(
       JSON.stringify({
@@ -334,6 +340,7 @@ describe("Phase 2B smoke tests", () => {
     ws.close();
 
     const stopResult = await runCli([
+      "daemon",
       "stop",
       "--config",
       workspace.configPath,

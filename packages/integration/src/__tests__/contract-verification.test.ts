@@ -19,7 +19,6 @@ import {
   AuthError,
   CancelledError,
   CredentialExpiredError,
-  GrantDeniedError,
   InternalError,
   NotFoundError,
   PermissionError,
@@ -125,13 +124,6 @@ describe("contract-verification", () => {
     expect(err.context).toEqual(
       expect.objectContaining({ field: "test", reason: "reason" }),
     );
-  });
-
-  test("GrantDeniedError contains operation and grantType context", () => {
-    const err = GrantDeniedError.create("send_message", "messaging.send");
-    expect(err.context.operation).toBe("send_message");
-    expect(err.context.grantType).toBe("messaging.send");
-    expect(err.message).toContain("send_message");
   });
 
   test("CredentialExpiredError contains credentialId context", () => {

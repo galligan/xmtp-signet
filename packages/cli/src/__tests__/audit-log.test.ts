@@ -54,7 +54,7 @@ describe("AuditLog", () => {
     const log = createAuditLog(logPath);
 
     await log.append(makeEntry({ action: "credential.issue" }));
-    await log.append(makeEntry({ action: "session.revoke" }));
+    await log.append(makeEntry({ action: "credential.revoke" }));
     await log.append(makeEntry({ action: "key.rotate" }));
 
     const content = await readFile(logPath, "utf-8");
@@ -94,8 +94,8 @@ describe("AuditLog", () => {
   test("append includes optional target and detail fields", async () => {
     const log = createAuditLog(logPath);
     const entry = makeEntry({
-      action: "grant.revoke",
-      target: "grant-abc-123",
+      action: "credential.revoke",
+      target: "cred_abc12345feedbabe",
       detail: { reason: "policy-change" },
     });
 
@@ -103,7 +103,7 @@ describe("AuditLog", () => {
 
     const content = await readFile(logPath, "utf-8");
     const parsed = JSON.parse(content.trim()) as AuditEntry;
-    expect(parsed.target).toBe("grant-abc-123");
+    expect(parsed.target).toBe("cred_abc12345feedbabe");
     expect(parsed.detail).toEqual({ reason: "policy-change" });
   });
 

@@ -42,38 +42,38 @@ export const RevealRequest: z.ZodType<RevealRequest> = z
   })
   .describe("Request to reveal content to an agent");
 
-/** Reveal grant that makes previously hidden content visible. */
-export type RevealGrant = {
+/** Reveal access that makes previously hidden content visible. */
+export type RevealAccess = {
   revealId: string;
   grantedAt: string;
   grantedBy: string;
   expiresAt: string | null;
 };
 
-/** Zod schema for a granted reveal. */
-export const RevealGrant: z.ZodType<RevealGrant> = z
+/** Zod schema for active reveal access. */
+export const RevealAccess: z.ZodType<RevealAccess> = z
   .object({
     revealId: z.string().describe("Matches the RevealRequest.revealId"),
-    grantedAt: z.string().datetime().describe("When the reveal was granted"),
-    grantedBy: z.string().describe("Inbox ID of the granting member"),
+    grantedAt: z.string().datetime().describe("When reveal access was granted"),
+    grantedBy: z.string().describe("Inbox ID of the approving member"),
     expiresAt: z
       .string()
       .datetime()
       .nullable()
-      .describe("When this grant expires, null for permanent"),
+      .describe("When this reveal access expires, null for permanent"),
   })
-  .describe("Granted reveal making content visible to the agent");
+  .describe("Active reveal access making content visible to the agent");
 
-/** Aggregate reveal state tracked for a session. */
+/** Aggregate reveal state tracked for a credential. */
 export type RevealState = {
-  activeReveals: RevealGrant[];
+  activeReveals: RevealAccess[];
 };
 
-/** Zod schema for aggregate reveal state tracked in a session. */
+/** Zod schema for aggregate reveal state tracked in a credential. */
 export const RevealState: z.ZodType<RevealState> = z
   .object({
     activeReveals: z
-      .array(RevealGrant)
-      .describe("Currently active reveal grants"),
+      .array(RevealAccess)
+      .describe("Currently active reveal access records"),
   })
-  .describe("Aggregate reveal state for a session");
+  .describe("Aggregate reveal state for a credential");

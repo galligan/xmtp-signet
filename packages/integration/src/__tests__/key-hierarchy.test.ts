@@ -1,7 +1,7 @@
 /**
  * Key hierarchy integration tests.
  *
- * Validates the three-tier key hierarchy: root -> operational -> session.
+ * Validates the three-tier key hierarchy: root -> operational -> credential.
  * Platform-aware: uses Secure Enclave on macOS with signer, otherwise software-vault.
  */
 
@@ -129,7 +129,7 @@ describe("key-hierarchy", () => {
     expect(sig1Hex).not.toBe(sig2Hex);
   });
 
-  test("signerProvider and sealSigner use operational key", async () => {
+  test("signerProvider uses the operational key", async () => {
     const km = await setup();
     await km.initialize();
     await km.createOperationalKey("provider-id", null);
@@ -156,30 +156,29 @@ describe("key-hierarchy", () => {
     expect(dbKeyResult.value.byteLength).toBe(32);
   });
 
-  test("credential key -- issue, sign, revoke", async () => {
+  test("credential key issues, signs, and revoke invalidates it", async () => {
     const km = await setup();
     await km.initialize();
 
-    const keyResult = await km.issueCredentialKey("cred-1", 300);
-    expect(keyResult.isOk()).toBe(true);
-    if (!keyResult.isOk()) return;
+    const credentialKeyResult = await km.issueCredentialKey(
+      "cred_1a2b3c4dfeedbabe",
+      300,
+    );
+    expect(credentialKeyResult.isOk()).toBe(true);
+    if (!credentialKeyResult.isOk()) return;
 
-    const credentialKey = keyResult.value;
-    expect(credentialKey.credentialId).toBe("cred-1");
+    const credentialKey = credentialKeyResult.value;
+    expect(credentialKey.credentialId).toBe("cred_1a2b3c4dfeedbabe");
     expect(credentialKey.fingerprint).toBeTruthy();
-
-    // Sign with credential key
     const sigResult = await km.signWithCredentialKey(
       credentialKey.keyId,
       new TextEncoder().encode("credential data"),
     );
     expect(sigResult.isOk()).toBe(true);
 
-    // Revoke
     const revokeResult = km.revokeCredentialKey(credentialKey.keyId);
     expect(revokeResult.isOk()).toBe(true);
 
-    // Sign after revoke fails
     const failResult = await km.signWithCredentialKey(
       credentialKey.keyId,
       new TextEncoder().encode("after revoke"),

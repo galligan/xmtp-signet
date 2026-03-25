@@ -819,8 +819,8 @@ describe("createWsRequestHandler", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      const grant = result.value as { revealId: string };
-      expect(grant.revealId).toBe("rev_1");
+      const access = result.value as { revealId: string };
+      expect(access.revealId).toBe("rev_1");
     }
 
     // Both messages should be revealed via broadcast

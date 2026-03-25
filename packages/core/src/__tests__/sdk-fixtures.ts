@@ -8,26 +8,12 @@ import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { SignerProviderLike } from "../xmtp-client-factory.js";
 import type {
-  SdkIdentifierShape,
   SdkGroupMemberShape,
-  SdkContentTypeIdShape,
   SdkDecodedMessageShape,
   SdkAsyncStreamProxyShape,
   SdkGroupShape,
-  SdkConversationsShape,
   SdkClientShape,
 } from "../sdk/sdk-types.js";
-
-// Re-export structural types under their legacy "Mock" names for backward
-// compatibility with tests that import from this file.
-export type MockIdentifier = SdkIdentifierShape;
-export type MockGroupMember = SdkGroupMemberShape;
-export type MockContentTypeId = SdkContentTypeIdShape;
-export type MockDecodedMessage = SdkDecodedMessageShape;
-export type MockAsyncStreamProxy<T> = SdkAsyncStreamProxyShape<T>;
-export type MockGroup = SdkGroupShape;
-export type MockConversations = SdkConversationsShape;
-export type MockSdkClient = SdkClientShape;
 
 // ---- Factory functions ----
 

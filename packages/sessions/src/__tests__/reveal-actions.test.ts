@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { RevealGrant } from "@xmtp/signet-schemas";
+import type { RevealAccess } from "@xmtp/signet-schemas";
 import type { CredentialManager } from "@xmtp/signet-contracts";
 import { createCredentialManager } from "../credential-manager.js";
 import { createCredentialService } from "../service.js";
@@ -59,12 +59,12 @@ describe("reveal.request action", () => {
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
 
-    const grant = result.value as RevealGrant;
-    expect(grant.revealId).toBeDefined();
-    expect(typeof grant.revealId).toBe("string");
-    expect(grant.grantedAt).toBeDefined();
-    expect(grant.grantedBy).toBe("member-1");
-    expect(grant.expiresAt).toBeNull();
+    const access = result.value as RevealAccess;
+    expect(access.revealId).toBeDefined();
+    expect(typeof access.revealId).toBe("string");
+    expect(access.grantedAt).toBeDefined();
+    expect(access.grantedBy).toBe("member-1");
+    expect(access.expiresAt).toBeNull();
   });
 
   test("rejects a chat not in credential chatIds", async () => {
@@ -113,7 +113,7 @@ describe("reveal.request action", () => {
 
     const snapshot = storeResult.value.snapshot();
     expect(snapshot.activeReveals).toHaveLength(1);
-    expect(snapshot.activeReveals[0]?.grant.grantedBy).toBe("member-1");
+    expect(snapshot.activeReveals[0]?.access.grantedBy).toBe("member-1");
     expect(snapshot.activeReveals[0]?.request.groupId).toBe("conv_group1");
   });
 
@@ -184,7 +184,7 @@ describe("reveal.list action", () => {
     expect(snapshot.activeReveals).toHaveLength(0);
   });
 
-  test("returns reveals after granting", async () => {
+  test("returns reveals after recording access", async () => {
     const actions = createRevealActions(deps);
     const requestAction = actions.find((a) => a.id === "reveal.request");
     const listAction = actions.find((a) => a.id === "reveal.list");

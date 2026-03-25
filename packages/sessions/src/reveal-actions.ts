@@ -8,7 +8,7 @@ import type { ActionSpec } from "@xmtp/signet-contracts";
 import type { CredentialManager } from "@xmtp/signet-contracts";
 import type {
   SignetError,
-  RevealGrant,
+  RevealAccess,
   RevealScope as RevealScopeType,
 } from "@xmtp/signet-schemas";
 import { RevealScope, PermissionError } from "@xmtp/signet-schemas";
@@ -71,7 +71,7 @@ function resolveCredentialTarget(
 export function createRevealActions(
   deps: RevealActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {
-  const request: ActionSpec<RevealRequestInput, RevealGrant, SignetError> = {
+  const request: ActionSpec<RevealRequestInput, RevealAccess, SignetError> = {
     id: "reveal.request",
     input: RevealRequestInput,
     handler: async (input, ctx) => {
@@ -132,7 +132,7 @@ export function createRevealActions(
       const revealId = crypto.randomUUID();
       const grantedAt = new Date().toISOString();
 
-      const grant: RevealGrant = {
+      const access: RevealAccess = {
         revealId,
         grantedAt,
         grantedBy: input.requestedBy,
@@ -148,9 +148,9 @@ export function createRevealActions(
         expiresAt: input.expiresAt,
       };
 
-      store.grant(grant, revealRequest);
+      store.record(access, revealRequest);
 
-      return Result.ok(grant);
+      return Result.ok(access);
     },
     cli: {
       command: "reveal:request",

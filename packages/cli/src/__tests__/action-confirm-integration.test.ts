@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import type { CredentialRecord } from "@xmtp/signet-contracts";
-import type { HarnessRequest, SignetEvent } from "@xmtp/signet-schemas";
+import type { HarnessRequest } from "@xmtp/signet-schemas";
 import { createWsRequestHandler } from "../ws/request-handler.js";
 import { createPendingActionStore } from "@xmtp/signet-sessions";
 

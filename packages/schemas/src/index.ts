@@ -54,34 +54,6 @@ export {
   isScopeInCategory,
 } from "./permission-scopes.js";
 
-// View
-export {
-  ViewMode,
-  type ViewMode as ViewModeType,
-  ContentTypeAllowlist,
-  type ContentTypeAllowlist as ContentTypeAllowlistType,
-  ThreadScope,
-  type ThreadScope as ThreadScopeType,
-  ViewConfig,
-  type ViewConfig as ViewConfigType,
-} from "./view.js";
-
-// Grant
-export {
-  MessagingGrant,
-  type MessagingGrant as MessagingGrantType,
-  GroupManagementGrant,
-  type GroupManagementGrant as GroupManagementGrantType,
-  ToolScope,
-  type ToolScope as ToolScopeType,
-  ToolGrant,
-  type ToolGrant as ToolGrantType,
-  EgressGrant,
-  type EgressGrant as EgressGrantType,
-  GrantConfig,
-  type GrantConfig as GrantConfigType,
-} from "./grant.js";
-
 // Operators
 export {
   OperatorRole,
@@ -123,14 +95,6 @@ export {
   type SealEnvelopeType,
 } from "./seal.js";
 
-// Session
-export {
-  SessionConfig,
-  SessionToken,
-  IssuedSession,
-  SessionState,
-} from "./session.js";
-
 // ID Mapping
 export {
   IdMappingResourceType,
@@ -160,7 +124,7 @@ export {
 export {
   RevealScope,
   RevealRequest,
-  RevealGrant,
+  RevealAccess,
   RevealState,
 } from "./reveal.js";
 
@@ -230,7 +194,6 @@ export {
   SealError,
   NotFoundError,
   PermissionError,
-  GrantDeniedError,
   AuthError,
   CredentialExpiredError,
   InternalError,

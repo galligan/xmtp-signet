@@ -53,7 +53,7 @@ function makeMessageEvent(overrides: Partial<MessageEvent> = {}): MessageEvent {
 
 function makeRevealStore(revealed: boolean): RevealStateStore {
   return {
-    grant: () => {},
+    record: () => {},
     isRevealed: () => revealed,
     expireStale: () => 0,
     snapshot: () => ({ activeReveals: [] }),
