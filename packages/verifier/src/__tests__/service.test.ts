@@ -303,6 +303,26 @@ describe("VerifierService", () => {
       const r2 = await a2;
       expect(r1).toEqual(r2);
     });
+
+    test("does not cache a failed self-seal forever", async () => {
+      let shouldFail = true;
+      const service = createVerifierService({
+        config: createTestConfig(),
+        sign: async () => {
+          if (shouldFail) {
+            throw new Error("transient signer failure");
+          }
+          return "bW9jay1zaWduYXR1cmU=";
+        },
+      });
+
+      const failed = await service.selfSeal();
+      expect(failed.isErr()).toBe(true);
+
+      shouldFail = false;
+      const retried = await service.selfSeal();
+      expect(retried.isOk()).toBe(true);
+    });
   });
 });
 

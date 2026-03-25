@@ -220,7 +220,8 @@ export function createVerifierService(
         return result;
       });
 
-      return cachedSelfSeal;
+      cachedSelfSeal = inFlight;
+      return inFlight;
     },
   };
 }
