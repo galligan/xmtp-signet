@@ -102,10 +102,9 @@ export type CliConfig = {
   };
   http: HttpServerConfig;
   admin: AdminServerConfig;
-  sessions: {
+  credentials: {
     defaultTtlSeconds: number;
-    maxConcurrentPerAgent: number;
-    heartbeatIntervalSeconds: number;
+    maxConcurrentPerOperator: number;
     actionExpirySeconds: number;
   };
   logging: {
@@ -131,11 +130,10 @@ type CliConfigInput = {
     | undefined;
   http?: HttpServerConfigInput;
   admin?: AdminServerConfigInput;
-  sessions?:
+  credentials?:
     | {
         defaultTtlSeconds?: number | undefined;
-        maxConcurrentPerAgent?: number | undefined;
-        heartbeatIntervalSeconds?: number | undefined;
+        maxConcurrentPerOperator?: number | undefined;
         actionExpirySeconds?: number | undefined;
       }
     | undefined;
@@ -197,26 +195,20 @@ const CliConfigBaseSchema = z
       .default({}),
     http: HttpServerConfigSchema,
     admin: AdminServerConfigSchema,
-    sessions: z
+    credentials: z
       .object({
         defaultTtlSeconds: z
           .number()
           .int()
           .positive()
           .default(3600)
-          .describe("Default session TTL in seconds"),
-        maxConcurrentPerAgent: z
+          .describe("Default credential TTL in seconds"),
+        maxConcurrentPerOperator: z
           .number()
           .int()
           .positive()
           .default(3)
-          .describe("Maximum concurrent sessions per agent"),
-        heartbeatIntervalSeconds: z
-          .number()
-          .int()
-          .positive()
-          .default(30)
-          .describe("Heartbeat interval in seconds"),
+          .describe("Maximum concurrent credentials per operator"),
         actionExpirySeconds: z
           .number()
           .int()

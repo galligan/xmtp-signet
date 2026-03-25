@@ -141,8 +141,8 @@ export async function createSignetRuntime(
 
   const credentialManager = deps.createCredentialManager(
     {
-      defaultTtlSeconds: config.sessions.defaultTtlSeconds,
-      maxConcurrentPerAgent: config.sessions.maxConcurrentPerAgent,
+      defaultTtlSeconds: config.credentials.defaultTtlSeconds,
+      maxConcurrentPerOperator: config.credentials.maxConcurrentPerOperator,
     },
     keyManager,
   );
@@ -157,7 +157,7 @@ export async function createSignetRuntime(
     {
       port: config.ws.port,
       host: config.ws.host,
-      actionExpirySeconds: config.sessions.actionExpirySeconds,
+      actionExpirySeconds: config.credentials.actionExpirySeconds,
     },
     {
       core,

@@ -54,8 +54,8 @@ describe("AdminDispatcher", () => {
     const registry = createActionRegistry();
     const spec = makeSpec("credential.list", {
       rpcMethod: "credential.list",
-      command: "session:list",
-      handler: async () => Result.ok({ sessions: [] }),
+      command: "credential:list",
+      handler: async () => Result.ok({ credentials: [] }),
     });
     registry.register(spec);
 
@@ -65,22 +65,22 @@ describe("AdminDispatcher", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.data).toEqual({ sessions: [] });
+      expect(result.data).toEqual({ credentials: [] });
     }
   });
 
   test("derives rpcMethod from command by replacing : with .", async () => {
     const registry = createActionRegistry();
-    // No explicit rpcMethod -- should derive "session.revoke" from "session:revoke"
-    const spec = makeSpec("session.revoke", {
-      command: "session:revoke",
+    // No explicit rpcMethod -- should derive "credential.revoke" from "credential:revoke"
+    const spec = makeSpec("credential.revoke", {
+      command: "credential:revoke",
       handler: async () => Result.ok({ revoked: true }),
     });
     registry.register(spec);
 
     const dispatcher = createAdminDispatcher(registry);
     const ctx = makeHandlerContext();
-    const result = await dispatcher.dispatch("session.revoke", {}, ctx);
+    const result = await dispatcher.dispatch("credential.revoke", {}, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) {

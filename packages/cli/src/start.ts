@@ -9,7 +9,12 @@ import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import { InternalError } from "@xmtp/signet-schemas";
 import type { SignetCore, CoreState } from "@xmtp/signet-contracts";
-import { createKeyManager, type KeyManager } from "@xmtp/signet-keys";
+import {
+  createKeyManager,
+  createSignerProvider,
+  createSealStamper,
+  type KeyManager,
+} from "@xmtp/signet-keys";
 import type { KeyManagerConfig } from "@xmtp/signet-keys";
 import {
   SignetCoreImpl,
@@ -19,7 +24,6 @@ import {
   type SignetState,
   type SignerProviderFactory,
 } from "@xmtp/signet-core";
-import { createSignerProvider } from "@xmtp/signet-keys";
 import {
   createCredentialManager as createCredentialManagerImpl,
   createCredentialService,
@@ -28,7 +32,6 @@ import {
 import { createSealManager as createSealManagerImpl } from "@xmtp/signet-seals";
 import { createSealPublisher } from "@xmtp/signet-seals";
 import type { InputResolver } from "@xmtp/signet-seals";
-import { createSealStamper as createKeysSealStamper } from "@xmtp/signet-keys";
 import {
   createWsServer as createWsServerImpl,
   type WsServer,
@@ -187,7 +190,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
     createCredentialManager(config: unknown, _keyManager: KeyManager) {
       const cfg = config as {
         defaultTtlSeconds: number;
-        maxConcurrentPerAgent: number;
+        maxConcurrentPerOperator: number;
       };
       const internal = createCredentialManagerImpl(
         {
@@ -296,7 +299,10 @@ export function createProductionDeps(): SignetRuntimeDeps {
           }
           const idResult = await resolveIdentityId(seal.chatId);
           if (Result.isError(idResult)) return idResult;
-          const stamper = createKeysSealStamper(keyManagerRef, idResult.value);
+          const stamper = createSealStamper(
+            keyManagerRef,
+            idResult.value,
+          );
           return stamper.sign(seal);
         },
         async signRevocation(revocation) {
@@ -309,7 +315,10 @@ export function createProductionDeps(): SignetRuntimeDeps {
           }
           const idResult = await resolveIdentityId(revocation.chatId);
           if (Result.isError(idResult)) return idResult;
-          const stamper = createKeysSealStamper(keyManagerRef, idResult.value);
+          const stamper = createSealStamper(
+            keyManagerRef,
+            idResult.value,
+          );
           return stamper.signRevocation(revocation);
         },
       };

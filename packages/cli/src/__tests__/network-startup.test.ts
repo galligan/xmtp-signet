@@ -114,7 +114,7 @@ function makeMockDeps(
             createdAt: new Date().toISOString(),
           }),
         listOperationalKeys: () => [],
-        issueSessionKey: async () =>
+        issueCredentialKey: async () =>
           Result.ok({
             keyId: "sk",
             credentialId: "cred_1a2b3c4dfeedbabe",
@@ -122,9 +122,9 @@ function makeMockDeps(
             publicKeyHex: "pub",
             expiresAt: new Date().toISOString(),
           }),
-        revokeSessionKey: () => Result.ok(undefined),
+        revokeCredentialKey: () => Result.ok(undefined),
         signWithOperationalKey: async () => Result.ok(new Uint8Array()),
-        signWithSessionKey: async () => Result.ok(new Uint8Array()),
+        signWithCredentialKey: async () => Result.ok(new Uint8Array()),
         getOrCreateDbKey: async () => Result.ok(new Uint8Array(32)),
         getOrCreateXmtpIdentityKey: async () =>
           Result.ok("0x00" as `0x${string}`),

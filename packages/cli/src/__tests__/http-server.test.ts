@@ -118,7 +118,7 @@ describe("HttpServer", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.data).toEqual({ sessions: [] });
+    expect(body.data).toEqual({ credentials: [] });
     expect(seenFingerprint).toBe("admin-fingerprint");
   });
 

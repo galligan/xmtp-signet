@@ -87,7 +87,7 @@ describe("HTTP API integration", () => {
     const dispatcher = makeDispatcher({
       dispatch: async () => ({
         ok: true as const,
-        data: { activeSessions: 3 },
+        data: { activeCredentials: 3 },
         meta: {
           requestId: "req-admin",
           timestamp: new Date().toISOString(),
@@ -112,7 +112,7 @@ describe("HTTP API integration", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.data).toEqual({ activeSessions: 3 });
+    expect(body.data).toEqual({ activeCredentials: 3 });
   });
 
   test("unauthenticated admin request returns 401", async () => {
