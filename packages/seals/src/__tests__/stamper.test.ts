@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { Result } from "better-result";
-import type { Seal, RevocationSeal } from "@xmtp/signet-schemas";
+import type { SealPayloadType, RevocationSeal } from "@xmtp/signet-schemas";
 import { createSealStamper, type SigningKeyHandle } from "../stamper.js";
 
 /** Deterministic Ed25519-like test signer backed by Web Crypto. */
@@ -16,7 +16,7 @@ async function createTestKeyHandle(): Promise<SigningKeyHandle> {
     .join("");
 
   return {
-    fingerprint: () => hex.slice(0, 16),
+    fingerprint: () => `key_${hex.slice(0, 8)}`,
     async sign(data: Uint8Array): Promise<Uint8Array> {
       const sig = await crypto.subtle.sign(
         { name: "Ed25519" },
@@ -28,48 +28,26 @@ async function createTestKeyHandle(): Promise<SigningKeyHandle> {
   };
 }
 
-function makeSeal(overrides?: Partial<Seal>): Seal {
+function makePayload(overrides?: Partial<SealPayloadType>): SealPayloadType {
   return {
-    sealId: "seal-1",
-    previousSealId: null,
-    agentInboxId: "agent-inbox-1",
-    ownerInboxId: "owner-inbox-1",
-    groupId: "group-1",
-    threadScope: null,
-    viewMode: "full",
-    contentTypes: ["xmtp.org/text:1.0"],
-    grantedOps: ["send", "reply"],
-    toolScopes: [],
-    inferenceMode: "local",
-    inferenceProviders: [],
-    contentEgressScope: "none",
-    retentionAtProvider: "none",
-    hostingMode: "local",
-    trustTier: "unverified",
-    buildProvenanceRef: null,
-    verifierStatementRef: null,
-    sessionKeyFingerprint: null,
-    policyHash: "sha256:abc123",
-    heartbeatInterval: 30,
+    sealId: "seal_0000000000000001",
+    credentialId: "cred_abcd1234feedbabe",
+    operatorId: "op_abcd1234feedbabe",
+    chatId: "conv_abcd1234feedbabe",
+    scopeMode: "per-chat",
+    permissions: { allow: ["send", "reply"], deny: [] },
     issuedAt: "2025-01-01T00:00:00.000Z",
-    expiresAt: "2025-01-02T00:00:00.000Z",
-    revocationRules: {
-      maxTtlSeconds: 86400,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: true,
-    },
-    issuer: "signet-1",
     ...overrides,
   };
 }
 
 function makeRevocation(overrides?: Partial<RevocationSeal>): RevocationSeal {
   return {
-    sealId: "revoke-1",
-    previousSealId: "seal-1",
-    agentInboxId: "agent-inbox-1",
-    groupId: "group-1",
+    sealId: "seal_0000000000000002",
+    previousSealId: "seal_0000000000000001",
+    operatorId: "op_abcd1234feedbabe",
+    credentialId: "cred_abcd1234feedbabe",
+    chatId: "conv_abcd1234feedbabe",
     reason: "owner-initiated",
     revokedAt: "2025-01-01T12:00:00.000Z",
     issuer: "signet-1",
@@ -79,20 +57,20 @@ function makeRevocation(overrides?: Partial<RevocationSeal>): RevocationSeal {
 
 describe("createSealStamper", () => {
   describe("sign", () => {
-    test("produces a valid SealEnvelope with correct structure", async () => {
+    test("produces a valid SealEnvelopeType with correct structure", async () => {
       const keyHandle = await createTestKeyHandle();
       const stamper = createSealStamper({ signingKey: keyHandle });
-      const seal = makeSeal();
+      const payload = makePayload();
 
-      const result = await stamper.sign(seal);
+      const result = await stamper.sign(payload);
 
       expect(Result.isOk(result)).toBe(true);
       if (!Result.isOk(result)) return;
 
       const envelope = result.value;
-      expect(envelope.seal).toEqual(seal);
-      expect(envelope.signatureAlgorithm).toBe("Ed25519");
-      expect(envelope.signerKeyRef).toBe(keyHandle.fingerprint());
+      expect(envelope.chain.current).toEqual(payload);
+      expect(envelope.algorithm).toBe("Ed25519");
+      expect(envelope.keyId).toBe(keyHandle.fingerprint());
       // Signature should be non-empty base64
       expect(envelope.signature.length).toBeGreaterThan(0);
       expect(() => atob(envelope.signature)).not.toThrow();
@@ -101,10 +79,10 @@ describe("createSealStamper", () => {
     test("produces deterministic signatures for the same input", async () => {
       const keyHandle = await createTestKeyHandle();
       const stamper = createSealStamper({ signingKey: keyHandle });
-      const seal = makeSeal();
+      const payload = makePayload();
 
-      const result1 = await stamper.sign(seal);
-      const result2 = await stamper.sign(seal);
+      const result1 = await stamper.sign(payload);
+      const result2 = await stamper.sign(payload);
 
       expect(Result.isOk(result1)).toBe(true);
       expect(Result.isOk(result2)).toBe(true);
@@ -117,11 +95,11 @@ describe("createSealStamper", () => {
       const keyHandle = await createTestKeyHandle();
       const stamper = createSealStamper({ signingKey: keyHandle });
 
-      const seal1 = makeSeal({ sealId: "seal-1" });
-      const seal2 = makeSeal({ sealId: "seal-2" });
+      const payload1 = makePayload({ sealId: "seal_0000000000000001" });
+      const payload2 = makePayload({ sealId: "seal_0000000000000002" });
 
-      const result1 = await stamper.sign(seal1);
-      const result2 = await stamper.sign(seal2);
+      const result1 = await stamper.sign(payload1);
+      const result2 = await stamper.sign(payload2);
 
       expect(Result.isOk(result1)).toBe(true);
       expect(Result.isOk(result2)).toBe(true);
@@ -169,15 +147,15 @@ describe("createSealStamper", () => {
   describe("error handling", () => {
     test("returns error when signing key fails", async () => {
       const failingKey: SigningKeyHandle = {
-        fingerprint: () => "bad-key",
+        fingerprint: () => "key_badkey01",
         sign: async () => {
           throw new Error("key material unavailable");
         },
       };
       const stamper = createSealStamper({ signingKey: failingKey });
-      const seal = makeSeal();
+      const payload = makePayload();
 
-      const result = await stamper.sign(seal);
+      const result = await stamper.sign(payload);
 
       expect(Result.isError(result)).toBe(true);
       if (!Result.isError(result)) return;

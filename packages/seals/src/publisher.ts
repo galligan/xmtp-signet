@@ -1,8 +1,7 @@
 import { Result } from "better-result";
-import type { SignetError } from "@xmtp/signet-schemas";
+import type { SignetError, SealEnvelopeType } from "@xmtp/signet-schemas";
 import type {
   SealPublisher,
-  SealEnvelope,
   SignedRevocationEnvelope,
 } from "@xmtp/signet-contracts";
 import {
@@ -32,7 +31,7 @@ export function createSealPublisher(deps: PublisherDeps): SealPublisher {
   return {
     async publish(
       groupId: string,
-      seal: SealEnvelope,
+      seal: SealEnvelopeType,
     ): Promise<Result<void, SignetError>> {
       const encoded = encodeSealMessage(seal);
       const serialized = JSON.stringify(encoded);

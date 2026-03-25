@@ -7,50 +7,27 @@ import {
   encodeSealMessage,
   encodeRevocationMessage,
 } from "../content-type.js";
-import type {
-  SealEnvelope,
-  SignedRevocationEnvelope,
-} from "@xmtp/signet-contracts";
-import type { Seal, RevocationSeal } from "@xmtp/signet-schemas";
+import type { SealEnvelopeType } from "@xmtp/signet-schemas";
+import type { SignedRevocationEnvelope } from "@xmtp/signet-contracts";
 
 /** Minimal valid signed seal for testing codec functions. */
-function stubSeal(): SealEnvelope {
+function stubSeal(): SealEnvelopeType {
   return {
-    seal: {
-      sealId: "att_00000000000000000000000000000001",
-      previousSealId: null,
-      agentInboxId: "agent-1",
-      ownerInboxId: "owner-1",
-      groupId: "group-1",
-      threadScope: null,
-      viewMode: "full",
-      contentTypes: ["xmtp.org/text:1.0"],
-      grantedOps: ["send"],
-      toolScopes: [],
-      inferenceMode: "local",
-      inferenceProviders: [],
-      contentEgressScope: "none",
-      retentionAtProvider: "none",
-      hostingMode: "local",
-      trustTier: "unverified",
-      buildProvenanceRef: null,
-      verifierStatementRef: null,
-      sessionKeyFingerprint: null,
-      policyHash: "sha256:test",
-      heartbeatInterval: 30,
-      issuedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 86400000).toISOString(),
-      revocationRules: {
-        maxTtlSeconds: 86400,
-        requireHeartbeat: true,
-        ownerCanRevoke: true,
-        adminCanRemove: true,
+    chain: {
+      current: {
+        sealId: "seal_0000000000000001",
+        credentialId: "cred_abcd1234feedbabe",
+        operatorId: "op_abcd1234feedbabe",
+        chatId: "conv_abcd1234feedbabe",
+        scopeMode: "per-chat",
+        permissions: { allow: ["send"], deny: [] },
+        issuedAt: new Date().toISOString(),
       },
-      issuer: "signet-1",
-    } as Seal,
+      delta: { added: [], removed: [], changed: [] },
+    },
     signature: "dGVzdA==",
-    signatureAlgorithm: "Ed25519",
-    signerKeyRef: "test-key",
+    keyId: "key_feedc0defeedbabe",
+    algorithm: "Ed25519",
   };
 }
 
@@ -58,17 +35,18 @@ function stubSeal(): SealEnvelope {
 function stubSignedRevocation(): SignedRevocationEnvelope {
   return {
     revocation: {
-      sealId: "att_00000000000000000000000000000002",
-      previousSealId: "att_00000000000000000000000000000001",
-      agentInboxId: "agent-1",
-      groupId: "group-1",
+      sealId: "seal_0000000000000002",
+      previousSealId: "seal_0000000000000001",
+      operatorId: "op_abcd1234feedbabe",
+      credentialId: "cred_abcd1234feedbabe",
+      chatId: "conv_abcd1234feedbabe",
       reason: "owner-initiated",
       revokedAt: new Date().toISOString(),
       issuer: "signet-1",
-    } as RevocationSeal,
+    },
     signature: "dGVzdA==",
     signatureAlgorithm: "Ed25519",
-    signerKeyRef: "test-key",
+    signerKeyRef: "key_test0001",
   };
 }
 
@@ -91,7 +69,7 @@ describe("encodeSealMessage", () => {
     const envelope = stubSeal();
     const message = encodeSealMessage(envelope);
     expect(message.contentType).toBe(SEAL_CONTENT_TYPE_ID);
-    expect(message.seal).toBe(envelope.seal);
+    expect(message.chain.current).toBe(envelope.chain.current);
     expect(message.signature).toBe(envelope.signature);
   });
 

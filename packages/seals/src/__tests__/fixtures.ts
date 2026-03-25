@@ -1,9 +1,13 @@
 import { Result } from "better-result";
-import type { Seal, SignetError, RevocationSeal } from "@xmtp/signet-schemas";
+import type {
+  SealPayloadType,
+  SealEnvelopeType,
+  SignetError,
+  RevocationSeal,
+} from "@xmtp/signet-schemas";
 import type {
   SealStamper,
   SealPublisher,
-  SealEnvelope,
   SignedRevocationEnvelope,
 } from "@xmtp/signet-contracts";
 import type { SealInput } from "../build.js";
@@ -13,72 +17,35 @@ import { canonicalize } from "../canonicalize.js";
 /** Creates a valid SealInput for testing. */
 export function validInput(overrides?: Partial<SealInput>): SealInput {
   return {
-    agentInboxId: "agent-inbox-1",
-    ownerInboxId: "owner-inbox-1",
-    groupId: "group-1",
-    threadScope: null,
-    view: {
-      mode: "full",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
+    credentialId: "cred_abcd1234feedbabe",
+    operatorId: "op_abcd1234feedbabe",
+    chatId: "conv_abcd1234feedbabe",
+    scopeMode: "per-chat",
+    permissions: {
+      allow: ["send", "reply"],
+      deny: [],
     },
-    grant: {
-      messaging: {
-        send: true,
-        reply: true,
-        react: false,
-        draftOnly: false,
-      },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
-      },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
-    },
-    inferenceMode: "local",
-    inferenceProviders: [],
-    contentEgressScope: "none",
-    retentionAtProvider: "none",
-    hostingMode: "local",
-    trustTier: "unverified",
-    buildProvenanceRef: null,
-    verifierStatementRef: null,
-    sessionKeyFingerprint: null,
-    policyHash: "sha256:abc123",
-    heartbeatInterval: 30,
-    revocationRules: {
-      maxTtlSeconds: 86400,
-      requireHeartbeat: true,
-      ownerCanRevoke: true,
-      adminCanRemove: true,
-    },
-    issuer: "signet-1",
     ...overrides,
   };
 }
 
 /**
  * Creates a mock InputResolver that returns validInput() for any
- * session+group pair. Override-able per call via the overrides map.
+ * credential+chat pair. Override-able per call via the overrides map.
  */
 export function createTestInputResolver(
   overrides?: Map<string, SealInput>,
 ): InputResolver {
   return async (
-    sessionId: string,
-    groupId: string,
+    credentialId: string,
+    chatId: string,
   ): Promise<Result<SealInput, SignetError>> => {
-    const key = `${sessionId}:${groupId}`;
-    const input = overrides?.get(key) ?? validInput({ groupId });
+    const key = `${credentialId}:${chatId}`;
+    const input = validInput({
+      ...overrides?.get(key),
+      credentialId,
+      chatId,
+    });
     return Result.ok(input);
   };
 }
@@ -86,17 +53,22 @@ export function createTestInputResolver(
 /** Creates a mock SealStamper that produces deterministic signatures. */
 export function createTestSigner(): SealStamper {
   return {
-    async sign(payload: Seal): Promise<Result<SealEnvelope, SignetError>> {
+    async sign(
+      payload: SealPayloadType,
+    ): Promise<Result<SealEnvelopeType, SignetError>> {
       const bytes = canonicalize(payload);
       // Simple test signature: base64 of the first 16 bytes of canonical form
       const sig = btoa(
         String.fromCharCode(...new Uint8Array(bytes.slice(0, 16))),
       );
       return Result.ok({
-        seal: payload,
+        chain: {
+          current: payload,
+          delta: { added: [], removed: [], changed: [] },
+        },
         signature: sig,
-        signatureAlgorithm: "Ed25519",
-        signerKeyRef: "test-key-ref",
+        keyId: "key_feedc0defeedbabe",
+        algorithm: "Ed25519",
       });
     },
     async signRevocation(
@@ -110,7 +82,7 @@ export function createTestSigner(): SealStamper {
         revocation: payload,
         signature: sig,
         signatureAlgorithm: "Ed25519",
-        signerKeyRef: "test-key-ref",
+        signerKeyRef: "key_test0001",
       });
     },
   };
@@ -118,17 +90,17 @@ export function createTestSigner(): SealStamper {
 
 /** Creates a mock SealPublisher that records published seals. */
 export function createTestPublisher(): SealPublisher & {
-  readonly published: SealEnvelope[];
+  readonly published: SealEnvelopeType[];
   readonly publishedRevocations: SignedRevocationEnvelope[];
 } {
-  const published: SealEnvelope[] = [];
+  const published: SealEnvelopeType[] = [];
   const publishedRevocations: SignedRevocationEnvelope[] = [];
   return {
     published,
     publishedRevocations,
     async publish(
       _groupId: string,
-      seal: SealEnvelope,
+      seal: SealEnvelopeType,
     ): Promise<Result<void, SignetError>> {
       published.push(seal);
       return Result.ok();

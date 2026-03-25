@@ -1,109 +1,84 @@
-import type { PolicyDelta } from "@xmtp/signet-contracts";
-import type { SealInput } from "./build.js";
+import type {
+  SealPayloadType,
+  SealDeltaType,
+  PermissionScopeType,
+} from "@xmtp/signet-schemas";
 
 /**
- * Computes a PolicyDelta between a previous and new SealInput.
- * Used to determine whether a policy change is material enough
- * to warrant a new seal.
+ * Computes a SealDeltaType between two seal payloads by comparing
+ * their permission scope sets. Used to determine whether a policy
+ * change is material enough to warrant a new seal.
  */
-export function computeInputDelta(
-  previous: SealInput,
-  next: SealInput,
-): PolicyDelta {
-  const viewChanges: Array<{ field: string; from: unknown; to: unknown }> = [];
-  const grantChanges: Array<{ field: string; from: unknown; to: unknown }> = [];
-  const added: string[] = [];
-  const removed: string[] = [];
+export function computePayloadDelta(
+  previous: SealPayloadType,
+  next: SealPayloadType,
+): SealDeltaType {
+  const prevAllow = new Set<PermissionScopeType>(previous.permissions.allow);
+  const nextAllow = new Set<PermissionScopeType>(next.permissions.allow);
+  const prevDeny = new Set<PermissionScopeType>(previous.permissions.deny);
+  const nextDeny = new Set<PermissionScopeType>(next.permissions.deny);
 
-  // View mode
-  if (previous.view.mode !== next.view.mode) {
-    viewChanges.push({
-      field: "view.mode",
-      from: previous.view.mode,
-      to: next.view.mode,
-    });
-  }
+  const added: PermissionScopeType[] = [];
+  const removed: PermissionScopeType[] = [];
+  const changed: Array<{
+    scope: PermissionScopeType;
+    from: "allow" | "deny";
+    to: "allow" | "deny";
+  }> = [];
 
-  // Thread scopes (compare serialized form)
-  const prevScopes = JSON.stringify(previous.view.threadScopes);
-  const nextScopes = JSON.stringify(next.view.threadScopes);
-  if (prevScopes !== nextScopes) {
-    viewChanges.push({
-      field: "view.threadScopes",
-      from: previous.view.threadScopes,
-      to: next.view.threadScopes,
-    });
-  }
-
-  // Content types
-  const prevTypes = new Set(previous.view.contentTypes);
-  const nextTypes = new Set(next.view.contentTypes);
-  for (const ct of nextTypes) {
-    if (!prevTypes.has(ct)) {
-      added.push(ct);
-    }
-  }
-  for (const ct of prevTypes) {
-    if (!nextTypes.has(ct)) {
-      removed.push(ct);
+  // Scopes newly allowed (not in previous allow set)
+  for (const scope of nextAllow) {
+    if (!prevAllow.has(scope)) {
+      if (prevDeny.has(scope)) {
+        // Was explicitly denied, now allowed
+        changed.push({ scope, from: "deny", to: "allow" });
+      } else {
+        added.push(scope);
+      }
     }
   }
 
-  // Grant: messaging
-  for (const key of Object.keys(
-    previous.grant.messaging,
-  ) as (keyof typeof previous.grant.messaging)[]) {
-    if (previous.grant.messaging[key] !== next.grant.messaging[key]) {
-      grantChanges.push({
-        field: `grant.messaging.${key}`,
-        from: previous.grant.messaging[key],
-        to: next.grant.messaging[key],
-      });
+  // Scopes removed from allow (were allowed, no longer)
+  for (const scope of prevAllow) {
+    if (!nextAllow.has(scope)) {
+      if (nextDeny.has(scope)) {
+        // Now explicitly denied
+        changed.push({ scope, from: "allow", to: "deny" });
+      } else {
+        removed.push(scope);
+      }
     }
   }
 
-  // Grant: groupManagement
-  for (const key of Object.keys(
-    previous.grant.groupManagement,
-  ) as (keyof typeof previous.grant.groupManagement)[]) {
-    if (
-      previous.grant.groupManagement[key] !== next.grant.groupManagement[key]
-    ) {
-      grantChanges.push({
-        field: `grant.groupManagement.${key}`,
-        from: previous.grant.groupManagement[key],
-        to: next.grant.groupManagement[key],
-      });
+  // Scopes that stay listed in allow but toggle deny state still change the
+  // effective permission because deny wins over allow.
+  for (const scope of nextDeny) {
+    if (!prevDeny.has(scope) && prevAllow.has(scope) && nextAllow.has(scope)) {
+      changed.push({ scope, from: "allow", to: "deny" });
     }
   }
 
-  // Grant: tools scopes
-  const prevTools = JSON.stringify(previous.grant.tools.scopes);
-  const nextTools = JSON.stringify(next.grant.tools.scopes);
-  if (prevTools !== nextTools) {
-    grantChanges.push({
-      field: "grant.tools.scopes",
-      from: previous.grant.tools.scopes,
-      to: next.grant.tools.scopes,
-    });
-  }
-
-  // Grant: egress
-  for (const key of Object.keys(
-    previous.grant.egress,
-  ) as (keyof typeof previous.grant.egress)[]) {
-    if (previous.grant.egress[key] !== next.grant.egress[key]) {
-      grantChanges.push({
-        field: `grant.egress.${key}`,
-        from: previous.grant.egress[key],
-        to: next.grant.egress[key],
-      });
+  for (const scope of prevDeny) {
+    if (!nextDeny.has(scope) && prevAllow.has(scope) && nextAllow.has(scope)) {
+      changed.push({ scope, from: "deny", to: "allow" });
     }
   }
 
-  return {
-    viewChanges,
-    grantChanges,
-    contentTypeChanges: { added, removed },
-  };
+  // Scopes newly denied that weren't in previous allow
+  // (were not mentioned, now explicitly denied)
+  for (const scope of nextDeny) {
+    if (!prevDeny.has(scope) && !prevAllow.has(scope)) {
+      removed.push(scope);
+    }
+  }
+
+  // Scopes removed from deny that aren't in next allow
+  // (were denied, now not mentioned at all -- effectively removed restriction)
+  for (const scope of prevDeny) {
+    if (!nextDeny.has(scope) && !nextAllow.has(scope)) {
+      added.push(scope);
+    }
+  }
+
+  return { added, removed, changed };
 }

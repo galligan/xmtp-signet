@@ -14,15 +14,12 @@ export {
   encodeRevocationMessage,
 } from "./content-type.js";
 
-// Grant-to-ops mapping
-export { grantConfigToOps, grantConfigToToolScopes } from "./grant-ops.js";
-
 // Seal builder
 export { buildSeal } from "./build.js";
 export type { SealInput, SealBuildResult } from "./build.js";
 
-// Input delta computation
-export { computeInputDelta } from "./compute-delta.js";
+// Payload delta computation
+export { computePayloadDelta } from "./compute-delta.js";
 
 // Seal stamper
 export { createSealStamper } from "./stamper.js";

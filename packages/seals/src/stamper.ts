@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import { InternalError } from "@xmtp/signet-schemas";
-import type { Seal, RevocationSeal, SignetError } from "@xmtp/signet-schemas";
+import type {
+  SealPayloadType,
+  SealEnvelopeType,
+  SignetError,
+} from "@xmtp/signet-schemas";
+import type { RevocationSeal } from "@xmtp/signet-schemas";
 import type {
   SealStamper,
-  SealEnvelope,
   SignedRevocationEnvelope,
 } from "@xmtp/signet-contracts";
 import { canonicalize } from "./canonicalize.js";
@@ -37,12 +41,12 @@ function isSignetError(e: unknown): e is SignetError {
  * Creates a `SealStamper` backed by a single `SigningKeyHandle`.
  *
  * The stamper canonicalizes the payload, signs the bytes, and wraps
- * the result in a `SealEnvelope` / `SignedRevocationEnvelope`.
+ * the result in a `SealEnvelopeType` / `SignedRevocationEnvelope`.
  */
 export function createSealStamper(deps: StamperDeps): SealStamper {
   const { signingKey } = deps;
 
-  async function signPayload(
+  async function signBytes(
     payload: unknown,
   ): Promise<Result<string, SignetError>> {
     try {
@@ -51,7 +55,6 @@ export function createSealStamper(deps: StamperDeps): SealStamper {
       const base64 = btoa(String.fromCharCode(...signature));
       return Result.ok(base64);
     } catch (e) {
-      // Preserve structured SignetErrors from the key layer
       if (isSignetError(e)) {
         return Result.err(e);
       }
@@ -64,22 +67,27 @@ export function createSealStamper(deps: StamperDeps): SealStamper {
   }
 
   return {
-    async sign(payload: Seal): Promise<Result<SealEnvelope, SignetError>> {
-      const sigResult = await signPayload(payload);
+    async sign(
+      payload: SealPayloadType,
+    ): Promise<Result<SealEnvelopeType, SignetError>> {
+      const sigResult = await signBytes(payload);
       if (Result.isError(sigResult)) return sigResult;
 
       return Result.ok({
-        seal: payload,
+        chain: {
+          current: payload,
+          delta: { added: [], removed: [], changed: [] },
+        },
         signature: sigResult.value,
-        signatureAlgorithm: "Ed25519",
-        signerKeyRef: signingKey.fingerprint(),
+        keyId: signingKey.fingerprint(),
+        algorithm: "Ed25519",
       });
     },
 
     async signRevocation(
       payload: RevocationSeal,
     ): Promise<Result<SignedRevocationEnvelope, SignetError>> {
-      const sigResult = await signPayload(payload);
+      const sigResult = await signBytes(payload);
       if (Result.isError(sigResult)) return sigResult;
 
       return Result.ok({
