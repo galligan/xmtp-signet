@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
+import type { AdminJwtPayload } from "@xmtp/signet-keys";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 import {
   createHttpServer,
@@ -35,7 +36,15 @@ function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
       overrides?.credentialManager ??
       ({} as HttpServerDeps["credentialManager"]),
     verifyAdminJwt:
-      overrides?.verifyAdminJwt ?? (async () => Result.ok(undefined)),
+      overrides?.verifyAdminJwt ??
+      (async () =>
+        Result.ok({
+          iss: "admin-fingerprint",
+          sub: "admin",
+          iat: 1,
+          exp: 2,
+          jti: "test-jti",
+        } satisfies AdminJwtPayload)),
     status: overrides?.status ?? (() => ({ state: "running", pid: 1 })),
   };
 }

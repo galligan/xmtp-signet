@@ -271,6 +271,143 @@ describe("createWsRequestHandler", () => {
     expect(heartbeatCalls).toEqual(["cred_123"]);
   });
 
+  test("applies scope narrowing in place without marking the credential pending", async () => {
+    const statusCalls: string[] = [];
+    const updateCalls: Array<{
+      credentialId: string;
+      scopes: { allow: readonly string[]; deny: readonly string[] };
+    }> = [];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
+      },
+      internalCredentialManager: makeInternalCredentialManager({
+        checkMateriality: () =>
+          Result.ok({
+            isMaterial: true,
+            reason: "Material change: removed: send",
+            requiresReauthorization: false,
+          }),
+        updateCredentialScopes: (credentialId, scopes) => {
+          updateCalls.push({ credentialId, scopes });
+          return Result.ok({
+            credentialId,
+            token: "token",
+            operatorId: "operator_1",
+            chatIds: ["g1"],
+            effectiveScopes: scopes,
+            resolvedScopes: new Set(scopes.allow),
+            policyHash: "hash",
+            status: "active",
+            heartbeatInterval: 30,
+            lastHeartbeat: "2024-01-01T00:00:00Z",
+            issuedAt: "2024-01-01T00:00:00Z",
+            expiresAt: "2024-01-02T00:00:00Z",
+            ttlMs: 3600_000,
+            revokedAt: null,
+            revocationReason: null,
+          });
+        },
+        setCredentialStatus: (_credentialId, status) => {
+          statusCalls.push(status);
+          return Result.err(NotFoundError.create("credential", "cred_123"));
+        },
+      } as unknown as Partial<InternalCredentialManager>),
+    });
+
+    const request: HarnessRequest = {
+      type: "update_scopes",
+      requestId: "req_update_1",
+      allow: ["read-messages"],
+      deny: ["send"],
+    };
+
+    const result = await handler(request, makeCredentialRecord());
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value).toEqual({
+      updated: true,
+      material: true,
+      reason: "Material change: removed: send",
+    });
+    expect(updateCalls).toEqual([
+      {
+        credentialId: "cred_123",
+        scopes: { allow: ["read-messages"], deny: ["send"] },
+      },
+    ]);
+    expect(statusCalls).toEqual([]);
+  });
+
+  test("marks the credential pending when scope escalation requires reauthorization", async () => {
+    const statusCalls: string[] = [];
+    const updateCalls: string[] = [];
+
+    const handler = createWsRequestHandler({
+      ensureCoreReady: async () => Result.ok(undefined),
+      sendMessage: async () => Result.ok({ messageId: "unused" }),
+      credentialManager: {
+        lookup: async () => Result.ok(makeCredentialRecord()),
+        lookupByToken: async () => Result.ok(makeCredentialRecord()),
+      },
+      internalCredentialManager: makeInternalCredentialManager({
+        checkMateriality: () =>
+          Result.ok({
+            isMaterial: true,
+            reason: "Material change: added: reply",
+            requiresReauthorization: true,
+          }),
+        updateCredentialScopes: (credentialId) => {
+          updateCalls.push(credentialId);
+          return Result.err(NotFoundError.create("credential", credentialId));
+        },
+        setCredentialStatus: (_credentialId, status) => {
+          statusCalls.push(status);
+          return Result.ok({
+            credentialId: "cred_123",
+            token: "token",
+            operatorId: "operator_1",
+            chatIds: ["g1"],
+            effectiveScopes: { allow: ["send", "read-messages"], deny: [] },
+            resolvedScopes: new Set(["send", "read-messages"]),
+            policyHash: "hash",
+            status,
+            heartbeatInterval: 30,
+            lastHeartbeat: "2024-01-01T00:00:00Z",
+            issuedAt: "2024-01-01T00:00:00Z",
+            expiresAt: "2024-01-02T00:00:00Z",
+            ttlMs: 3600_000,
+            revokedAt: null,
+            revocationReason: null,
+          });
+        },
+      } as unknown as Partial<InternalCredentialManager>),
+    });
+
+    const request: HarnessRequest = {
+      type: "update_scopes",
+      requestId: "req_update_2",
+      allow: ["send", "read-messages", "reply"],
+    };
+
+    const result = await handler(request, makeCredentialRecord());
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value).toEqual({
+      updated: false,
+      material: true,
+      reason: "Material change: added: reply",
+    });
+    expect(statusCalls).toEqual(["pending"]);
+    expect(updateCalls).toEqual([]);
+  });
+
   test("rejects unsupported request types", async () => {
     const handler = createWsRequestHandler({
       ensureCoreReady: async () => Result.ok(undefined),

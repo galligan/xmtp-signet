@@ -291,9 +291,7 @@ export async function createSignetRuntime(
         dispatcher,
         credentialManager,
         verifyAdminJwt: async (token: string) => {
-          const result = await keyManager.admin.verifyJwt(token);
-          if (Result.isError(result)) return result;
-          return Result.ok(undefined);
+          return keyManager.admin.verifyJwt(token);
         },
         status: async () => {
           if (runtimeRef === undefined) {

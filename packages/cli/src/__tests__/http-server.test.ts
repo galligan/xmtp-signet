@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
 import { AuthError } from "@xmtp/signet-schemas";
+import type { AdminJwtPayload } from "@xmtp/signet-keys";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 import {
   createHttpServer,
@@ -36,7 +37,15 @@ function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
       overrides?.credentialManager ??
       ({} as HttpServerDeps["credentialManager"]),
     verifyAdminJwt:
-      overrides?.verifyAdminJwt ?? (async () => Result.ok(undefined)),
+      overrides?.verifyAdminJwt ??
+      (async () =>
+        Result.ok({
+          iss: "admin-fingerprint",
+          sub: "admin",
+          iat: 1,
+          exp: 2,
+          jti: "test-jti",
+        } satisfies AdminJwtPayload)),
     status: overrides?.status ?? (() => ({ state: "running", pid: 1 })),
   };
 }
@@ -77,16 +86,20 @@ describe("HttpServer", () => {
   });
 
   test("POST /v1/admin/:method with valid JWT dispatches to admin", async () => {
+    let seenFingerprint: string | null = null;
     const dispatcher = makeDispatcher({
-      dispatch: async () => ({
-        ok: true as const,
-        data: { sessions: [] },
-        meta: {
-          requestId: "req-1",
-          timestamp: new Date().toISOString(),
-          durationMs: 1,
-        },
-      }),
+      dispatch: async (_method, _params, ctx) => {
+        seenFingerprint = ctx.adminAuth?.adminKeyFingerprint ?? null;
+        return {
+          ok: true as const,
+          data: { credentials: [] },
+          meta: {
+            requestId: "req-1",
+            timestamp: new Date().toISOString(),
+            durationMs: 1,
+          },
+        };
+      },
     });
     const deps = makeDeps({ dispatcher });
     const port = randomPort();
@@ -106,6 +119,7 @@ describe("HttpServer", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.data).toEqual({ sessions: [] });
+    expect(seenFingerprint).toBe("admin-fingerprint");
   });
 
   test("unauthenticated request to /v1/admin returns 401", async () => {
@@ -135,6 +149,25 @@ describe("HttpServer", () => {
     const res = await fetch(`http://127.0.0.1:${port}/v1/nonexistent`);
     expect(res.status).toBe(404);
 
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.category).toBe("not_found");
+  });
+
+  test("legacy /v1/session route is not exposed", async () => {
+    const deps = makeDeps();
+    const port = randomPort();
+    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
+    await server.start();
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/session/info`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer credential-token",
+      },
+    });
+
+    expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error.category).toBe("not_found");

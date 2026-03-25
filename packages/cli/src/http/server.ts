@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import { InternalError } from "@xmtp/signet-schemas";
+import type { AdminJwtPayload } from "@xmtp/signet-keys";
 import type { CredentialManager } from "@xmtp/signet-contracts";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 
@@ -20,7 +21,7 @@ export interface HttpServerDeps {
   readonly credentialManager: CredentialManager;
   readonly verifyAdminJwt: (
     token: string,
-  ) => Promise<Result<void, SignetError>>;
+  ) => Promise<Result<AdminJwtPayload, SignetError>>;
   readonly status: () => unknown | Promise<unknown>;
 }
 
@@ -144,7 +145,9 @@ export function createHttpServer(
       return errorResponse("validation", "Invalid JSON body", null);
     }
 
-    const ctx = makeHandlerContext({ adminKeyFingerprint: "http-admin" });
+    const ctx = makeHandlerContext({
+      adminKeyFingerprint: verifyResult.value.iss,
+    });
 
     const actionResult = await deps.dispatcher.dispatch(method, params, ctx);
 

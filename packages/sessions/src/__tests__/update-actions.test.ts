@@ -83,6 +83,42 @@ describe("credential.updateScopes action", () => {
     expect(output.material).toBe(false);
   });
 
+  test("applies scope narrowing without revoking the credential", async () => {
+    const actions = createUpdateActions(deps);
+    const updateScopes = actions.find(
+      (a) => a.id === "credential.updateScopes",
+    );
+    expect(updateScopes).toBeDefined();
+    if (!updateScopes) return;
+
+    const narrowerScopes = createTestScopes({
+      allow: ["read-messages"] as PermissionScopeType[],
+    });
+
+    const result = await updateScopes.handler(
+      { credentialId, scopes: narrowerScopes },
+      stubContext(),
+    );
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    const output = result.value as {
+      updated: boolean;
+      material: boolean;
+      reason: string | null;
+    };
+    expect(output.updated).toBe(true);
+    expect(output.material).toBe(true);
+    expect(output.reason).toContain("removed:");
+
+    const internal = manager.getCredentialById(credentialId);
+    expect(internal.isOk()).toBe(true);
+    if (!internal.isOk()) return;
+    expect(internal.value.status).toBe("active");
+    expect(internal.value.effectiveScopes.allow).toEqual(["read-messages"]);
+    expect(internal.value.revocationReason).toBeNull();
+  });
+
   test("triggers revocation for material scope escalation", async () => {
     const actions = createUpdateActions(deps);
     const updateScopes = actions.find(
@@ -117,6 +153,8 @@ describe("credential.updateScopes action", () => {
     expect(internal.isOk()).toBe(true);
     if (!internal.isOk()) return;
     expect(internal.value.status).toBe("revoked");
+    expect(internal.value.revocationReason).toBe("reauthorization-required");
+    expect(internal.value.revokedAt).not.toBeNull();
   });
 
   test("returns NotFoundError for non-existent credential", async () => {

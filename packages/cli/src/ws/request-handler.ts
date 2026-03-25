@@ -330,7 +330,7 @@ export function createWsRequestHandler(
 
     const check = materialityResult.value;
 
-    if (check.isMaterial) {
+    if (check.requiresReauthorization) {
       deps.internalCredentialManager.setCredentialStatus(
         credential.credentialId,
         "pending",
@@ -350,7 +350,11 @@ export function createWsRequestHandler(
       return updateResult;
     }
 
-    return Result.ok({ updated: true, material: false, reason: null });
+    return Result.ok({
+      updated: true,
+      material: check.isMaterial,
+      reason: check.isMaterial ? check.reason : null,
+    });
   }
 
   async function handleConfirmAction(
