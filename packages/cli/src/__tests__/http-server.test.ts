@@ -50,9 +50,14 @@ function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   };
 }
 
-/** Pick a random high port to avoid collisions between parallel tests. */
-function randomPort(): number {
-  return 10_000 + Math.floor(Math.random() * 50_000);
+async function startTestServer(deps: HttpServerDeps): Promise<number> {
+  server = createHttpServer({ port: 0, host: "127.0.0.1" }, deps);
+  const result = await server.start();
+  expect(Result.isOk(result)).toBe(true);
+  if (!Result.isOk(result)) {
+    throw new Error(result.error.message);
+  }
+  return result.value.port;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,11 +77,7 @@ describe("HttpServer", () => {
   test("GET /v1/health returns status without auth", async () => {
     const statusData = { state: "running", pid: 42 };
     const deps = makeDeps({ status: () => statusData });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-
-    const startResult = await server.start();
-    expect(Result.isOk(startResult)).toBe(true);
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/health`);
     expect(res.status).toBe(200);
@@ -102,9 +103,7 @@ describe("HttpServer", () => {
       },
     });
     const deps = makeDeps({ dispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/signet.status`, {
       method: "POST",
@@ -124,9 +123,7 @@ describe("HttpServer", () => {
 
   test("unauthenticated request to /v1/admin returns 401", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/signet.status`, {
       method: "POST",
@@ -142,9 +139,7 @@ describe("HttpServer", () => {
 
   test("unknown route returns 404", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/nonexistent`);
     expect(res.status).toBe(404);
@@ -156,9 +151,7 @@ describe("HttpServer", () => {
 
   test("legacy /v1/session route is not exposed", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/session/info`, {
       method: "POST",
@@ -193,9 +186,7 @@ describe("HttpServer", () => {
           }),
       } as HttpServerDeps["credentialManager"],
     });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(
       `http://127.0.0.1:${port}/v1/credential/session.info`,
@@ -232,9 +223,7 @@ describe("HttpServer", () => {
       hasMethod: () => false,
     });
     const deps = makeDeps({ dispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/no.such`, {
       method: "POST",
@@ -255,9 +244,7 @@ describe("HttpServer", () => {
     const deps = makeDeps({
       verifyAdminJwt: async () => Result.err(AuthError.create("Invalid JWT")),
     });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/signet.status`, {
       method: "POST",
@@ -293,9 +280,7 @@ describe("HttpServer", () => {
       }),
     });
     const deps = makeDeps({ dispatcher: validationDispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/test.action`, {
       method: "POST",
@@ -311,21 +296,18 @@ describe("HttpServer", () => {
 
   test("start returns port on success", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
+    server = createHttpServer({ port: 0, host: "127.0.0.1" }, deps);
 
     const result = await server.start();
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.port).toBe(port);
+      expect(result.value.port).toBeGreaterThan(0);
     }
   });
 
   test("stop transitions state to stopped", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    await startTestServer(deps);
 
     expect(server.state).toBe("listening");
     const stopResult = await server.stop();

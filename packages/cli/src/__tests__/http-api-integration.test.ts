@@ -49,8 +49,14 @@ function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   };
 }
 
-function randomPort(): number {
-  return 10_000 + Math.floor(Math.random() * 50_000);
+async function startTestServer(deps: HttpServerDeps): Promise<number> {
+  server = createHttpServer({ port: 0, host: "127.0.0.1" }, deps);
+  const result = await server.start();
+  expect(Result.isOk(result)).toBe(true);
+  if (!Result.isOk(result)) {
+    throw new Error(result.error.message);
+  }
+  return result.value.port;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,9 +77,7 @@ describe("HTTP API integration", () => {
     const deps = makeDeps({
       status: () => ({ state: "running", pid: 42 }),
     });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/health`);
 
@@ -96,9 +100,7 @@ describe("HTTP API integration", () => {
       }),
     });
     const deps = makeDeps({ dispatcher });
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/broker.status`, {
       method: "POST",
@@ -117,9 +119,7 @@ describe("HTTP API integration", () => {
 
   test("unauthenticated admin request returns 401", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/admin/broker.status`, {
       method: "POST",
@@ -135,9 +135,7 @@ describe("HTTP API integration", () => {
 
   test("unknown route returns 404", async () => {
     const deps = makeDeps();
-    const port = randomPort();
-    server = createHttpServer({ port, host: "127.0.0.1" }, deps);
-    await server.start();
+    const port = await startTestServer(deps);
 
     const res = await fetch(`http://127.0.0.1:${port}/v1/nonexistent`);
 
