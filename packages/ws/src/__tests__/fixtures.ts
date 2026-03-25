@@ -1,126 +1,52 @@
 import { Result } from "better-result";
-import type {
-  HarnessRequest,
-  IssuedSession,
-  SessionToken,
-} from "@xmtp/signet-schemas";
+import type { HarnessRequest, CredentialTokenType } from "@xmtp/signet-schemas";
 import { AuthError, NotFoundError } from "@xmtp/signet-schemas";
 import type {
   SignetCore,
-  SessionManager,
+  CredentialRecord,
   SealManager,
-  SessionRecord,
 } from "@xmtp/signet-contracts";
 import type { WsServerDeps } from "../server.js";
 
-/** Default session record used in tests. */
-export function makeSessionRecord(
-  overrides: Partial<SessionRecord> = {},
-): SessionRecord {
+/** Default credential record used in tests. */
+export function makeCredentialRecord(
+  overrides: Partial<CredentialRecord> = {},
+): CredentialRecord {
   return {
-    sessionId: "sess_test",
-    agentInboxId: "agent_test",
-    sessionKeyFingerprint: "fp_test",
-    view: {
-      mode: "full",
-      threadScopes: [{ groupId: "g1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
+    id: "cred_deadbeeffeedbabe",
+    config: {
+      operatorId: "op_deadbeeffeedbabe",
+      chatIds: ["conv_c0ffee12feedbabe"],
+      allow: ["send", "reply", "read-messages"],
+      deny: [],
     },
-    grant: {
-      messaging: { send: true, reply: true, react: true, draftOnly: false },
-      groupManagement: {
-        addMembers: false,
-        removeMembers: false,
-        updateMetadata: false,
-        inviteUsers: false,
-      },
-      tools: { scopes: [] },
-      egress: {
-        storeExcerpts: false,
-        useForMemory: false,
-        forwardToProviders: false,
-        quoteRevealed: false,
-        summarize: false,
-      },
+    inboxIds: ["inbox_deadbeeffeedbabe"],
+    credentialId: "cred_deadbeeffeedbabe",
+    operatorId: "op_deadbeeffeedbabe",
+    effectiveScopes: {
+      allow: ["send", "reply", "read-messages"],
+      deny: [],
     },
-    state: "active",
+    status: "active",
     issuedAt: "2024-01-01T00:00:00Z",
     expiresAt: "2024-01-02T00:00:00Z",
+    issuedBy: "op_admin1234",
+    isExpired: false,
     lastHeartbeat: "2024-01-01T00:00:00Z",
     ...overrides,
   };
 }
 
-export function makeSessionToken(
-  record: SessionRecord = makeSessionRecord(),
-): SessionToken {
+export function makeCredentialToken(
+  record: CredentialRecord = makeCredentialRecord(),
+): CredentialTokenType {
   return {
-    sessionId: record.sessionId,
-    agentInboxId: record.agentInboxId,
-    sessionKeyFingerprint: record.sessionKeyFingerprint,
+    credentialId: record.credentialId,
+    operatorId: record.operatorId,
+    fingerprint: "fp_test",
     issuedAt: record.issuedAt,
     expiresAt: record.expiresAt,
   };
-}
-
-export function makeIssuedSession(
-  token = "valid_token",
-  record: SessionRecord = makeSessionRecord(),
-): IssuedSession {
-  return {
-    token,
-    session: makeSessionToken(record),
-  };
-}
-
-/** Creates a mock SessionManager that recognizes one token. */
-export function createMockSessionManager(
-  validToken = "valid_token",
-  record: SessionRecord = makeSessionRecord(),
-): SessionManager {
-  const sessions = new Map<string, SessionRecord>();
-  sessions.set(record.sessionId, record);
-
-  return {
-    async issue() {
-      return Result.ok(makeIssuedSession(validToken, record));
-    },
-    async list(agentInboxId?: string) {
-      return Result.ok(
-        [...sessions.values()].filter(
-          (session) =>
-            agentInboxId === undefined || session.agentInboxId === agentInboxId,
-        ),
-      );
-    },
-    async lookup(sessionId: string) {
-      const s = sessions.get(sessionId);
-      if (!s) return Result.err(NotFoundError.create("session", sessionId));
-      return Result.ok(s);
-    },
-    async lookupByToken(token: string) {
-      if (token !== validToken) {
-        return Result.err(NotFoundError.create("session", token));
-      }
-      return Result.ok(record);
-    },
-    async revoke() {
-      return Result.ok(undefined);
-    },
-    async heartbeat() {
-      return Result.ok(undefined);
-    },
-    async isActive(sessionId: string) {
-      const s = sessions.get(sessionId);
-      return Result.ok(s?.state === "active");
-    },
-    getRevealState() {
-      return Result.err(NotFoundError.create("session", "mock"));
-    },
-    // Non-standard: token lookup for the WS layer
-    _validToken: validToken,
-    _record: record,
-  } as SessionManager & { _validToken: string; _record: SessionRecord };
 }
 
 /** Creates a mock SignetCore. */
@@ -177,28 +103,28 @@ export function createMockSealManager(): SealManager {
 /** Creates a full WsServerDeps mock. */
 export function createMockDeps(validToken = "valid_token"): {
   deps: WsServerDeps;
-  sessionRecord: SessionRecord;
+  credentialRecord: CredentialRecord;
 } {
-  const sessionRecord = makeSessionRecord();
-  const sessionManager = createMockSessionManager(validToken, sessionRecord);
+  const credentialRecord = makeCredentialRecord();
   return {
     deps: {
-      sessionManager,
       core: createMockSignetCore(),
+      credentialLookup: async (credentialId: string) => {
+        if (credentialId === credentialRecord.credentialId) {
+          return Result.ok(credentialRecord);
+        }
+        return Result.err(NotFoundError.create("credential", credentialId));
+      },
       sealManager: createMockSealManager(),
       tokenLookup: async (token: string) => {
-        if (
-          token ===
-          (sessionManager as SessionManager & { _validToken: string })
-            ._validToken
-        ) {
-          return Result.ok(sessionRecord);
+        if (token === validToken) {
+          return Result.ok(credentialRecord);
         }
         return Result.err(AuthError.create("Invalid token"));
       },
       requestHandler: async (
         request: HarnessRequest,
-        _session: SessionRecord,
+        _credential: CredentialRecord,
       ) => {
         if (request.type === "heartbeat") {
           return Result.ok(null);
@@ -206,7 +132,7 @@ export function createMockDeps(validToken = "valid_token"): {
         return Result.ok({ messageId: "msg_test" });
       },
     },
-    sessionRecord,
+    credentialRecord,
   };
 }
 

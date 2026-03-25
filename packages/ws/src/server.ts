@@ -8,15 +8,14 @@ import {
 } from "@xmtp/signet-schemas";
 import type {
   SignetCore,
-  SessionManager,
-  SessionRecord,
+  CredentialRecord,
   SealManager,
 } from "@xmtp/signet-contracts";
 import type { WsServerConfig } from "./config.js";
 import { WsServerConfigSchema } from "./config.js";
 import {
   type ConnectionData,
-  type SessionReplayState,
+  type CredentialReplayState,
   createConnectionState,
   transition,
 } from "./connection-state.js";
@@ -35,17 +34,26 @@ import { WS_CLOSE_CODES } from "./close-codes.js";
 /** Lifecycle states for the websocket server. */
 export type WsServerState = "idle" | "listening" | "draining" | "stopped";
 
+/**
+ * Callback to look up a credential by its ID.
+ * Injected by the composition root -- the WS layer works with the
+ * runtime-enriched CredentialRecord, not the raw schema type.
+ */
+export type CredentialLookup = (
+  credentialId: string,
+) => Promise<Result<CredentialRecord, SignetError>>;
+
 /** Dependencies required to run the websocket transport. */
 export interface WsServerDeps {
   readonly core: SignetCore;
-  readonly sessionManager: SessionManager;
+  readonly credentialLookup: CredentialLookup;
   readonly sealManager: SealManager;
   readonly tokenLookup: TokenLookup;
   readonly requestHandler: RequestHandler;
-  /** Optional event projector for view-mode filtering before broadcast. */
+  /** Optional event projector for scope-based filtering before broadcast. */
   readonly projectEvent?: (
     event: SignetEvent,
-    session: SessionRecord,
+    credential: CredentialRecord,
   ) => SignetEvent | null;
 }
 
@@ -55,14 +63,14 @@ export interface WsServer {
   stop(): Promise<Result<void, SignetError>>;
   readonly state: WsServerState;
   readonly connectionCount: number;
-  /** Broadcast an event to all connections for a session. */
-  broadcast(sessionId: string, event: SignetEvent): void;
+  /** Broadcast an event to all connections for a credential. */
+  broadcast(credentialId: string, event: SignetEvent): void;
   /**
-   * Invalidate cached session state for all connections on a session.
-   * Call this when session policy changes from outside the WS request path
+   * Invalidate cached credential state for all connections on a credential.
+   * Call this when credential policy changes from outside the WS request path
    * (admin, HTTP, MCP, expiry, revocation) so broadcasts project correctly.
    */
-  invalidateSession(sessionId: string): Promise<void>;
+  invalidateCredential(credentialId: string): Promise<void>;
 }
 
 /**
@@ -74,9 +82,9 @@ export function createWsServer(
 ): WsServer {
   const config = WsServerConfigSchema.parse(rawConfig);
   const registry = new ConnectionRegistry();
-  /** Per-session replay state: survives reconnections. */
-  const sessionStates = new Map<string, SessionReplayState>();
-  /** Sessions with pending invalidations — broadcasts queue until all in-flight lookups complete. */
+  /** Per-credential replay state: survives reconnections. */
+  const credentialStates = new Map<string, CredentialReplayState>();
+  /** Credentials with pending invalidations -- broadcasts queue until all in-flight lookups complete. */
   const pendingInvalidations = new Map<
     string,
     { refcount: number; generation: number; events: SignetEvent[] }
@@ -86,14 +94,16 @@ export function createWsServer(
   let serverState: WsServerState = "idle";
   let bunServer: ReturnType<typeof Bun.serve<ConnectionData>> | null = null;
 
-  function getOrCreateSessionState(sessionId: string): SessionReplayState {
-    let state = sessionStates.get(sessionId);
+  function getOrCreateCredentialState(
+    credentialId: string,
+  ): CredentialReplayState {
+    let state = credentialStates.get(credentialId);
     if (!state) {
       state = {
         buffer: new CircularBuffer<SequencedFrame>(config.replayBufferSize),
         nextSeq: 1,
       };
-      sessionStates.set(sessionId, state);
+      credentialStates.set(credentialId, state);
     }
     return state;
   }
@@ -114,10 +124,10 @@ export function createWsServer(
     ws: ServerWebSocket<ConnectionData>,
     event: SignetEvent,
   ): void {
-    const sessionState = ws.data.sessionReplayState;
-    if (!sessionState) return;
+    const credentialState = ws.data.credentialReplayState;
+    if (!credentialState) return;
 
-    const frame = sequenceEvent(sessionState, event);
+    const frame = sequenceEvent(credentialState, event);
     sendJson(ws, frame);
 
     // Check backpressure
@@ -177,8 +187,8 @@ export function createWsServer(
   }
 
   function startHeartbeat(ws: ServerWebSocket<ConnectionData>): void {
-    const sessionRecord = ws.data.sessionRecord;
-    if (!sessionRecord) return;
+    const credentialRecord = ws.data.credentialRecord;
+    if (!credentialRecord) return;
 
     const deadThresholdMs =
       config.missedHeartbeatsBeforeDead * config.heartbeatIntervalMs;
@@ -196,34 +206,37 @@ export function createWsServer(
         return;
       }
 
-      // Refresh session state so idle sockets pick up revocations/narrowing.
+      // Refresh credential state so idle sockets pick up revocations/narrowing.
       // This ensures broadcasts also see current permissions.
-      const currentSessionId =
-        ws.data.sessionRecord?.sessionId ?? sessionRecord.sessionId;
-      const lookupResult = await deps.sessionManager.lookup(currentSessionId);
+      const currentCredentialId =
+        ws.data.credentialRecord?.credentialId ?? credentialRecord.credentialId;
+      const lookupResult = await deps.credentialLookup(currentCredentialId);
       if (!lookupResult.isOk()) {
-        ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+        ws.close(
+          WS_CLOSE_CODES.CREDENTIAL_REVOKED,
+          "Credential no longer valid",
+        );
         stopHeartbeat(ws);
         return;
       }
       const fresh = lookupResult.value;
-      ws.data.sessionRecord = fresh;
+      ws.data.credentialRecord = fresh;
 
-      if (fresh.state !== "active") {
+      if (fresh.status !== "active") {
         const closeCode =
-          fresh.state === "revoked"
+          fresh.status === "revoked"
             ? WS_CLOSE_CODES.SESSION_REVOKED
-            : fresh.state === "expired"
+            : fresh.status === "expired"
               ? WS_CLOSE_CODES.SESSION_EXPIRED
               : WS_CLOSE_CODES.POLICY_CHANGE;
-        ws.close(closeCode, `Session is ${fresh.state}`);
+        ws.close(closeCode, `Credential is ${fresh.status}`);
         stopHeartbeat(ws);
         return;
       }
 
       sendSequenced(ws, {
         type: "heartbeat",
-        sessionId: currentSessionId,
+        credentialId: currentCredentialId,
         timestamp: new Date().toISOString(),
       });
     }, config.heartbeatIntervalMs);
@@ -267,17 +280,17 @@ export function createWsServer(
       return;
     }
 
-    const session = result.value;
+    const credential = result.value;
 
     // Transition to active
-    ws.data.sessionRecord = session;
-    ws.data.sessionId = session.sessionId;
-    ws.data.agentInboxId = session.agentInboxId;
+    ws.data.credentialRecord = credential;
+    ws.data.credentialId = credential.credentialId;
+    ws.data.operatorId = credential.operatorId;
     transition(ws.data, "active");
 
-    // Attach session replay state (shared across reconnections)
-    const sessionState = getOrCreateSessionState(session.sessionId);
-    ws.data.sessionReplayState = sessionState;
+    // Attach credential replay state (shared across reconnections)
+    const credentialState = getOrCreateCredentialState(credential.credentialId);
+    ws.data.credentialReplayState = credentialState;
 
     // Register connection
     registry.add(ws);
@@ -289,11 +302,11 @@ export function createWsServer(
 
     if (authFrame.lastSeenSeq !== null) {
       const lastSeen = authFrame.lastSeenSeq;
-      const oldestFrame = sessionState.buffer.oldest();
+      const oldestFrame = credentialState.buffer.oldest();
       if (oldestFrame !== undefined && oldestFrame.seq > lastSeen + 1) {
         needsRecovery = true;
       } else {
-        replayFrames = sessionState.buffer.itemsSince(
+        replayFrames = credentialState.buffer.itemsSince(
           (f: SequencedFrame) => f.seq > lastSeen,
         );
 
@@ -307,15 +320,14 @@ export function createWsServer(
     sendJson(ws, {
       type: "authenticated",
       connectionId: ws.data.connectionId,
-      session: {
-        sessionId: session.sessionId,
-        agentInboxId: session.agentInboxId,
-        sessionKeyFingerprint: session.sessionKeyFingerprint,
-        issuedAt: session.issuedAt,
-        expiresAt: session.expiresAt,
+      credential: {
+        credentialId: credential.credentialId,
+        operatorId: credential.operatorId,
+        fingerprint: tokenFingerprint,
+        issuedAt: credential.issuedAt,
+        expiresAt: credential.expiresAt,
       },
-      view: session.view,
-      grant: session.grant,
+      effectiveScopes: credential.effectiveScopes,
       resumedFromSeq,
     });
 
@@ -342,35 +354,35 @@ export function createWsServer(
     ws: ServerWebSocket<ConnectionData>,
     frame: unknown,
   ): Promise<void> {
-    const cachedSession = ws.data.sessionRecord;
-    if (!cachedSession) {
+    const cachedCredential = ws.data.credentialRecord;
+    if (!cachedCredential) {
       ws.close(WS_CLOSE_CODES.PROTOCOL_ERROR, "Not authenticated");
       return;
     }
 
-    // Fresh session lookup — fail closed on errors instead of
+    // Fresh credential lookup -- fail closed on errors instead of
     // falling back to a stale snapshot that may be revoked/expired.
-    const lookupResult = await deps.sessionManager.lookup(
-      cachedSession.sessionId,
+    const lookupResult = await deps.credentialLookup(
+      cachedCredential.credentialId,
     );
     if (!lookupResult.isOk()) {
-      ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+      ws.close(WS_CLOSE_CODES.CREDENTIAL_REVOKED, "Credential no longer valid");
       stopHeartbeat(ws);
       return;
     }
-    const session = lookupResult.value;
-    ws.data.sessionRecord = session;
+    const credential = lookupResult.value;
+    ws.data.credentialRecord = credential;
 
-    // Reject non-active sessions — close the socket so the client
+    // Reject non-active credentials -- close the socket so the client
     // doesn't stay on a "healthy-looking" connection.
-    if (session.state !== "active") {
+    if (credential.status !== "active") {
       const closeCode =
-        session.state === "revoked"
+        credential.status === "revoked"
           ? WS_CLOSE_CODES.SESSION_REVOKED
-          : session.state === "expired"
+          : credential.status === "expired"
             ? WS_CLOSE_CODES.SESSION_EXPIRED
             : WS_CLOSE_CODES.POLICY_CHANGE;
-      ws.close(closeCode, `Session is ${session.state}`);
+      ws.close(closeCode, `Credential is ${credential.status}`);
       stopHeartbeat(ws);
       return;
     }
@@ -433,18 +445,21 @@ export function createWsServer(
     try {
       const response = await routeRequest(
         request,
-        session,
+        credential,
         deps.requestHandler,
       );
 
-      // Re-sync cached session after mutating requests so broadcasts
+      // Re-sync cached credential after mutating requests so broadcasts
       // immediately see updated policy instead of waiting for the next heartbeat.
-      if (request.type === "update_view" || request.type === "reveal_content") {
-        const refreshResult = await deps.sessionManager.lookup(
-          session.sessionId,
+      if (
+        request.type === "update_scopes" ||
+        request.type === "reveal_content"
+      ) {
+        const refreshResult = await deps.credentialLookup(
+          credential.credentialId,
         );
         if (refreshResult.isOk()) {
-          ws.data.sessionRecord = refreshResult.value;
+          ws.data.credentialRecord = refreshResult.value;
         }
       }
 
@@ -477,26 +492,29 @@ export function createWsServer(
     }
   }
 
-  function broadcastToSession(sessionId: string, event: SignetEvent): void {
-    // Queue events while any invalidation is in flight — they'll be
-    // replayed with the fresh session snapshot once all lookups complete.
-    const pending = pendingInvalidations.get(sessionId);
+  function broadcastToCredential(
+    credentialId: string,
+    event: SignetEvent,
+  ): void {
+    // Queue events while any invalidation is in flight -- they'll be
+    // replayed with the fresh credential snapshot once all lookups complete.
+    const pending = pendingInvalidations.get(credentialId);
     if (pending !== undefined) {
       pending.events.push(event);
       return;
     }
 
-    const connections = registry.getBySessionId(sessionId);
+    const connections = registry.getByCredentialId(credentialId);
     for (const ws of connections) {
       if (ws.data.phase === "active") {
-        const session = ws.data.sessionRecord;
-        if (!session) continue;
+        const credential = ws.data.credentialRecord;
+        if (!credential) continue;
 
-        // Skip non-active sessions (will be closed on next request)
-        if (session.state !== "active") continue;
+        // Skip non-active credentials (will be closed on next request)
+        if (credential.status !== "active") continue;
 
         if (deps.projectEvent) {
-          const projected = deps.projectEvent(event, session);
+          const projected = deps.projectEvent(event, credential);
           if (projected === null) continue;
           sendSequenced(ws, projected);
         } else {
@@ -515,67 +533,70 @@ export function createWsServer(
       return registry.size;
     },
 
-    broadcast: broadcastToSession,
+    broadcast: broadcastToCredential,
 
-    async invalidateSession(sessionId: string): Promise<void> {
+    async invalidateCredential(credentialId: string): Promise<void> {
       // Each invalidation gets a generation number. Only the highest
       // generation writes to the cache, so later (narrower) policy
       // always wins over earlier (broader) lookups that resolve late.
       const myGen = ++invalidationGen;
-      const existing = pendingInvalidations.get(sessionId);
+      const existing = pendingInvalidations.get(credentialId);
       if (existing) {
         existing.refcount++;
         existing.generation = myGen;
       } else {
-        pendingInvalidations.set(sessionId, {
+        pendingInvalidations.set(credentialId, {
           refcount: 1,
           generation: myGen,
           events: [],
         });
       }
       try {
-        const lookupResult = await deps.sessionManager.lookup(sessionId);
+        const lookupResult = await deps.credentialLookup(credentialId);
 
-        // Only apply if this is still the latest invalidation for this session.
+        // Only apply if this is still the latest invalidation for this credential.
         // An earlier broader lookup that resolves after a later narrower one
         // must not overwrite the narrower snapshot.
-        const entry = pendingInvalidations.get(sessionId);
+        const entry = pendingInvalidations.get(credentialId);
         if (!entry || entry.generation !== myGen) return;
 
-        const connections = registry.getBySessionId(sessionId);
+        const connections = registry.getByCredentialId(credentialId);
         for (const ws of connections) {
           if (ws.data.phase !== "active") continue;
 
           if (!lookupResult.isOk()) {
-            ws.close(WS_CLOSE_CODES.SESSION_REVOKED, "Session no longer valid");
+            ws.close(
+              WS_CLOSE_CODES.CREDENTIAL_REVOKED,
+              "Credential no longer valid",
+            );
             stopHeartbeat(ws);
             continue;
           }
 
           const fresh = lookupResult.value;
-          ws.data.sessionRecord = fresh;
+          ws.data.credentialRecord = fresh;
 
-          if (fresh.state !== "active") {
+          if (fresh.status !== "active") {
             const closeCode =
-              fresh.state === "revoked"
+              fresh.status === "revoked"
                 ? WS_CLOSE_CODES.SESSION_REVOKED
-                : fresh.state === "expired"
+                : fresh.status === "expired"
                   ? WS_CLOSE_CODES.SESSION_EXPIRED
                   : WS_CLOSE_CODES.POLICY_CHANGE;
-            ws.close(closeCode, `Session is ${fresh.state}`);
+            ws.close(closeCode, `Credential is ${fresh.status}`);
             stopHeartbeat(ws);
           }
         }
       } finally {
-        const entry = pendingInvalidations.get(sessionId);
+        const entry = pendingInvalidations.get(credentialId);
         if (entry) {
           entry.refcount--;
           if (entry.refcount <= 0) {
-            // Last invalidation done — drain queued events with fresh snapshot
+            // Last invalidation done -- drain queued events with fresh snapshot
             const queued = entry.events;
-            pendingInvalidations.delete(sessionId);
+            pendingInvalidations.delete(credentialId);
             for (const event of queued) {
-              broadcastToSession(sessionId, event);
+              broadcastToCredential(credentialId, event);
             }
           }
         }
@@ -723,13 +744,13 @@ export function createWsServer(
 
       serverState = "draining";
 
-      // Send session.expired to all active connections
+      // Send credential.expired to all active connections
       const allConnections = registry.getAll();
       for (const ws of allConnections) {
-        if (ws.data.phase === "active" && ws.data.sessionRecord) {
+        if (ws.data.phase === "active" && ws.data.credentialRecord) {
           sendSequenced(ws, {
-            type: "session.expired",
-            sessionId: ws.data.sessionRecord.sessionId,
+            type: "credential.expired",
+            credentialId: ws.data.credentialRecord.credentialId,
             reason: "signet_shutdown",
           });
           transition(ws.data, "draining");
@@ -774,8 +795,8 @@ export function createWsServer(
         cleanupConnection(ws);
       }
 
-      // Clean up session states
-      sessionStates.clear();
+      // Clean up credential states
+      credentialStates.clear();
 
       // Stop the server (false = don't force-close remaining connections)
       if (bunServer) {

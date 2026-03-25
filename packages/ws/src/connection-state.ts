@@ -1,4 +1,4 @@
-import type { SessionRecord } from "@xmtp/signet-contracts";
+import type { CredentialRecord } from "@xmtp/signet-contracts";
 import { CircularBuffer } from "./replay-buffer.js";
 import { BackpressureTracker } from "./backpressure.js";
 import type { SequencedFrame } from "./frames.js";
@@ -19,10 +19,10 @@ const VALID_TRANSITIONS: Record<ConnectionPhase, readonly ConnectionPhase[]> = {
 };
 
 /**
- * Per-session replay state: buffer + seq counter.
- * Shared across reconnections of the same session.
+ * Per-credential replay state: buffer + seq counter.
+ * Shared across reconnections of the same credential.
  */
-export interface SessionReplayState {
+export interface CredentialReplayState {
   buffer: CircularBuffer<SequencedFrame>;
   nextSeq: number;
 }
@@ -34,11 +34,11 @@ export interface SessionReplayState {
 export interface ConnectionData {
   readonly connectionId: string;
   phase: ConnectionPhase;
-  sessionRecord: SessionRecord | null;
-  sessionId: string | null;
-  agentInboxId: string | null;
+  credentialRecord: CredentialRecord | null;
+  credentialId: string | null;
+  operatorId: string | null;
   /** Attached after auth succeeds; shared across reconnections. */
-  sessionReplayState: SessionReplayState | null;
+  credentialReplayState: CredentialReplayState | null;
   backpressure: BackpressureTracker;
   authTimer: ReturnType<typeof setTimeout> | null;
   heartbeatTimer: ReturnType<typeof setInterval> | null;
@@ -66,10 +66,10 @@ export function createConnectionState(
   return {
     connectionId: `conn_${now}_${connectionCounter}`,
     phase: "authenticating",
-    sessionRecord: null,
-    sessionId: null,
-    agentInboxId: null,
-    sessionReplayState: null,
+    credentialRecord: null,
+    credentialId: null,
+    operatorId: null,
+    credentialReplayState: null,
     backpressure: new BackpressureTracker(softLimit, hardLimit),
     authTimer: null,
     heartbeatTimer: null,

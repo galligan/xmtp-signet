@@ -176,7 +176,7 @@ describe("HeartbeatRequest", () => {
     const valid = {
       type: "heartbeat",
       requestId: "req-1",
-      sessionId: "sess-1",
+      credentialId: "cred_1234abcdfeedbabe",
     };
     expect(HeartbeatRequest.safeParse(valid).success).toBe(true);
   });
@@ -187,7 +187,7 @@ describe("HarnessRequest discriminated union", () => {
     const heartbeat = {
       type: "heartbeat",
       requestId: "req-1",
-      sessionId: "sess-1",
+      credentialId: "cred_1234abcdfeedbabe",
     };
     const result = HarnessRequest.safeParse(heartbeat);
     expect(result.success).toBe(true);
@@ -267,7 +267,7 @@ describe("HarnessRequest discriminated union", () => {
         actionId: "a1",
         confirmed: true,
       },
-      { type: "heartbeat", requestId: "r7", sessionId: "s1" },
+      { type: "heartbeat", requestId: "r7", credentialId: "cred_1234abcdfeedbabe" },
     ];
 
     for (const req of requests) {

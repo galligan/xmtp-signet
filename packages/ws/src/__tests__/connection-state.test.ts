@@ -11,8 +11,8 @@ describe("createConnectionState", () => {
     const state = createConnectionState();
     expect(state.phase).toBe("authenticating");
     expect(state.connectionId).toBeTruthy();
-    expect(state.sessionRecord).toBeNull();
-    expect(state.sessionReplayState).toBeNull();
+    expect(state.credentialRecord).toBeNull();
+    expect(state.credentialReplayState).toBeNull();
     expect(state.inFlightRequests.size).toBe(0);
   });
 

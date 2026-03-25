@@ -4,8 +4,7 @@ import { createWsServer, type WsServer, type WsServerDeps } from "../server.js";
 import { SequencedFrame } from "../frames.js";
 import {
   createMockDeps,
-  createMockSessionManager,
-  makeSessionRecord,
+  makeCredentialRecord,
   nextMessage,
   waitForClose,
   waitForOpen,
@@ -86,8 +85,8 @@ describe("Auth handshake", () => {
     expect(frame["connectionId"]).toBeTruthy();
     expect(frame["resumedFromSeq"]).toBeNull();
 
-    const session = frame["session"] as Record<string, unknown>;
-    expect(session["sessionId"]).toBe("sess_test");
+    const credential = frame["credential"] as Record<string, unknown>;
+    expect(credential["credentialId"]).toBe("cred_deadbeeffeedbabe");
 
     ws.close();
   });
@@ -187,7 +186,7 @@ describe("Request/Response", () => {
       JSON.stringify({
         type: "heartbeat",
         requestId: "req_hb",
-        sessionId: "sess_test",
+        credentialId: "cred_deadbeeffeedbabe",
       }),
     );
 
@@ -265,15 +264,15 @@ describe("Event broadcasting", () => {
     }
   });
 
-  test("broadcasts sequenced events to connected sessions", async () => {
+  test("broadcasts sequenced events to connected credentials", async () => {
     await startServer();
     const ws = await connectAndAuth();
     await nextMessage(ws); // consume auth response
 
     // Broadcast an event
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:00Z",
     });
 
@@ -291,14 +290,14 @@ describe("Event broadcasting", () => {
     const ws = await connectAndAuth();
     await nextMessage(ws); // consume auth response
 
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:00Z",
     });
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:01Z",
     });
 
@@ -319,9 +318,9 @@ describe("Event broadcasting", () => {
     const ws = await connectAndAuth();
     await nextMessage(ws); // consume auth response
 
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:00Z",
     });
 
@@ -332,7 +331,7 @@ describe("Event broadcasting", () => {
       JSON.stringify({
         type: "heartbeat",
         requestId: "req_after_event",
-        sessionId: "sess_test",
+        credentialId: "cred_deadbeeffeedbabe",
       }),
     );
 
@@ -348,16 +347,16 @@ describe("Event broadcasting", () => {
     const first = await connectAndAuth();
     await nextMessage(first); // consume auth response
 
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:00Z",
     });
     await nextMessage(first);
 
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:01Z",
     });
     await nextMessage(first);
@@ -419,7 +418,7 @@ describe("Dead-connection detection", () => {
     const ws = await connectAndAuth();
     await nextMessage(ws); // consume auth response
 
-    // Do NOT send any messages — let the dead check fire
+    // Do NOT send any messages -- let the dead check fire
     const { code } = await waitForClose(ws, 2000);
     expect(code).toBe(4010);
   });
@@ -439,7 +438,7 @@ describe("Dead-connection detection", () => {
           JSON.stringify({
             type: "heartbeat",
             requestId: `req_keep_alive_${Date.now()}`,
-            sessionId: "sess_test",
+            credentialId: "cred_deadbeeffeedbabe",
           }),
         );
       }
@@ -474,7 +473,7 @@ describe("Rate limiting", () => {
         JSON.stringify({
           type: "heartbeat",
           requestId: `req_${i}`,
-          sessionId: "sess_test",
+          credentialId: "cred_deadbeeffeedbabe",
         }),
       );
     }
@@ -502,7 +501,7 @@ describe("Rate limiting", () => {
         JSON.stringify({
           type: "heartbeat",
           requestId: `req_${i}`,
-          sessionId: "sess_test",
+          credentialId: "cred_deadbeeffeedbabe",
         }),
       );
     }
@@ -524,14 +523,14 @@ describe("Rate limiting", () => {
       JSON.stringify({
         type: "heartbeat",
         requestId: "req_a",
-        sessionId: "sess_test",
+        credentialId: "cred_deadbeeffeedbabe",
       }),
     );
     ws.send(
       JSON.stringify({
         type: "heartbeat",
         requestId: "req_b",
-        sessionId: "sess_test",
+        credentialId: "cred_deadbeeffeedbabe",
       }),
     );
 
@@ -543,7 +542,7 @@ describe("Rate limiting", () => {
       JSON.stringify({
         type: "heartbeat",
         requestId: "req_c",
-        sessionId: "sess_test",
+        credentialId: "cred_deadbeeffeedbabe",
       }),
     );
 
@@ -555,17 +554,17 @@ describe("Rate limiting", () => {
 });
 
 describe("Graceful shutdown", () => {
-  test("sends session.expired event before closing", async () => {
+  test("sends credential.expired event before closing", async () => {
     await startServer();
     const ws = await connectAndAuth();
     await nextMessage(ws); // consume auth response
 
-    // Collect the session.expired event sent during drain
+    // Collect the credential.expired event sent during drain
     const msgPromise = nextMessage(ws, 10000);
     const closePromise = waitForClose(ws, 10000);
     await server.stop();
 
-    // Should receive a sequenced session.expired event
+    // Should receive a sequenced credential.expired event
     const frame = msgPromise
       .then((f) => f as Record<string, unknown>)
       .catch(() => null);
@@ -573,7 +572,7 @@ describe("Graceful shutdown", () => {
     if (msg !== null) {
       const event = msg["event"] as Record<string, unknown> | undefined;
       if (event) {
-        expect(event["type"]).toBe("session.expired");
+        expect(event["type"]).toBe("credential.expired");
         expect(event["reason"]).toBe("signet_shutdown");
       }
     }
@@ -596,51 +595,48 @@ describe("Overlapping invalidations", () => {
     }
   });
 
-  test("overlapping invalidations use the latest session snapshot", async () => {
-    // The first invalidation resolves slowly with a "full" view.
-    // The second invalidation resolves quickly with a narrower view.
-    // After both complete, broadcasts should use the narrower view.
+  test("overlapping invalidations use the latest credential snapshot", async () => {
+    // The first invalidation resolves slowly with broad scopes.
+    // The second invalidation resolves quickly with narrower scopes.
+    // After both complete, broadcasts should use the narrower scopes.
     let lookupCallCount = 0;
 
-    const fullRecord = makeSessionRecord({
-      view: {
-        mode: "full",
-        threadScopes: [{ groupId: "g1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0", "xmtp.org/reaction:1.0"],
+    const broadRecord = makeCredentialRecord({
+      effectiveScopes: {
+        allow: ["send", "reply", "react"],
+        deny: [],
       },
     });
 
-    const narrowRecord = makeSessionRecord({
-      view: {
-        mode: "full",
-        threadScopes: [{ groupId: "g1", threadId: null }],
-        contentTypes: ["xmtp.org/text:1.0"],
+    const narrowRecord = makeCredentialRecord({
+      effectiveScopes: {
+        allow: ["send"],
+        deny: [],
       },
     });
 
-    const sessionManager = createMockSessionManager("valid_token", fullRecord);
-
-    // Override lookup to return different records with different delays
-    sessionManager.lookup = async (_sessionId: string) => {
+    const credentialLookup: WsServerDeps["credentialLookup"] = async (
+      _credentialId,
+    ) => {
       lookupCallCount++;
       const callNumber = lookupCallCount;
       if (callNumber === 1) {
-        // First call: slow, returns full view
+        // First call: slow, returns broad scopes
         await Bun.sleep(50);
-        return Result.ok(fullRecord);
+        return Result.ok(broadRecord);
       }
-      // Second call: fast, returns narrow view
+      // Second call: fast, returns narrow scopes
       await Bun.sleep(10);
       return Result.ok(narrowRecord);
     };
 
-    // Track which contentTypes the projector sees
-    const projectedContentTypes: string[][] = [];
+    // Track which scopes the projector sees
+    const projectedScopes: string[][] = [];
 
     await startServer({}, "valid_token", {
-      sessionManager,
-      projectEvent: (event, session) => {
-        projectedContentTypes.push([...(session.view.contentTypes ?? [])]);
+      credentialLookup,
+      projectEvent: (event, credential) => {
+        projectedScopes.push([...(credential.effectiveScopes.allow ?? [])]);
         return event;
       },
     });
@@ -649,55 +645,55 @@ describe("Overlapping invalidations", () => {
     await nextMessage(ws); // consume auth response
 
     // Fire two overlapping invalidations
-    const inv1 = server.invalidateSession("sess_test");
-    const inv2 = server.invalidateSession("sess_test");
+    const inv1 = server.invalidateCredential("cred_deadbeeffeedbabe");
+    const inv2 = server.invalidateCredential("cred_deadbeeffeedbabe");
     await Promise.all([inv1, inv2]);
 
     // Broadcast after both complete
-    server.broadcast("sess_test", {
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:00Z",
     });
 
     const frame = (await nextMessage(ws)) as Record<string, unknown>;
     expect(frame["seq"]).toBe(1);
 
-    // The projector should have seen the NARROW view (from the later invalidation)
-    expect(projectedContentTypes).toHaveLength(1);
-    expect(projectedContentTypes[0]).toEqual(["xmtp.org/text:1.0"]);
+    // The projector should have seen the NARROW scopes (from the later invalidation)
+    expect(projectedScopes).toHaveLength(1);
+    expect(projectedScopes[0]).toEqual(["send"]);
 
     ws.close();
   });
 
   test("broadcasts during invalidation are queued and replayed", async () => {
     let lookupResolveFn: (() => void) | null = null;
-    const record = makeSessionRecord();
-    const sessionManager = createMockSessionManager("valid_token", record);
+    const record = makeCredentialRecord();
 
-    // Override lookup to block until we release it
-    sessionManager.lookup = async (_sessionId: string) => {
+    const credentialLookup: WsServerDeps["credentialLookup"] = async (
+      _credentialId,
+    ) => {
       await new Promise<void>((resolve) => {
         lookupResolveFn = resolve;
       });
       return Result.ok(record);
     };
 
-    await startServer({}, "valid_token", { sessionManager });
+    await startServer({}, "valid_token", { credentialLookup });
 
     const ws = await connectAndAuth();
     await nextMessage(ws); // consume auth response
 
     // Start invalidation (lookup will block)
-    const invPromise = server.invalidateSession("sess_test");
+    const invPromise = server.invalidateCredential("cred_deadbeeffeedbabe");
 
     // Wait a tick so the invalidation is in flight
     await Bun.sleep(5);
 
-    // Broadcast while invalidation is pending — should be queued, not sent
-    server.broadcast("sess_test", {
+    // Broadcast while invalidation is pending -- should be queued, not sent
+    server.broadcast("cred_deadbeeffeedbabe", {
       type: "heartbeat",
-      sessionId: "sess_test",
+      credentialId: "cred_deadbeeffeedbabe",
       timestamp: "2024-01-01T00:00:00Z",
     });
 
@@ -711,7 +707,7 @@ describe("Overlapping invalidations", () => {
     await Bun.sleep(10);
     expect(prematureMessage).toBeNull();
 
-    // Release the lookup — queued events should drain now
+    // Release the lookup -- queued events should drain now
     expect(lookupResolveFn).not.toBeNull();
     lookupResolveFn!();
     await invPromise;
