@@ -122,6 +122,52 @@ describe("daemon-backed CLI command wiring", () => {
     expect(harness.stdout.join("")).toContain("cred_cafe1234feedbabe");
   });
 
+  test("credential issue preserves ttlSeconds from credential JSON", async () => {
+    const issued = {
+      token: "credential-token",
+      credential: {
+        id: "cred_cafe1234feedbabe",
+        config: {
+          ...credentialConfig,
+          ttlSeconds: 900,
+        },
+        inboxIds: [],
+        status: "active",
+        issuedAt: "2024-01-01T00:00:00.000Z",
+        expiresAt: "2024-01-01T01:00:00.000Z",
+        issuedBy: "op_deadbeeffeedbabe",
+      },
+    };
+    const harness = createHarness(issued);
+
+    const command = createSessionCommands(harness.deps);
+    await command.parseAsync([
+      "node",
+      "session",
+      "issue",
+      "--operator",
+      "op_deadbeeffeedbabe",
+      "--credential",
+      JSON.stringify({
+        ...credentialConfig,
+        ttlSeconds: 900,
+      }),
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "credential.issue",
+        params: {
+          operatorId: "op_deadbeeffeedbabe",
+          chatIds: ["conv_c0ffee12feedbabe"],
+          allow: ["send", "read-messages"],
+          deny: [],
+          ttlSeconds: 900,
+        },
+      },
+    ]);
+  });
+
   test("status routes through daemon client and prints response", async () => {
     const harness = createHarness({
       state: "running",

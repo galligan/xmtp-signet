@@ -247,6 +247,9 @@ async function buildCredentialConfig(options: {
     policyId: credResult.value.policyId,
     allow: credResult.value.allow,
     deny: credResult.value.deny,
+    ...(credResult.value.ttlSeconds !== undefined
+      ? { ttlSeconds: credResult.value.ttlSeconds }
+      : {}),
     ...(ttlResult.value !== undefined ? { ttlSeconds: ttlResult.value } : {}),
   });
   if (!parsedConfig.success) {
