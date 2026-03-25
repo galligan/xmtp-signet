@@ -1,7 +1,4 @@
-import type {
-  PermissionScopeType,
-  PermissionError,
-} from "@xmtp/signet-schemas";
+import type { PermissionScopeType } from "@xmtp/signet-schemas";
 
 /** Describes a change between two scope configurations. */
 export interface PolicyDelta {
@@ -13,6 +10,3 @@ export interface PolicyDelta {
     to: "allow" | "deny";
   }>;
 }
-
-/** Type alias for scope enforcement error results. */
-export type GrantError = PermissionError;
