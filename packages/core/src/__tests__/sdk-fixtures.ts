@@ -8,13 +8,10 @@ import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { SignerProviderLike } from "../xmtp-client-factory.js";
 import type {
-  SdkIdentifierShape,
   SdkGroupMemberShape,
-  SdkContentTypeIdShape,
   SdkDecodedMessageShape,
   SdkAsyncStreamProxyShape,
   SdkGroupShape,
-  SdkConversationsShape,
   SdkClientShape,
 } from "../sdk/sdk-types.js";
 
