@@ -19,6 +19,7 @@ import {
   AuthError,
   CancelledError,
   CredentialExpiredError,
+  GrantDeniedError,
   InternalError,
   NotFoundError,
   PermissionError,
