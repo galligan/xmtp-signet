@@ -91,11 +91,11 @@ describe("OperatorConfig", () => {
     }
   });
 
-  it("defaults provider to undefined when omitted", () => {
+  it("defaults provider to internal when omitted", () => {
     const result = OperatorConfig.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.provider).toBeUndefined();
+      expect(result.data.provider).toBe("internal");
     }
   });
 

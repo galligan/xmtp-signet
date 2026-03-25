@@ -42,7 +42,7 @@ export const OperatorConfig: z.ZodObject<{
   label: z.ZodString;
   role: typeof OperatorRole;
   scopeMode: typeof ScopeMode;
-  provider: z.ZodOptional<typeof WalletProvider>;
+  provider: z.ZodDefault<typeof WalletProvider>;
   walletId: z.ZodOptional<z.ZodString>;
 }> = z.object({
   /** Human-readable name for the operator. */
@@ -52,7 +52,7 @@ export const OperatorConfig: z.ZodObject<{
   /** Whether credentials are per-chat or shared. */
   scopeMode: ScopeMode,
   /** Wallet key source. Defaults to internal when omitted. */
-  provider: WalletProvider.optional(),
+  provider: WalletProvider.default("internal"),
   /** Reference to the backing wallet. */
   walletId: z.string().optional(),
 });
