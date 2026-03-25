@@ -32,6 +32,13 @@ export type { PublisherDeps } from "./publisher.js";
 // Chain validation
 export { validateSealChain, verifyChainDelta } from "./chain-validator.js";
 
+// Message-seal binding
+export {
+  createMessageBinding,
+  verifyMessageBinding,
+} from "./message-binding.js";
+export type { BindingSigner, BindingVerifier } from "./message-binding.js";
+
 // Seal manager
 export { createSealManager } from "./manager.js";
 export type {
