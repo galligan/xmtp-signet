@@ -177,11 +177,18 @@ describe("se-bridge", () => {
   });
 
   describe("findSignerBinary", () => {
-    test("returns string or null", () => {
+    test("returns string on macOS with built signer, null otherwise", () => {
       const result = findSignerBinary();
-      // On macOS dev machines with a build, this should find the binary.
-      // On CI without a build, it returns null. Either is valid.
-      expect(result === null || typeof result === "string").toBe(true);
+      // findSignerBinary is environment-dependent: returns a path on macOS dev
+      // machines with a compiled signet-signer, null everywhere else (CI runs
+      // on ubuntu-latest). Both outcomes are correct — the function's contract
+      // is to probe, not to guarantee.
+      if (result !== null) {
+        expect(typeof result).toBe("string");
+        expect(result.length).toBeGreaterThan(0);
+      } else {
+        expect(result).toBeNull();
+      }
     });
   });
 });
