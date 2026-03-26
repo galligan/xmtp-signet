@@ -59,6 +59,9 @@ export type {
   RegisteredIdentity,
 } from "./identity-registration.js";
 
+// ID mapping store
+export { createSqliteIdMappingStore } from "./id-mapping-store.js";
+
 // Conversation actions
 export { createConversationActions } from "./conversation-actions.js";
 export type { ConversationActionDeps } from "./conversation-actions.js";
