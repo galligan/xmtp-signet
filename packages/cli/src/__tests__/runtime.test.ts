@@ -44,12 +44,17 @@ function createCallTracker(): {
 function makeMockDeps(tracker: {
   calls: string[];
   record(name: string): void;
-}): SignetRuntimeDeps & { _dispatcher: () => AdminDispatcher | undefined } {
+}): SignetRuntimeDeps & {
+  _dispatcher: () => AdminDispatcher | undefined;
+  _keyManagerConfig: () => unknown;
+} {
   let capturedDispatcher: AdminDispatcher | undefined;
+  let capturedKeyManagerConfig: unknown;
 
   return {
-    createKeyManager: async () => {
+    createKeyManager: async (config) => {
       tracker.record("keyManager.create");
+      capturedKeyManagerConfig = config;
       return Result.ok({
         initialize: async () => {
           tracker.record("keyManager.initialize");
@@ -221,6 +226,7 @@ function makeMockDeps(tracker: {
       };
     },
     _dispatcher: () => capturedDispatcher,
+    _keyManagerConfig: () => capturedKeyManagerConfig,
   };
 }
 
@@ -260,6 +266,43 @@ describe("createSignetRuntime", () => {
     expect(runtime.wsServer).toBeDefined();
     expect(runtime.adminServer).toBeDefined();
     expect(runtime.paths).toBeDefined();
+  });
+
+  test("passes vault and biometric config through to createKeyManager", async () => {
+    const tracker = createCallTracker();
+    const config = CliConfigSchema.parse({
+      signet: { dataDir: join(tempDir, "data") },
+      admin: { socketPath: join(tempDir, "admin.sock") },
+      logging: { auditLogPath: join(tempDir, "audit.jsonl") },
+      keys: {
+        rootKeyPolicy: "passcode",
+        operationalKeyPolicy: "open",
+        vaultKeyPolicy: "biometric",
+      },
+      biometricGating: {
+        rootKeyCreation: true,
+        operationalKeyRotation: true,
+      },
+    });
+    const deps = makeMockDeps(tracker);
+
+    const result = await createSignetRuntime(config, deps);
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(deps._keyManagerConfig()).toEqual({
+      platform: "software-vault",
+      rootKeyPolicy: "passcode",
+      operationalKeyPolicy: "open",
+      vaultKeyPolicy: "biometric",
+      biometricGating: {
+        rootKeyCreation: true,
+        operationalKeyRotation: true,
+        scopeExpansion: false,
+        egressExpansion: false,
+        agentCreation: false,
+      },
+      dataDir: join(tempDir, "data"),
+    });
   });
 
   test("start() transitions through states correctly", async () => {

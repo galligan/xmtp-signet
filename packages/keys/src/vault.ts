@@ -14,6 +14,11 @@ import { hkdf } from "@noble/hashes/hkdf";
 import { sha256 } from "@noble/hashes/sha256";
 import { gcm } from "@noble/ciphers/aes.js";
 import { bytesToHex, hexToBytes } from "@noble/ciphers/utils.js";
+import type { KeyPolicy } from "./config.js";
+import {
+  resolveVaultSecretProvider,
+  type VaultSecretProvider,
+} from "./vault-secret-provider.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -110,6 +115,14 @@ export interface Vault {
   close(): void;
 }
 
+/** Optional overrides when constructing a file-backed vault. */
+export interface CreateVaultOptions {
+  /** Inject a pre-resolved secret provider, primarily for deterministic tests. */
+  readonly secretProvider?: VaultSecretProvider | undefined;
+  /** Access policy to use if the vault secret provider is resolved automatically. */
+  readonly vaultKeyPolicy?: KeyPolicy | undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Scrypt parameters
 // ---------------------------------------------------------------------------
@@ -192,26 +205,6 @@ async function importSecretKey(raw: Uint8Array): Promise<CryptoKey> {
     false,
     ["encrypt", "decrypt"],
   );
-}
-
-async function getOrCreateSecretKey(dataDir: string): Promise<CryptoKey> {
-  const keyPath = join(dataDir, "vault.key");
-  const file = Bun.file(keyPath);
-
-  if (await file.exists()) {
-    const raw = new Uint8Array(await file.arrayBuffer());
-    if (raw.byteLength !== 32) {
-      throw new Error(
-        `Vault key file has invalid length: expected 32 bytes, got ${raw.byteLength}`,
-      );
-    }
-    return importSecretKey(raw);
-  }
-
-  const raw = crypto.getRandomValues(new Uint8Array(32));
-  await Bun.write(keyPath, raw);
-  chmodSync(keyPath, 0o600);
-  return importSecretKey(raw);
 }
 
 async function encryptSecret(
@@ -944,10 +937,12 @@ function createFileVault(dataDir: string, secretKey: CryptoKey): Vault {
  * Create an encrypted vault.
  *
  * For `:memory:` mode (tests), uses an in-memory Map-based store.
- * For file-based mode, creates a directory structure under `dataDir`.
+ * For file-based mode, creates a directory structure under `dataDir` and
+ * resolves the vault secret through the configured secret provider.
  */
 export async function createVault(
   dataDir: string,
+  options: CreateVaultOptions = {},
 ): Promise<Result<Vault, InternalError>> {
   try {
     if (dataDir === ":memory:") {
@@ -960,7 +955,21 @@ export async function createVault(
       chmodSync(dataDir, 0o700);
     }
 
-    const secretKey = await getOrCreateSecretKey(dataDir);
+    const secretProvider =
+      options.secretProvider ??
+      resolveVaultSecretProvider(dataDir, options.vaultKeyPolicy ?? "open");
+    const secretResult = await secretProvider.getSecret();
+    if (Result.isError(secretResult)) {
+      return Result.err(
+        InternalError.create("Failed to resolve vault secret", {
+          dataDir,
+          providerKind: secretProvider.kind,
+          cause: secretResult.error.message,
+        }),
+      );
+    }
+
+    const secretKey = await importSecretKey(hexToBytes(secretResult.value));
     return Result.ok(createFileVault(dataDir, secretKey));
   } catch (e) {
     return Result.err(

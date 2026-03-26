@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  BiometricGateConfigSchema,
+  type BiometricGateConfig,
+  type BiometricGateConfigInput,
+} from "./biometric-gate.js";
 
 /** Access policy for a specific key tier. */
 export const KeyPolicySchema: z.ZodEnum<["biometric", "passcode", "open"]> = z
@@ -23,6 +28,8 @@ export type KeyManagerConfig = {
   dataDir: string;
   rootKeyPolicy: KeyPolicy;
   operationalKeyPolicy: KeyPolicy;
+  vaultKeyPolicy: KeyPolicy;
+  biometricGating: BiometricGateConfig;
   /** Auto-rotation interval in seconds. 0 disables auto-rotation. */
   rotationIntervalSeconds: number;
 };
@@ -32,6 +39,8 @@ type KeyManagerConfigInput = {
   dataDir: string;
   rootKeyPolicy?: KeyPolicy | undefined;
   operationalKeyPolicy?: KeyPolicy | undefined;
+  vaultKeyPolicy?: KeyPolicy | undefined;
+  biometricGating?: BiometricGateConfigInput | undefined;
   rotationIntervalSeconds?: number | undefined;
 };
 
@@ -48,6 +57,12 @@ export const KeyManagerConfigSchema: z.ZodType<
     ),
     operationalKeyPolicy: KeyPolicySchema.default("open").describe(
       "Access policy for routine operations",
+    ),
+    vaultKeyPolicy: KeyPolicySchema.default("open").describe(
+      "Access policy for persisted vault secret protection",
+    ),
+    biometricGating: BiometricGateConfigSchema.default({}).describe(
+      "Per-operation biometric gate configuration",
     ),
     rotationIntervalSeconds: z
       .number()

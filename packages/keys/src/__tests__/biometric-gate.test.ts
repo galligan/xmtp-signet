@@ -8,9 +8,9 @@ import {
 } from "../biometric-gate.js";
 
 describe("BiometricGateConfig", () => {
-  test("defaults: rootKeyCreation on, everything else off", () => {
+  test("defaults all gating off", () => {
     const config = BiometricGateConfigSchema.parse({});
-    expect(config.rootKeyCreation).toBe(true);
+    expect(config.rootKeyCreation).toBe(false);
     expect(config.operationalKeyRotation).toBe(false);
     expect(config.scopeExpansion).toBe(false);
     expect(config.egressExpansion).toBe(false);

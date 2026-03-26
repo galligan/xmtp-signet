@@ -119,6 +119,8 @@ export function createIdentityInitCommand(): Command {
       const kmResult = await createKeyManager({
         rootKeyPolicy: config.keys.rootKeyPolicy,
         operationalKeyPolicy: config.keys.operationalKeyPolicy,
+        vaultKeyPolicy: config.keys.vaultKeyPolicy,
+        biometricGating: config.biometricGating,
         dataDir: paths.dataDir,
       });
       if (Result.isError(kmResult)) {
