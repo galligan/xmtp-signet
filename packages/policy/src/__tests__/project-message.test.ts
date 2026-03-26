@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { projectMessage } from "../pipeline/project-message.js";
-import type { ContentTypeId, ViewConfig } from "@xmtp/signet-schemas";
+import type { ContentTypeId } from "@xmtp/signet-schemas";
 import {
   createTestRawMessage,
   createFullScopes,
@@ -146,23 +146,6 @@ describe("projectMessage", () => {
       expect(result.event.senderInboxId).toBe("sender-1");
       expect(result.event.contentType).toBe("xmtp.org/text:1.0");
       expect(result.event.sentAt).toBe("2024-01-01T00:00:00Z");
-    }
-  });
-
-  test("supports legacy view-mode callers for redacted sessions", () => {
-    const message = createTestRawMessage();
-    const view: ViewConfig = {
-      mode: "redacted",
-      threadScopes: [{ groupId: "group-1", threadId: null }],
-      contentTypes: ["xmtp.org/text:1.0"],
-    };
-
-    const result = projectMessage(message, view, baseAllowlist, false);
-
-    expect(result.action).toBe("emit");
-    if (result.action === "emit") {
-      expect(result.event.visibility).toBe("redacted");
-      expect(result.event.content).toBeNull();
     }
   });
 });

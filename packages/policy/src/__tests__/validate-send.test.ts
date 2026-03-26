@@ -9,31 +9,6 @@ import {
   createEmptyScopes,
   createChatIds,
 } from "./fixtures.js";
-import type { GrantConfig, ViewConfig } from "@xmtp/signet-schemas";
-
-const fullGrant: GrantConfig = {
-  messaging: { send: true, reply: true, react: true, draftOnly: false },
-  groupManagement: {
-    addMembers: false,
-    removeMembers: false,
-    updateMetadata: false,
-    inviteUsers: false,
-  },
-  tools: { scopes: [] },
-  egress: {
-    storeExcerpts: false,
-    useForMemory: false,
-    forwardToProviders: false,
-    quoteRevealed: false,
-    summarize: false,
-  },
-};
-
-const chatView: ViewConfig = {
-  mode: "full",
-  threadScopes: [{ groupId: "group-1", threadId: null }],
-  contentTypes: ["xmtp.org/text:1.0"],
-};
 
 describe("validateSendMessage", () => {
   test("succeeds when send scope is allowed and chat is in scope", () => {
@@ -78,19 +53,15 @@ describe("validateSendMessage", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
-  test("preserves draftOnly for legacy grant/view callers", () => {
+  test("always returns draftOnly false (v1 scopes)", () => {
     const result = validateSendMessage(
       { groupId: "group-1" },
-      {
-        ...fullGrant,
-        messaging: { ...fullGrant.messaging, draftOnly: true },
-      },
-      chatView,
+      createFullScopes(),
+      createChatIds("group-1"),
     );
-
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.draftOnly).toBe(true);
+      expect(result.value.draftOnly).toBe(false);
     }
   });
 });
