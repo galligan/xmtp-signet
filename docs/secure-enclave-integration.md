@@ -1,12 +1,12 @@
 # Secure Enclave Integration
 
-This document describes the Secure Enclave integration primitives added to
-`@xmtp/signet-keys` and the intended runtime model for protecting the vault
-encryption secret and gating privileged operations. The keys package now
-contains the Secure Enclave-backed providers and bridge logic; wiring the
-daemon/runtime boot path to consume those providers remains a separate
-follow-on change. For the broader key hierarchy and threat model, see
-[security.md](security.md).
+This document describes the Secure Enclave integration primitives in
+`@xmtp/signet-keys` and the current runtime model for protecting persisted
+vault secret material and gating privileged key lifecycle operations. The
+daemon/runtime boot path now consumes the Secure Enclave-backed vault provider
+through the compat key manager's encrypted vault storage. Broader policy-level
+gates such as scope or egress expansion still require separate runtime wiring.
+For the broader key hierarchy and threat model, see [security.md](security.md).
 
 ## Overview
 
@@ -115,8 +115,8 @@ presence is required at every cold start.
 Configuration:
 
 ```toml
-[security]
-vault_key_policy = "open"  # "open" | "passcode" | "biometric"
+[keys]
+vaultKeyPolicy = "open"  # "open" | "passcode" | "biometric"
 ```
 
 ## Biometric Gate for Privileged Operations
@@ -124,17 +124,23 @@ vault_key_policy = "open"  # "open" | "passcode" | "biometric"
 Separately from vault unlock, certain operations can require Touch ID
 confirmation. This uses a second SE key with `biometric` policy.
 
+The current runtime wiring applies this gate to compat key lifecycle
+operations such as root key creation, agent/operational key creation, and
+operational key rotation. Scope- and egress-expansion gate toggles remain
+part of the broader intended model, but are not yet consumed by a runtime
+code path.
+
 ### Gated operations
 
 Configurable per-operation:
 
 ```toml
-[security.biometric]
-root_key_creation = true
-operational_key_rotation = true
-scope_expansion = true
-egress_expansion = true
-agent_creation = false
+[biometricGating]
+rootKeyCreation = true
+operationalKeyRotation = true
+scopeExpansion = true
+egressExpansion = true
+agentCreation = false
 ```
 
 When a gated operation fires:
@@ -152,8 +158,8 @@ gated operations return an error instead of silently succeeding. This
 prevents a configuration that expects biometric enforcement from being
 silently bypassed on an unsupported platform.
 
-On platforms without SE, to run without biometric gating, the
-configuration must explicitly disable all gate toggles (the defaults).
+On platforms without SE, to run without biometric gating, keep all gate
+toggles disabled (the defaults).
 
 ## Software Fallback
 
@@ -332,10 +338,16 @@ The vault secret transitions: SE-protected (old) → passphrase-protected
 
 ```text
 dataDir/
+  secrets/                 # encrypted compat key-manager secret entries
+    admin-key.bin
+    admin-key-pub.bin
+    db-key%3A<identity>.bin
+    xmtp-identity-key%3A<identity>.bin
   se-vault-keyref          # base64 SE key data representation
   vault-sealed-box.json    # { ephemeralPublicKey, nonce, ciphertext, tag }
   se-gate-keyref           # base64 SE gate key data representation (created on first gated op)
   vault-passphrase         # software fallback only (0o600, not present on SE platforms)
+  kv/                      # legacy compat layout, lazily migrated into secrets/
 ```
 
 ## Testing Strategy

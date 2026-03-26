@@ -84,6 +84,8 @@ export function createWithDaemonClient(
     const keyManagerResult = await resolvedDeps.createKeyManager({
       rootKeyPolicy: config.keys.rootKeyPolicy,
       operationalKeyPolicy: config.keys.operationalKeyPolicy,
+      vaultKeyPolicy: config.keys.vaultKeyPolicy,
+      biometricGating: config.biometricGating,
       dataDir: paths.dataDir,
     });
     if (keyManagerResult.isErr()) {

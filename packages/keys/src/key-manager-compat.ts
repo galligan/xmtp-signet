@@ -12,6 +12,10 @@ import {
 } from "./config.js";
 import { detectPlatform, platformToTrustTier } from "./platform.js";
 import type { TrustTier } from "./platform.js";
+import {
+  createBiometricGate,
+  type BiometricPrompter,
+} from "./biometric-gate.js";
 import type { RootKeyHandle, OperationalKey, CredentialKey } from "./types.js";
 import { verifyJwt as verifyAdminJwt, type AdminJwtPayload } from "./jwt.js";
 import {
@@ -29,9 +33,12 @@ import {
   readFileSync,
   readdirSync,
   unlinkSync,
-  writeFileSync,
+  rmdirSync,
 } from "node:fs";
 import { join } from "node:path";
+import { createVault, type Vault } from "./vault.js";
+import { resolveGatePrompter } from "./se-gate-prompter.js";
+import type { VaultSecretProvider } from "./vault-secret-provider.js";
 
 type AdminKeyInfo = string & {
   readonly publicKey: string;
@@ -39,10 +46,11 @@ type AdminKeyInfo = string & {
 };
 
 interface SimpleKvStore {
-  get(key: string): Result<Uint8Array, NotFoundError | InternalError>;
-  set(key: string, value: Uint8Array): Result<void, InternalError>;
-  delete(key: string): Result<void, NotFoundError>;
+  get(key: string): Promise<Result<Uint8Array, NotFoundError | InternalError>>;
+  set(key: string, value: Uint8Array): Promise<Result<void, InternalError>>;
+  delete(key: string): Promise<Result<void, NotFoundError>>;
   list(): readonly string[];
+  close(): void;
 }
 
 interface OperationalKeyEntry {
@@ -55,6 +63,11 @@ interface CredentialKeyEntry {
   readonly privateKey: CryptoKey;
 }
 
+type CreateKeyManagerDeps = {
+  readonly vaultSecretProvider?: VaultSecretProvider;
+  readonly biometricPrompter?: BiometricPrompter;
+};
+
 /**
  * Admin key operations used by the CLI and runtime boot path.
  */
@@ -63,7 +76,7 @@ export interface AdminKeyManager {
   exists(): boolean;
 
   /** Create and persist the admin signing key. */
-  create(): Promise<Result<AdminKeyInfo, InternalError>>;
+  create(): Promise<Result<AdminKeyInfo, SignetError>>;
 
   /** Read the existing admin key metadata without re-creating it. */
   get(): Promise<Result<AdminKeyInfo, NotFoundError | InternalError>>;
@@ -98,7 +111,7 @@ export interface KeyManager {
   createOperationalKey(
     identityId: string,
     groupId: string | null,
-  ): Promise<Result<OperationalKey, InternalError>>;
+  ): Promise<Result<OperationalKey, SignetError>>;
 
   /** Lookup an operational key by identity ID. */
   getOperationalKey(identityId: string): Result<OperationalKey, NotFoundError>;
@@ -111,7 +124,7 @@ export interface KeyManager {
   /** Rotate an operational key in place. */
   rotateOperationalKey(
     identityId: string,
-  ): Promise<Result<OperationalKey, InternalError | NotFoundError>>;
+  ): Promise<Result<OperationalKey, SignetError>>;
 
   /** List all known operational keys. */
   listOperationalKeys(): readonly OperationalKey[];
@@ -215,57 +228,135 @@ async function fingerprintBytes(bytes: Uint8Array): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
-function createSimpleKvStore(dataDir: string): SimpleKvStore {
-  const kvDir = join(dataDir, "kv");
-  mkdirSync(kvDir, { recursive: true });
+function legacyKvDirPath(dataDir: string): string {
+  return join(dataDir, "kv");
+}
 
-  function keyPath(key: string): string {
-    return join(kvDir, encodeURIComponent(key));
+function legacyKvKeyPath(dataDir: string, key: string): string {
+  return join(legacyKvDirPath(dataDir), encodeURIComponent(key));
+}
+
+function readLegacyKvEntry(
+  dataDir: string,
+  key: string,
+): Result<Uint8Array, NotFoundError | InternalError> {
+  const path = legacyKvKeyPath(dataDir, key);
+  if (!existsSync(path)) {
+    return Result.err(NotFoundError.create("kv-entry", key));
   }
 
+  try {
+    const hex = readFileSync(path, "utf8");
+    return Result.ok(hexToBytes(hex));
+  } catch (error: unknown) {
+    return Result.err(
+      InternalError.create("Failed to read legacy compat vault entry", {
+        key,
+        cause: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
+function removeLegacyKvEntry(dataDir: string, key: string): void {
+  const path = legacyKvKeyPath(dataDir, key);
+  if (!existsSync(path)) {
+    return;
+  }
+
+  try {
+    unlinkSync(path);
+  } catch {
+    return;
+  }
+
+  const kvDir = legacyKvDirPath(dataDir);
+  if (!existsSync(kvDir)) {
+    return;
+  }
+
+  try {
+    if (readdirSync(kvDir).length === 0) {
+      rmdirSync(kvDir);
+    }
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+function listLegacyKvEntries(dataDir: string): readonly string[] {
+  const kvDir = legacyKvDirPath(dataDir);
+  if (!existsSync(kvDir)) {
+    return [];
+  }
+
+  return readdirSync(kvDir).map(decodeURIComponent);
+}
+
+function createCompatSecretStore(dataDir: string, vault: Vault): SimpleKvStore {
   return {
-    get(key) {
-      const path = keyPath(key);
-      if (!existsSync(path)) {
-        return Result.err(NotFoundError.create("kv-entry", key));
+    async get(key) {
+      const current = await vault.get(key);
+      if (Result.isOk(current)) {
+        return current;
       }
-      try {
-        const hex = readFileSync(path, "utf8");
-        return Result.ok(hexToBytes(hex));
-      } catch (error: unknown) {
-        return Result.err(
-          InternalError.create("Failed to read compat vault entry", {
-            key,
-            cause: error instanceof Error ? error.message : String(error),
-          }),
-        );
+      if (current.error._tag !== "NotFoundError") {
+        return current;
       }
+
+      const legacy = readLegacyKvEntry(dataDir, key);
+      if (Result.isError(legacy)) {
+        return legacy;
+      }
+
+      const migrated = await vault.set(key, legacy.value);
+      if (Result.isError(migrated)) {
+        return migrated;
+      }
+
+      removeLegacyKvEntry(dataDir, key);
+      return Result.ok(legacy.value);
     },
-    set(key, value) {
-      try {
-        writeFileSync(keyPath(key), bytesToHex(value), "utf8");
+
+    async set(key, value) {
+      const result = await vault.set(key, value);
+      if (Result.isOk(result)) {
+        removeLegacyKvEntry(dataDir, key);
+      }
+      return result;
+    },
+
+    async delete(key) {
+      const current = await vault.delete(key);
+      const hadLegacy = existsSync(legacyKvKeyPath(dataDir, key));
+
+      if (Result.isOk(current)) {
+        if (hadLegacy) {
+          removeLegacyKvEntry(dataDir, key);
+        }
+        return current;
+      }
+
+      if (current.error._tag !== "NotFoundError") {
+        return current;
+      }
+
+      if (hadLegacy) {
+        removeLegacyKvEntry(dataDir, key);
         return Result.ok(undefined);
-      } catch (error: unknown) {
-        return Result.err(
-          InternalError.create("Failed to write compat vault entry", {
-            key,
-            cause: error instanceof Error ? error.message : String(error),
-          }),
-        );
       }
+
+      return current;
     },
-    delete(key) {
-      const path = keyPath(key);
-      if (!existsSync(path)) {
-        return Result.err(NotFoundError.create("kv-entry", key));
-      }
-      unlinkSync(path);
-      return Result.ok(undefined);
-    },
+
     list() {
-      return existsSync(kvDir)
-        ? readdirSync(kvDir).map(decodeURIComponent)
-        : [];
+      return Array.from(
+        new Set([...vault.list(), ...listLegacyKvEntries(dataDir)]),
+      );
+    },
+
+    close() {
+      vault.close();
     },
   };
 }
@@ -276,9 +367,11 @@ function createSimpleKvStore(dataDir: string): SimpleKvStore {
 export async function createKeyManager(
   rawConfig: Partial<KeyManagerConfig> & {
     dataDir: string;
-  },
+  } & CreateKeyManagerDeps,
 ): Promise<Result<KeyManager, InternalError>> {
-  const parsed = KeyManagerConfigSchema.safeParse(rawConfig);
+  const { vaultSecretProvider, biometricPrompter, ...configInput } = rawConfig;
+
+  const parsed = KeyManagerConfigSchema.safeParse(configInput);
   if (!parsed.success) {
     return Result.err(
       InternalError.create("Invalid key manager config", {
@@ -290,10 +383,22 @@ export async function createKeyManager(
   const config = parsed.data;
   mkdirSync(config.dataDir, { recursive: true });
 
-  const kv = createSimpleKvStore(config.dataDir);
+  const vaultResult = await createVault(config.dataDir, {
+    secretProvider: vaultSecretProvider,
+    vaultKeyPolicy: config.vaultKeyPolicy,
+  });
+  if (Result.isError(vaultResult)) {
+    return vaultResult;
+  }
+
+  const kv = createCompatSecretStore(config.dataDir, vaultResult.value);
   const opKeys = new Map<string, OperationalKeyEntry>();
   const groupIdIndex = new Map<string, string>();
   const credentialKeys = new Map<string, CredentialKeyEntry>();
+  const gate = createBiometricGate(
+    config.biometricGating,
+    biometricPrompter ?? resolveGatePrompter(config.dataDir),
+  );
 
   let activePlatform = detectPlatform();
   let activeTrustTier = platformToTrustTier(activePlatform);
@@ -361,9 +466,14 @@ export async function createKeyManager(
       return adminPublicKeyHex !== null;
     },
 
-    async create(): Promise<Result<AdminKeyInfo, InternalError>> {
+    async create(): Promise<Result<AdminKeyInfo, SignetError>> {
       if (adminPublicKeyHex !== null) {
         return Result.err(InternalError.create("Admin key already exists"));
+      }
+
+      const gateResult = await gate("rootKeyCreation");
+      if (Result.isError(gateResult)) {
+        return gateResult;
       }
 
       const pairResult = await generateEd25519KeyPair();
@@ -386,11 +496,14 @@ export async function createKeyManager(
       adminPublicKeyHex = toHex(publicKeyResult.value);
       adminPrivateKey = pairResult.value.privateKey;
 
-      const setPrivateResult = kv.set("admin-key", privateKeyResult.value);
+      const setPrivateResult = await kv.set(
+        "admin-key",
+        privateKeyResult.value,
+      );
       if (Result.isError(setPrivateResult)) {
         return setPrivateResult;
       }
-      const setPublicResult = kv.set(
+      const setPublicResult = await kv.set(
         "admin-key-pub",
         new TextEncoder().encode(adminPublicKeyHex),
       );
@@ -466,12 +579,12 @@ export async function createKeyManager(
         return Result.ok(rootKeyHandle);
       }
 
-      const existingPublic = kv.get("admin-key-pub");
+      const existingPublic = await kv.get("admin-key-pub");
       if (Result.isOk(existingPublic)) {
         adminPublicKeyHex = new TextDecoder().decode(existingPublic.value);
       }
 
-      const existingPrivate = kv.get("admin-key");
+      const existingPrivate = await kv.get("admin-key");
       if (Result.isOk(existingPrivate)) {
         const imported = await importEd25519PrivateKey(existingPrivate.value);
         if (Result.isError(imported)) {
@@ -492,6 +605,10 @@ export async function createKeyManager(
     },
 
     async createOperationalKey(identityId, groupId) {
+      const gateResult = await gate("agentCreation");
+      if (Result.isError(gateResult)) {
+        return gateResult;
+      }
       return createOperationalKeyRecord(identityId, groupId);
     },
 
@@ -514,6 +631,12 @@ export async function createKeyManager(
       if (existing === undefined) {
         return Result.err(NotFoundError.create("operational-key", identityId));
       }
+
+      const gateResult = await gate("operationalKeyRotation");
+      if (Result.isError(gateResult)) {
+        return gateResult;
+      }
+
       return createOperationalKeyRecord(identityId, existing.key.groupId);
     },
 
@@ -576,7 +699,7 @@ export async function createKeyManager(
 
     async getOrCreateDbKey(identityId) {
       const key = `db-key:${identityId}`;
-      const existing = kv.get(key);
+      const existing = await kv.get(key);
       if (Result.isOk(existing)) {
         return Result.ok(existing.value);
       }
@@ -584,13 +707,13 @@ export async function createKeyManager(
         return existing as Result<Uint8Array, InternalError>;
       }
       const generated = crypto.getRandomValues(new Uint8Array(32));
-      const setResult = kv.set(key, generated);
+      const setResult = await kv.set(key, generated);
       return Result.isError(setResult) ? setResult : Result.ok(generated);
     },
 
     async getOrCreateXmtpIdentityKey(identityId) {
       const key = `xmtp-identity-key:${identityId}`;
-      const existing = kv.get(key);
+      const existing = await kv.get(key);
       if (Result.isOk(existing)) {
         return Result.ok(`0x${bytesToHex(existing.value)}` as `0x${string}`);
       }
@@ -598,7 +721,7 @@ export async function createKeyManager(
         return existing as Result<`0x${string}`, InternalError>;
       }
       const generated = crypto.getRandomValues(new Uint8Array(32));
-      const setResult = kv.set(key, generated);
+      const setResult = await kv.set(key, generated);
       if (Result.isError(setResult)) {
         return setResult;
       }
@@ -643,6 +766,7 @@ export async function createKeyManager(
 
     close() {
       manager.stopAutoRotation();
+      kv.close();
     },
   };
 

@@ -134,9 +134,10 @@ All persistent key material lives in an encrypted vault.
 - **Permissions:** `0o600` on both the vault database and its encryption key
 - **Zeroization:** Exported private key bytes are `fill(0)`'d immediately
   after vault storage
-- **Future:** The vault passphrase will be protected by the Secure Enclave —
-  hardware-bound, non-exportable. The only way to unlock the vault will be
-  through the enclave, gated by biometrics or a passkey.
+- **Secure Enclave protection when available:** the vault secret can be
+  hardware-bound and non-exportable via Secure Enclave ECIES. The active
+  runtime now uses that path for compat key-manager persisted secret
+  material, while broader policy-level gate wiring continues separately.
 
 ## MLS and the decryption boundary
 

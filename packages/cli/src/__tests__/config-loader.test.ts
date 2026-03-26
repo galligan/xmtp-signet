@@ -55,6 +55,8 @@ defaultTtlSeconds = 7200
     expect(config.credentials.defaultTtlSeconds).toBe(7200);
     // Unspecified sections get defaults
     expect(config.keys.rootKeyPolicy).toBe("biometric");
+    expect(config.keys.vaultKeyPolicy).toBe("open");
+    expect(config.biometricGating.rootKeyCreation).toBe(false);
     expect(config.logging.level).toBe("info");
   });
 

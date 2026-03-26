@@ -60,7 +60,12 @@ export type {
 
 // Vault
 export { createVault } from "./vault.js";
-export type { Vault, WalletFileInfo, AccountEntry } from "./vault.js";
+export type {
+  Vault,
+  WalletFileInfo,
+  AccountEntry,
+  CreateVaultOptions,
+} from "./vault.js";
 
 // Signer provider
 export { createSignerProvider } from "./signer-provider.js";

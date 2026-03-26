@@ -94,6 +94,7 @@ export type CliConfig = {
   keys: {
     rootKeyPolicy: "biometric" | "passcode" | "open";
     operationalKeyPolicy: "biometric" | "passcode" | "open";
+    vaultKeyPolicy: "biometric" | "passcode" | "open";
   };
   biometricGating: BiometricGateConfig;
   ws: {
@@ -119,6 +120,7 @@ type CliConfigInput = {
     | {
         rootKeyPolicy?: "biometric" | "passcode" | "open" | undefined;
         operationalKeyPolicy?: "biometric" | "passcode" | "open" | undefined;
+        vaultKeyPolicy?: "biometric" | "passcode" | "open" | undefined;
       }
     | undefined;
   biometricGating?: BiometricGateConfigInput | undefined;
@@ -176,6 +178,10 @@ const CliConfigBaseSchema = z
           .enum(["biometric", "passcode", "open"])
           .default("open")
           .describe("Protection level for operational keys"),
+        vaultKeyPolicy: z
+          .enum(["biometric", "passcode", "open"])
+          .default("open")
+          .describe("Protection level for persisted vault secret material"),
       })
       .default({}),
     biometricGating: BiometricGateConfigSchema.default({}),

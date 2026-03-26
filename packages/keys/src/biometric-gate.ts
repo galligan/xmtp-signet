@@ -30,7 +30,7 @@ export const BiometricGateConfigSchema: z.ZodType<
   .object({
     rootKeyCreation: z
       .boolean()
-      .default(true)
+      .default(false)
       .describe("Require biometric for root key creation"),
     operationalKeyRotation: z
       .boolean()

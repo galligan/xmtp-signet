@@ -119,6 +119,8 @@ export async function createSignetRuntime(
     platform: "software-vault",
     rootKeyPolicy: config.keys.rootKeyPolicy,
     operationalKeyPolicy: config.keys.operationalKeyPolicy,
+    vaultKeyPolicy: config.keys.vaultKeyPolicy,
+    biometricGating: config.biometricGating,
     dataDir: paths.dataDir,
   });
 

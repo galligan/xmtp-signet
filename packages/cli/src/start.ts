@@ -99,11 +99,15 @@ export function createProductionDeps(): SignetRuntimeDeps {
         platform: string;
         rootKeyPolicy: KeyManagerConfig["rootKeyPolicy"];
         operationalKeyPolicy: KeyManagerConfig["operationalKeyPolicy"];
+        vaultKeyPolicy: KeyManagerConfig["vaultKeyPolicy"];
+        biometricGating: KeyManagerConfig["biometricGating"];
         dataDir: string;
       };
       const result = await createKeyManager({
         rootKeyPolicy: cfg.rootKeyPolicy,
         operationalKeyPolicy: cfg.operationalKeyPolicy,
+        vaultKeyPolicy: cfg.vaultKeyPolicy,
+        biometricGating: cfg.biometricGating,
         dataDir: cfg.dataDir,
       });
       if (Result.isOk(result)) {

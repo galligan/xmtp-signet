@@ -44,6 +44,8 @@ describe("KeyManagerConfigSchema", () => {
     expect(config.dataDir).toBe("/tmp/keys");
     expect(config.rootKeyPolicy).toBe("biometric");
     expect(config.operationalKeyPolicy).toBe("open");
+    expect(config.vaultKeyPolicy).toBe("open");
+    expect(config.biometricGating.rootKeyCreation).toBe(false);
     expect(config.rotationIntervalSeconds).toBe(86400);
   });
 
@@ -52,10 +54,14 @@ describe("KeyManagerConfigSchema", () => {
       dataDir: "/tmp/keys",
       rootKeyPolicy: "open",
       operationalKeyPolicy: "passcode",
+      vaultKeyPolicy: "biometric",
+      biometricGating: { operationalKeyRotation: true },
       rotationIntervalSeconds: 7200,
     });
     expect(config.rootKeyPolicy).toBe("open");
     expect(config.operationalKeyPolicy).toBe("passcode");
+    expect(config.vaultKeyPolicy).toBe("biometric");
+    expect(config.biometricGating.operationalKeyRotation).toBe(true);
     expect(config.rotationIntervalSeconds).toBe(7200);
   });
 
