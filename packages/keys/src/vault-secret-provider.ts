@@ -59,10 +59,86 @@ export function createSeVaultSecretProvider(
   policy: KeyPolicy = "open",
 ): VaultSecretProvider {
   let cached: string | null = null;
+  let inflight: Promise<Result<string, InternalError>> | null = null;
 
   const keyRefPath = join(dataDir, "se-vault-keyref");
   const sealedBoxPath = join(dataDir, "vault-sealed-box.json");
   const publicKeyPath = join(dataDir, "se-vault-pubkey");
+
+  async function resolveSecret(): Promise<Result<string, InternalError>> {
+    try {
+      // Ensure data dir exists
+      if (!existsSync(dataDir)) {
+        mkdirSync(dataDir, { recursive: true });
+        chmodSync(dataDir, 0o700);
+      }
+
+      if (existsSync(keyRefPath) && existsSync(sealedBoxPath)) {
+        // --- Subsequent run: decrypt ---
+        const keyRef = await Bun.file(keyRefPath).text();
+        const sealedBoxJson = await Bun.file(sealedBoxPath).text();
+        const sealedBox: SealedBox = JSON.parse(sealedBoxJson) as SealedBox;
+
+        const decryptResult = await seDecrypt(keyRef, sealedBox, signerPath);
+        if (Result.isError(decryptResult)) {
+          return Result.err(
+            InternalError.create("Failed to decrypt vault secret from SE", {
+              cause: decryptResult.error.message,
+            }),
+          );
+        }
+
+        cached = decryptResult.value.plaintext;
+        return Result.ok(cached);
+      }
+
+      // --- First run: create key + encrypt ---
+
+      // 1. Create SE key-agreement key
+      const createResult = await seCreate(
+        "signet-vault-root",
+        policy,
+        signerPath,
+        "key-agreement",
+      );
+      if (Result.isError(createResult)) {
+        return Result.err(
+          InternalError.create("Failed to create SE vault key", {
+            cause: createResult.error.message,
+          }),
+        );
+      }
+
+      // Persist key reference and public key
+      await Bun.write(keyRefPath, createResult.value.keyRef);
+      chmodSync(keyRefPath, 0o600);
+      await Bun.write(publicKeyPath, createResult.value.publicKey);
+      chmodSync(publicKeyPath, 0o600);
+
+      // 2. Generate random vault secret
+      const secretBytes = crypto.getRandomValues(new Uint8Array(32));
+      const secretHex = bytesToHex(secretBytes);
+
+      // 3. ECIES encrypt (pure TypeScript, no SE needed)
+      const sealedBox = seEncrypt(createResult.value.publicKey, secretBytes);
+
+      // 4. Persist sealed box
+      await Bun.write(sealedBoxPath, JSON.stringify(sealedBox, null, 2));
+      chmodSync(sealedBoxPath, 0o600);
+
+      // 5. Zeroize secret bytes
+      secretBytes.fill(0);
+
+      cached = secretHex;
+      return Result.ok(cached);
+    } catch (e) {
+      return Result.err(
+        InternalError.create("SE vault secret provider failed", {
+          cause: String(e),
+        }),
+      );
+    }
+  }
 
   return {
     kind: "secure-enclave",
@@ -70,77 +146,13 @@ export function createSeVaultSecretProvider(
     async getSecret(): Promise<Result<string, InternalError>> {
       if (cached !== null) return Result.ok(cached);
 
+      // Serialize concurrent calls to prevent double-initialization
+      if (inflight !== null) return inflight;
+      inflight = resolveSecret();
       try {
-        // Ensure data dir exists
-        if (!existsSync(dataDir)) {
-          mkdirSync(dataDir, { recursive: true });
-          chmodSync(dataDir, 0o700);
-        }
-
-        if (existsSync(keyRefPath) && existsSync(sealedBoxPath)) {
-          // --- Subsequent run: decrypt ---
-          const keyRef = await Bun.file(keyRefPath).text();
-          const sealedBoxJson = await Bun.file(sealedBoxPath).text();
-          const sealedBox: SealedBox = JSON.parse(sealedBoxJson) as SealedBox;
-
-          const decryptResult = await seDecrypt(keyRef, sealedBox, signerPath);
-          if (Result.isError(decryptResult)) {
-            return Result.err(
-              InternalError.create("Failed to decrypt vault secret from SE", {
-                cause: decryptResult.error.message,
-              }),
-            );
-          }
-
-          cached = decryptResult.value.plaintext;
-          return Result.ok(cached);
-        }
-
-        // --- First run: create key + encrypt ---
-
-        // 1. Create SE key-agreement key
-        const createResult = await seCreate(
-          "signet-vault-root",
-          policy,
-          signerPath,
-          "key-agreement",
-        );
-        if (Result.isError(createResult)) {
-          return Result.err(
-            InternalError.create("Failed to create SE vault key", {
-              cause: createResult.error.message,
-            }),
-          );
-        }
-
-        // Persist key reference and public key
-        await Bun.write(keyRefPath, createResult.value.keyRef);
-        chmodSync(keyRefPath, 0o600);
-        await Bun.write(publicKeyPath, createResult.value.publicKey);
-        chmodSync(publicKeyPath, 0o600);
-
-        // 2. Generate random vault secret
-        const secretBytes = crypto.getRandomValues(new Uint8Array(32));
-        const secretHex = bytesToHex(secretBytes);
-
-        // 3. ECIES encrypt (pure TypeScript, no SE needed)
-        const sealedBox = seEncrypt(createResult.value.publicKey, secretBytes);
-
-        // 4. Persist sealed box
-        await Bun.write(sealedBoxPath, JSON.stringify(sealedBox, null, 2));
-        chmodSync(sealedBoxPath, 0o600);
-
-        // 5. Zeroize secret bytes
-        secretBytes.fill(0);
-
-        cached = secretHex;
-        return Result.ok(cached);
-      } catch (e) {
-        return Result.err(
-          InternalError.create("SE vault secret provider failed", {
-            cause: String(e),
-          }),
-        );
+        return await inflight;
+      } finally {
+        inflight = null;
       }
     },
   };
@@ -218,6 +230,37 @@ export function resolveVaultSecretProvider(
   dataDir: string,
   policy: KeyPolicy = "open",
 ): VaultSecretProvider {
+  // If a legacy software vault-passphrase file exists, always use the
+  // software provider — even on SE-capable machines. Switching providers
+  // would create a new SE-backed secret and strand the existing vault data.
+  const legacyPath = join(dataDir, "vault-passphrase");
+  if (existsSync(legacyPath)) {
+    return createSoftwareVaultSecretProvider(dataDir);
+  }
+
+  // If an SE sealed box already exists, use the SE provider regardless
+  // of current platform detection (the vault was created with SE).
+  const sealedBoxPath = join(dataDir, "vault-sealed-box.json");
+  if (existsSync(sealedBoxPath)) {
+    const signerPath = findSignerBinary();
+    if (signerPath) {
+      return createSeVaultSecretProvider(dataDir, signerPath, policy);
+    }
+    // SE sealed box exists but no signer binary — can't decrypt
+    return {
+      kind: "software" as const,
+      async getSecret() {
+        return Result.err(
+          InternalError.create(
+            "Vault was created with Secure Enclave but signet-signer binary not found. " +
+              "Cannot decrypt vault secret.",
+          ),
+        );
+      },
+    };
+  }
+
+  // Fresh data dir — choose based on platform
   const platform = detectPlatform();
 
   if (platform === "secure-enclave") {

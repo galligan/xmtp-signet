@@ -73,16 +73,20 @@ public class SecureEnclaveManager {
     // MARK: - Key Lookup
 
     /// Check if a key exists by trying to load it from dataRepresentation.
+    /// Tries both signing and key-agreement key types.
     public func lookupKey(_ base64DataRep: String) -> Bool {
         guard let dataRep = Data(base64Encoded: base64DataRep) else {
             return false
         }
-        do {
-            _ = try SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: dataRep)
+        // Try signing key first
+        if (try? SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: dataRep)) != nil {
             return true
-        } catch {
-            return false
         }
+        // Then try key-agreement key
+        if (try? SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: dataRep)) != nil {
+            return true
+        }
+        return false
     }
 
     // MARK: - Signing
@@ -198,12 +202,21 @@ public class SecureEnclaveManager {
 
     // MARK: - Key Deletion
 
-    /// Best-effort deletion of an SE key.
+    /// Best-effort deletion of an SE key. Tries both signing and key-agreement types.
     public func deleteKey(_ base64DataRep: String) {
         guard let dataRep = Data(base64Encoded: base64DataRep) else { return }
-        guard let key = try? SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: dataRep) else { return }
 
-        let publicKeySHA1 = Data(Insecure.SHA1.hash(data: key.publicKey.x963Representation))
+        // Try to load as signing key first, then key-agreement
+        let publicKeyData: Data
+        if let signingKey = try? SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: dataRep) {
+            publicKeyData = signingKey.publicKey.x963Representation
+        } else if let kaKey = try? SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: dataRep) {
+            publicKeyData = kaKey.publicKey.x963Representation
+        } else {
+            return
+        }
+
+        let publicKeySHA1 = Data(Insecure.SHA1.hash(data: publicKeyData))
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,

@@ -1,4 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import {
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { Result } from "better-result";
 import {
   writeFileSync,
@@ -191,9 +198,36 @@ exit 0
     const result = await provider.getSecret();
     expect(Result.isError(result)).toBe(true);
   });
+
+  test("returns a deterministic secret for concurrent first-run calls", async () => {
+    const dataDir = join(tmpDir, "data-concurrent");
+    const provider = createSeVaultSecretProvider(dataDir, mockSigner);
+
+    const [r1, r2] = await Promise.all([
+      provider.getSecret(),
+      provider.getSecret(),
+    ]);
+
+    expect(Result.isOk(r1)).toBe(true);
+    expect(Result.isOk(r2)).toBe(true);
+    if (Result.isError(r1) || Result.isError(r2)) {
+      throw new Error("expected ok");
+    }
+    expect(r1.value).toBe(r2.value);
+  });
 });
 
 describe("resolveVaultSecretProvider", () => {
+  const originalSignerPath = process.env["SIGNET_SIGNER_PATH"];
+
+  beforeEach(() => {
+    if (originalSignerPath === undefined) {
+      delete process.env["SIGNET_SIGNER_PATH"];
+      return;
+    }
+    process.env["SIGNET_SIGNER_PATH"] = originalSignerPath;
+  });
+
   test("returns a provider with software or secure-enclave kind", () => {
     const dir = mkdtempSync(join(tmpdir(), "signet-vs-resolve-"));
     const provider = resolveVaultSecretProvider(dir);
@@ -201,6 +235,38 @@ describe("resolveVaultSecretProvider", () => {
     expect(
       provider.kind === "software" || provider.kind === "secure-enclave",
     ).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("prefers legacy software provider when vault-passphrase exists", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "signet-vs-legacy-"));
+    const legacySecret = "be".repeat(32);
+    writeFileSync(join(dir, "vault-passphrase"), legacySecret);
+
+    const provider = resolveVaultSecretProvider(dir);
+    const result = await provider.getSecret();
+
+    expect(provider.kind).toBe("software");
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) throw new Error("expected ok");
+    expect(result.value).toBe(legacySecret);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("returns an error when an SE-backed vault exists but signer is unavailable", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "signet-vs-missing-signer-"));
+    process.env["SIGNET_SIGNER_PATH"] = join(dir, "missing-signer");
+    writeFileSync(join(dir, "vault-sealed-box.json"), "{}");
+
+    const provider = resolveVaultSecretProvider(dir);
+    const result = await provider.getSecret();
+
+    expect(provider.kind).toBe("software");
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) throw new Error("expected error");
+    expect(result.error.message).toContain("Secure Enclave");
+
     rmSync(dir, { recursive: true, force: true });
   });
 });
