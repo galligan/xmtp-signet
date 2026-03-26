@@ -34,3 +34,11 @@ jobs:
 
       - name: Test
         run: bun run test
+        env:
+          # Live Secure Enclave tests are opt-in and require macOS + Apple
+          # Silicon + the compiled signet-signer binary. CI runs on
+          # ubuntu-latest where SE is unavailable, so these tests skip
+          # automatically via the SIGNET_RUN_LIVE_SE_TESTS gate.
+          #
+          # To run SE tests locally: SIGNET_RUN_LIVE_SE_TESTS=1 bun test
+          SIGNET_RUN_LIVE_SE_TESTS: "0"

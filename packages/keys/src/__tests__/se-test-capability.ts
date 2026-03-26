@@ -1,5 +1,20 @@
 import { findSignerBinary } from "../se-bridge.js";
 
+/**
+ * Secure Enclave test capability detection.
+ *
+ * SE tests are split into two tiers:
+ *
+ * 1. **se-bridge.test.ts** — deterministic, mock-based. Tests the bridge
+ *    protocol (JSON parsing, error handling, exit codes) using mock signer
+ *    scripts. Always runs on all platforms including CI.
+ *
+ * 2. **se-integration.test.ts** — live hardware tests. Requires macOS +
+ *    Apple Silicon + compiled signet-signer + explicit opt-in via
+ *    SIGNET_RUN_LIVE_SE_TESTS=1. Skipped everywhere else.
+ *
+ * This module gates tier 2 by probing the environment at import time.
+ */
 type SecureEnclaveTestCapability =
   | { kind: "disabled"; reason: string }
   | { kind: "unsupported" }
