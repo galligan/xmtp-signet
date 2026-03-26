@@ -62,6 +62,13 @@ export type {
 // ID mapping store
 export { createSqliteIdMappingStore } from "./id-mapping-store.js";
 
+// Operator storage partitions
+export { createOperatorStorageManager } from "./operator-storage.js";
+export type {
+  OperatorStorageManager,
+  OperatorPartition,
+} from "./operator-storage.js";
+
 // Conversation actions
 export { createConversationActions } from "./conversation-actions.js";
 export type { ConversationActionDeps } from "./conversation-actions.js";
