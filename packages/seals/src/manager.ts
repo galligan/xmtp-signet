@@ -21,6 +21,7 @@ import { buildSeal } from "./build.js";
 import type { SealInput } from "./build.js";
 import { generateSealId } from "./seal-id.js";
 import { computePayloadDelta } from "./compute-delta.js";
+import { canonicalize } from "./canonicalize.js";
 
 /** Renewal threshold: renew when 75% of TTL has elapsed. */
 const RENEWAL_THRESHOLD = 0.75;
@@ -312,6 +313,15 @@ function hasInputChanges(previous: SealInput, next: SealInput): boolean {
     previous.operatorId !== next.operatorId ||
     previous.chatId !== next.chatId ||
     previous.scopeMode !== next.scopeMode ||
-    JSON.stringify(previous.adminAccess) !== JSON.stringify(next.adminAccess)
+    stableSerialize(previous.adminAccess) !==
+      stableSerialize(next.adminAccess) ||
+    stableSerialize(previous.operatorDisclosures) !==
+      stableSerialize(next.operatorDisclosures) ||
+    stableSerialize(previous.provenanceMap) !==
+      stableSerialize(next.provenanceMap)
   );
+}
+
+function stableSerialize(value: unknown): string {
+  return new TextDecoder().decode(canonicalize(value));
 }
