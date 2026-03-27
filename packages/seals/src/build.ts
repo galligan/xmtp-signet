@@ -5,13 +5,20 @@ import type {
   SealDeltaType,
   ScopeSetType,
   ScopeModeType,
+  OperatorDisclosuresType,
+  ProvenanceMapType,
 } from "@xmtp/signet-schemas";
 import { SealPayload, ValidationError } from "@xmtp/signet-schemas";
 import { generateSealId } from "./seal-id.js";
 import { canonicalize } from "./canonicalize.js";
 import { computePayloadDelta } from "./compute-delta.js";
 
-/** Input fields for building a seal. */
+/**
+ * Input fields for building a seal.
+ *
+ * Derived fields (sealId, issuedAt) are never accepted here — they are
+ * computed internally by buildSeal(). This is a correctness invariant.
+ */
 export interface SealInput {
   readonly credentialId: string;
   readonly operatorId: string;
@@ -19,6 +26,10 @@ export interface SealInput {
   readonly scopeMode: ScopeModeType;
   readonly permissions: ScopeSetType;
   readonly adminAccess?: { operatorId: string; expiresAt: string } | undefined;
+  /** Operator-declared claims about the runtime environment. */
+  readonly operatorDisclosures?: OperatorDisclosuresType | undefined;
+  /** Provenance metadata for disclosed and externally-verified claims. */
+  readonly provenanceMap?: ProvenanceMapType | undefined;
 }
 
 /** Result of building a seal. */
@@ -49,6 +60,15 @@ export function buildSeal(
     },
     adminAccess: input.adminAccess ? { ...input.adminAccess } : undefined,
     issuedAt: now.toISOString(),
+    operatorDisclosures: input.operatorDisclosures
+      ? {
+          ...input.operatorDisclosures,
+          inferenceProviders: input.operatorDisclosures.inferenceProviders
+            ? [...input.operatorDisclosures.inferenceProviders]
+            : undefined,
+        }
+      : undefined,
+    provenanceMap: input.provenanceMap ? { ...input.provenanceMap } : undefined,
   };
 
   const parsed = SealPayload.safeParse(raw);

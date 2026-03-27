@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  OperatorDisclosures,
   SealPayload,
   SealDelta,
   SealChain,
@@ -84,6 +85,86 @@ describe("SealPayload", () => {
         ...valid,
         permissions: { allow: ["invalid-scope"], deny: [] },
       }).success,
+    ).toBe(false);
+  });
+
+  it("accepts payload with operatorDisclosures", () => {
+    const withDisclosures = {
+      ...valid,
+      operatorDisclosures: {
+        inferenceMode: "cloud",
+        inferenceProviders: ["openai", "anthropic"],
+        contentEgressScope: "provider-only",
+        hostingMode: "cloud",
+      },
+    };
+    expect(SealPayload.safeParse(withDisclosures).success).toBe(true);
+  });
+
+  it("accepts payload with partial operatorDisclosures", () => {
+    const partial = {
+      ...valid,
+      operatorDisclosures: { inferenceMode: "local" },
+    };
+    expect(SealPayload.safeParse(partial).success).toBe(true);
+  });
+
+  it("accepts payload with provenanceMap", () => {
+    const withProvenance = {
+      ...valid,
+      operatorDisclosures: { inferenceMode: "cloud" },
+      provenanceMap: {
+        inferenceMode: { source: "declared" },
+        trustTier: {
+          source: "verified",
+          attestedBy: "verifier_a1b2c3d4e5f67890",
+          attestedAt: "2024-01-01T00:00:00Z",
+        },
+      },
+    };
+    expect(SealPayload.safeParse(withProvenance).success).toBe(true);
+  });
+
+  it("accepts payload without operatorDisclosures or provenanceMap", () => {
+    expect(SealPayload.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects invalid inferenceMode in operatorDisclosures", () => {
+    expect(
+      SealPayload.safeParse({
+        ...valid,
+        operatorDisclosures: { inferenceMode: "quantum" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("OperatorDisclosures", () => {
+  it("accepts empty disclosures", () => {
+    expect(OperatorDisclosures.safeParse({}).success).toBe(true);
+  });
+
+  it("accepts full disclosures", () => {
+    const full = {
+      inferenceMode: "hybrid",
+      inferenceProviders: ["anthropic"],
+      contentEgressScope: "none",
+      retentionAtProvider: "30 days",
+      hostingMode: "tee",
+    };
+    expect(OperatorDisclosures.safeParse(full).success).toBe(true);
+  });
+
+  it("rejects invalid contentEgressScope", () => {
+    expect(
+      OperatorDisclosures.safeParse({ contentEgressScope: "everything" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid hostingMode", () => {
+    expect(
+      OperatorDisclosures.safeParse({ hostingMode: "bare-metal" }).success,
     ).toBe(false);
   });
 });

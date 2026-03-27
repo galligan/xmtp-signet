@@ -53,6 +53,9 @@ export { createSealSignatureCheck } from "./checks/seal-signature.js";
 export { createSealChainCheck } from "./checks/seal-chain.js";
 export { createSchemaComplianceCheck } from "./checks/schema-compliance.js";
 
+// Provenance
+export { deriveProvenanceMap } from "./provenance.js";
+
 // Service
 export {
   createVerifierService,

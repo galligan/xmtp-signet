@@ -10,8 +10,31 @@ import { ScopeMode } from "./operator.js";
 import { ScopeSet, PermissionScope } from "./permission-scopes.js";
 import type { PermissionScopeType, ScopeSetType } from "./permission-scopes.js";
 import type { ScopeModeType } from "./operator.js";
+import { ProvenanceMap } from "./claim-provenance.js";
+import type { ProvenanceMapType } from "./claim-provenance.js";
 
 // -- Types (declared first for isolatedDeclarations) -----------------------
+
+/**
+ * Operator-declared claims about the runtime environment.
+ *
+ * These are self-reported by the operator and passed through by the signet
+ * without independent confirmation. Consuming interfaces should render
+ * these with appropriate trust caveats unless the provenanceMap indicates
+ * they have been upgraded to `observed` or `verified`.
+ */
+export type OperatorDisclosuresType = {
+  /** How inference is performed: locally, via cloud providers, or a mix. */
+  inferenceMode?: "local" | "cloud" | "hybrid" | undefined;
+  /** Which inference providers content may be sent to. */
+  inferenceProviders?: string[] | undefined;
+  /** What data is permitted to leave the signet boundary. */
+  contentEgressScope?: "none" | "provider-only" | "unrestricted" | undefined;
+  /** Provider's stated data retention policy. */
+  retentionAtProvider?: string | undefined;
+  /** Where the agent runtime is hosted. */
+  hostingMode?: "self-hosted" | "cloud" | "tee" | undefined;
+};
 
 /** Core payload of a capability seal. */
 export type SealPayloadType = {
@@ -23,6 +46,10 @@ export type SealPayloadType = {
   permissions: ScopeSetType;
   adminAccess?: { operatorId: string; expiresAt: string } | undefined;
   issuedAt: string;
+  /** Operator-declared claims about the runtime environment. */
+  operatorDisclosures?: OperatorDisclosuresType | undefined;
+  /** Provenance metadata for disclosed and externally-verified claims. */
+  provenanceMap?: ProvenanceMapType | undefined;
 };
 
 /** Convenience diff between current and previous seal payloads. */
@@ -66,6 +93,44 @@ export type SealEnvelopeType = {
 
 // -- Schemas ---------------------------------------------------------------
 
+/** Inference execution mode. */
+export const InferenceMode: z.ZodEnum<["local", "cloud", "hybrid"]> = z.enum([
+  "local",
+  "cloud",
+  "hybrid",
+]);
+
+/** Content egress scope. */
+export const ContentEgressScope: z.ZodEnum<
+  ["none", "provider-only", "unrestricted"]
+> = z.enum(["none", "provider-only", "unrestricted"]);
+
+/** Agent runtime hosting mode. */
+export const HostingMode: z.ZodEnum<["self-hosted", "cloud", "tee"]> = z.enum([
+  "self-hosted",
+  "cloud",
+  "tee",
+]);
+
+/**
+ * Operator-declared claims about the runtime environment.
+ * All fields are optional — operators disclose what they choose to.
+ */
+export const OperatorDisclosures: z.ZodType<OperatorDisclosuresType> = z
+  .object({
+    /** How inference is performed. */
+    inferenceMode: InferenceMode.optional(),
+    /** Which inference providers content may be sent to. */
+    inferenceProviders: z.array(z.string()).optional(),
+    /** What data is permitted to leave the signet boundary. */
+    contentEgressScope: ContentEgressScope.optional(),
+    /** Provider's stated data retention policy. */
+    retentionAtProvider: z.string().optional(),
+    /** Where the agent runtime is hosted. */
+    hostingMode: HostingMode.optional(),
+  })
+  .describe("Operator-declared claims about the runtime environment");
+
 /**
  * Core payload of a capability seal, binding an operator credential
  * to a conversation with resolved permission scopes.
@@ -95,6 +160,16 @@ export const SealPayload: z.ZodType<SealPayloadType> = z
       .optional(),
     /** When this seal was issued. */
     issuedAt: z.string().datetime(),
+    /** Operator-declared claims about the runtime environment. */
+    operatorDisclosures: OperatorDisclosures.optional(),
+    /**
+     * Provenance metadata for disclosed and externally-verified claims.
+     * Derived fields (sealId, permissions, etc.) have no entries —
+     * their provenance is structural. Only operatorDisclosures fields
+     * and externally-verified fields (trustTier, buildProvenance)
+     * get entries.
+     */
+    provenanceMap: ProvenanceMap.optional(),
   })
   .describe("Core payload of a capability seal");
 

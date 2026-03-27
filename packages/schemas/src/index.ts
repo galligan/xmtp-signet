@@ -79,8 +79,23 @@ export {
   resolvePolicy,
 } from "./policy.js";
 
+// Claim Provenance
+export {
+  ClaimProvenance,
+  type ClaimProvenanceType,
+  ClaimProvenanceRecord,
+  type ClaimProvenanceRecordType,
+  ProvenanceMap,
+  type ProvenanceMapType,
+} from "./claim-provenance.js";
+
 // Seal
 export {
+  InferenceMode,
+  ContentEgressScope,
+  HostingMode,
+  OperatorDisclosures,
+  type OperatorDisclosuresType,
   SealPayload,
   type SealPayloadType,
   SealDelta,
