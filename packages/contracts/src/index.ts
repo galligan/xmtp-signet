@@ -62,6 +62,16 @@ export type { ActionRegistry } from "./action-registry.js";
 export { validateActionSpecs } from "./action-validate.js";
 export type { ActionContractIssue } from "./action-validate.js";
 
+// Action surface maps
+export {
+  generateActionSurfaceMap,
+  hashActionSurfaceMap,
+} from "./action-surface-map.js";
+export type {
+  ActionSurfaceMap,
+  ActionSurfaceMapEntry,
+} from "./action-surface-map.js";
+
 // Result envelope
 export { toActionResult } from "./result-envelope.js";
 export type { ActionResult } from "./result-envelope.js";

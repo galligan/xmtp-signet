@@ -14,6 +14,20 @@ import { joinConversation } from "./convos/join.js";
 import { generateConvosInviteUrl } from "./convos/invite-generator.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
 
+const GroupInfoSchema = z.object({
+  groupId: z.string(),
+  name: z.string(),
+  description: z.string(),
+  memberInboxIds: z.array(z.string()),
+  createdAt: z.string(),
+});
+
+const MembersOutputSchema = z.object({
+  groupId: z.string(),
+  members: z.array(z.string()),
+  memberCount: z.number().int().nonnegative(),
+});
+
 /** Dependencies used to build conversation-related action specs. */
 export interface ConversationActionDeps {
   /** Identity store used to resolve conversation creators and viewers. */
@@ -186,6 +200,22 @@ export function createConversationActions(
     input: z.object({
       groupId: z.string(),
     }),
+    output: GroupInfoSchema,
+    examples: [
+      {
+        name: "group info",
+        input: {
+          groupId: "group-1",
+        },
+        expected: {
+          groupId: "group-1",
+          name: "Example Group",
+          description: "Example description",
+          memberInboxIds: ["inbox-a", "inbox-b"],
+          createdAt: "2026-03-30T00:00:00.000Z",
+        },
+      },
+    ],
     handler: async (input) => deps.getGroupInfo(input.groupId),
     cli: {
       command: "conversation:info",
@@ -445,6 +475,20 @@ export function createConversationActions(
     input: z.object({
       groupId: z.string(),
     }),
+    output: MembersOutputSchema,
+    examples: [
+      {
+        name: "member list",
+        input: {
+          groupId: "group-1",
+        },
+        expected: {
+          groupId: "group-1",
+          members: ["inbox-a", "inbox-b"],
+          memberCount: 2,
+        },
+      },
+    ],
     handler: async (input) => {
       const groupResult = await deps.getGroupInfo(input.groupId);
       if (Result.isError(groupResult)) return groupResult;
