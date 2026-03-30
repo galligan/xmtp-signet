@@ -66,8 +66,21 @@ const deepSortKeys = (value: unknown): unknown => {
   return value;
 };
 
+const isSurfaceExposed = (
+  spec: AnyActionSpec,
+  surface: ActionSurface,
+): boolean => {
+  if (surface === "http") {
+    return spec.http !== undefined && spec.http.expose !== false;
+  }
+
+  return spec[surface] !== undefined;
+};
+
 const getSurfaces = (spec: AnyActionSpec): ActionSurface[] =>
-  ACTION_SURFACES.filter((surface) => spec[surface] !== undefined).toSorted();
+  ACTION_SURFACES.filter((surface) =>
+    isSurfaceExposed(spec, surface),
+  ).toSorted();
 
 const toEntry = (spec: AnyActionSpec): ActionSurfaceMapEntry => {
   const entry: Record<string, unknown> = {

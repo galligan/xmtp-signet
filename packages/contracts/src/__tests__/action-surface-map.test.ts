@@ -45,4 +45,26 @@ describe("action surface map", () => {
     expect(first.entries).toEqual(second.entries);
     expect(hashActionSurfaceMap(first)).toBe(hashActionSurfaceMap(second));
   });
+
+  test("omits hidden HTTP surfaces from the public surface summary", () => {
+    const surfaceMap = generateActionSurfaceMap([
+      makeSpec("credential.list", {
+        intent: "read",
+        http: {
+          auth: "admin",
+          expose: false,
+        },
+        mcp: {},
+      }),
+    ]);
+
+    expect(surfaceMap.entries).toHaveLength(1);
+    expect(surfaceMap.entries[0]).toEqual(
+      expect.objectContaining({
+        id: "credential.list",
+        surfaces: ["mcp"],
+      }),
+    );
+    expect(surfaceMap.entries[0]).not.toHaveProperty("http");
+  });
 });
