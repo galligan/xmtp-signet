@@ -22,15 +22,6 @@ type ActionLike = Pick<
 
 const DEFAULT_HTTP_BASE_PATH = "/v1/actions";
 
-const INTENT_TO_HTTP_METHOD: Record<
-  NonNullable<ActionLike["intent"]>,
-  HttpMethod
-> = {
-  destroy: "DELETE",
-  read: "GET",
-  write: "POST",
-};
-
 const normalizeBasePath = (basePath: string): string => {
   const trimmed = basePath.trim();
   if (trimmed === "" || trimmed === "/") {
@@ -103,7 +94,11 @@ export function deriveMcpAnnotations(spec: ActionLike): McpAnnotations {
 export function deriveHttpMethod(
   spec: Pick<ActionLike, "http" | "intent">,
 ): HttpMethod {
-  return spec.http?.method ?? INTENT_TO_HTTP_METHOD[spec.intent ?? "write"];
+  if (spec.http?.method !== undefined) {
+    return spec.http.method;
+  }
+
+  return spec.intent === "read" ? "GET" : "POST";
 }
 
 /** Derive the HTTP path for an action. */

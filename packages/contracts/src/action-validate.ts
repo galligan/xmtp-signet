@@ -27,6 +27,9 @@ const STANDARD_MCP_ANNOTATION_KEYS = [
 const isHttpExposed = (spec: AnyActionSpec): boolean =>
   spec.http !== undefined && spec.http.expose !== false;
 
+const RESERVED_HTTP_ROUTE_PREFIXES = ["/v1/admin/", "/v1/credential/"] as const;
+const RESERVED_HTTP_ROUTE_PATHS = ["/v1/health"] as const;
+
 const validateUniqueIds = (
   specs: readonly AnyActionSpec[],
 ): ActionContractIssue[] => {
@@ -107,6 +110,41 @@ const validateUniqueHttpRoutes = (
   return issues;
 };
 
+const validateReservedHttpRoutes = (
+  specs: readonly AnyActionSpec[],
+): ActionContractIssue[] => {
+  const issues: ActionContractIssue[] = [];
+
+  for (const spec of specs) {
+    if (!isHttpExposed(spec)) {
+      continue;
+    }
+
+    const path = deriveHttpPath(spec);
+    const collidesWithPrefix = RESERVED_HTTP_ROUTE_PREFIXES.find((prefix) =>
+      path.startsWith(prefix),
+    );
+    const collidesWithExactPath = RESERVED_HTTP_ROUTE_PATHS.includes(
+      path as (typeof RESERVED_HTTP_ROUTE_PATHS)[number],
+    );
+
+    if (!collidesWithPrefix && !collidesWithExactPath) {
+      continue;
+    }
+
+    issues.push({
+      actionId: spec.id,
+      message: collidesWithPrefix
+        ? `Action '${spec.id}' derives reserved HTTP path '${path}' under '${collidesWithPrefix}'`
+        : `Action '${spec.id}' derives reserved HTTP path '${path}'`,
+      rule: "reserved-http-route",
+      surface: "http",
+    });
+  }
+
+  return issues;
+};
+
 const validateMcpAnnotations = (
   specs: readonly AnyActionSpec[],
 ): ActionContractIssue[] => {
@@ -159,6 +197,7 @@ export function validateActionSpecs(
     ...validateUniqueIds(specs),
     ...validateHttpAuth(specs),
     ...validateUniqueHttpRoutes(specs),
+    ...validateReservedHttpRoutes(specs),
     ...validateMcpAnnotations(specs),
   ];
 

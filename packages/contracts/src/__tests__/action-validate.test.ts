@@ -110,6 +110,54 @@ describe("validateActionSpecs", () => {
     }
   });
 
+  it("reports reserved HTTP route collisions with built-in namespaces", () => {
+    const result = validateActionSpecs([
+      createTestSpec("credential.list", {
+        intent: "read",
+        http: {
+          auth: "admin",
+          path: "/v1/admin/credential.list",
+        },
+      }),
+    ]);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.context.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            actionId: "credential.list",
+            rule: "reserved-http-route",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("reports reserved HTTP route collisions with built-in paths", () => {
+    const result = validateActionSpecs([
+      createTestSpec("signet.health-shadow", {
+        intent: "read",
+        http: {
+          auth: "admin",
+          path: "/v1/health",
+        },
+      }),
+    ]);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.context.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            actionId: "signet.health-shadow",
+            rule: "reserved-http-route",
+          }),
+        ]),
+      );
+    }
+  });
+
   it("reports contradictory authored MCP annotations", () => {
     const result = validateActionSpecs([
       createTestSpec("credential.list", {

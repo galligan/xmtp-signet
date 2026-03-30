@@ -102,7 +102,7 @@ describe("action derivation helpers", () => {
       deriveHttpMethod(
         createTestSpec("credential.revoke", { intent: "destroy" }),
       ),
-    ).toBe("DELETE");
+    ).toBe("POST");
   });
 
   it("uses an authored HTTP method override when present", () => {
