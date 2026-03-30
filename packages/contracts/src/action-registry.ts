@@ -1,5 +1,11 @@
-import type { SignetError } from "@xmtp/signet-schemas";
-import type { ActionSpec } from "./action-spec.js";
+import type { Result } from "better-result";
+import type { ValidationError, SignetError } from "@xmtp/signet-schemas";
+import {
+  ACTION_SURFACES,
+  type ActionSpec,
+  type ActionSurface,
+} from "./action-spec.js";
+import { validateActionSpecs } from "./action-validate.js";
 
 /**
  * Base type that any ActionSpec satisfies, regardless of its
@@ -35,7 +41,10 @@ export interface ActionRegistry {
    * List ActionSpecs that have a specific surface.
    * Convenience for transport adapters.
    */
-  listForSurface(surface: "cli" | "mcp" | "http"): readonly AnyActionSpec[];
+  listForSurface(surface: ActionSurface): readonly AnyActionSpec[];
+
+  /** Validate the current registry contents. */
+  validate(): Result<void, ValidationError>;
 
   /** Number of registered actions. */
   readonly size: number;
@@ -53,6 +62,10 @@ export function createActionRegistry(): ActionRegistry {
       if (specs.has(spec.id)) {
         throw new Error(`Action '${spec.id}' is already registered`);
       }
+      const validation = validateActionSpecs([...specs.values(), spec]);
+      if (validation.isErr()) {
+        throw validation.error;
+      }
       specs.set(spec.id, spec);
     },
 
@@ -65,7 +78,15 @@ export function createActionRegistry(): ActionRegistry {
     },
 
     listForSurface(surface) {
+      if (!ACTION_SURFACES.includes(surface)) {
+        return [];
+      }
+
       return [...specs.values()].filter((spec) => spec[surface] != null);
+    },
+
+    validate() {
+      return validateActionSpecs([...specs.values()]);
     },
 
     get size() {

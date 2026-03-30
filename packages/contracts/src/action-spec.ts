@@ -2,6 +2,12 @@ import type { z } from "zod";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { Handler } from "./handler-types.js";
 
+/** Action transport surfaces supported by the contracts package. */
+export const ACTION_SURFACES = ["cli", "mcp", "http"] as const;
+
+/** Action transport surface name. */
+export type ActionSurface = (typeof ACTION_SURFACES)[number];
+
 /**
  * Authored action intent. Borrowed directly from the Trails cleanup:
  * one semantic field beats scattered per-surface safety booleans.

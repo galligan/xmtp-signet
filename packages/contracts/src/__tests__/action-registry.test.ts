@@ -165,4 +165,28 @@ describe("ActionRegistry", () => {
     registry.register(createTestSpec("a.two"));
     expect(registry.size).toBe(2);
   });
+
+  it("fails fast when a registered action would collide on an HTTP route", () => {
+    const registry = createActionRegistry();
+    registry.register(
+      createTestSpec("credential.list", {
+        http: {
+          auth: "admin",
+          method: "GET",
+        },
+      }),
+    );
+
+    expect(() =>
+      registry.register(
+        createTestSpec("credential.lookup", {
+          http: {
+            auth: "admin",
+            method: "GET",
+            path: "/v1/actions/credential/list",
+          },
+        }),
+      ),
+    ).toThrow(/Action contract validation failed/);
+  });
 });
