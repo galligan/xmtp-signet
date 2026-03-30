@@ -106,6 +106,31 @@ describe("conversation actions", () => {
     };
   }
 
+  test("declares top-level semantics and curated HTTP auth for surfaced actions", () => {
+    setupDeps();
+
+    const actions = createConversationActions(deps);
+    const createAction = actions.find((a) => a.id === "conversation.create");
+    const listAction = actions.find((a) => a.id === "conversation.list");
+    const inviteAction = actions.find((a) => a.id === "conversation.invite");
+    const membersAction = actions.find((a) => a.id === "conversation.members");
+
+    expect(createAction?.description).toBe("Create a new group conversation");
+    expect(createAction?.intent).toBe("write");
+    expect(createAction?.http?.auth).toBe("admin");
+
+    expect(listAction?.intent).toBe("read");
+    expect(listAction?.idempotent).toBe(true);
+    expect(listAction?.http?.auth).toBe("admin");
+
+    expect(inviteAction?.intent).toBe("write");
+    expect(inviteAction?.http?.auth).toBe("admin");
+
+    expect(membersAction?.intent).toBe("read");
+    expect(membersAction?.idempotent).toBe(true);
+    expect(membersAction?.http?.auth).toBe("admin");
+  });
+
   /** Seed an identity and a managed client in the test harness. */
   async function seedIdentity(label: string): Promise<ManagedClient> {
     const identityResult = await identityStore.create(null, label);

@@ -87,6 +87,8 @@ export function createConversationActions(
     SignetError
   > = {
     id: "conversation.create",
+    description: "Create a new group conversation",
+    intent: "write",
     input: z.object({
       memberInboxIds: z.array(z.string()),
       name: z.string().optional(),
@@ -126,12 +128,10 @@ export function createConversationActions(
     },
     cli: {
       command: "conversation:create",
-      rpcMethod: "conversation.create",
     },
-    mcp: {
-      toolName: "signet/conversation/create",
-      description: "Create a new group conversation",
-      readOnly: false,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 
@@ -141,6 +141,9 @@ export function createConversationActions(
     SignetError
   > = {
     id: "conversation.list",
+    description: "List group conversations",
+    intent: "read",
+    idempotent: true,
     input: z.object({
       identityLabel: z.string().optional(),
     }),
@@ -168,29 +171,28 @@ export function createConversationActions(
     },
     cli: {
       command: "conversation:list",
-      rpcMethod: "conversation.list",
     },
-    mcp: {
-      toolName: "signet/conversation/list",
-      description: "List group conversations",
-      readOnly: true,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 
   const info: ActionSpec<{ groupId: string }, XmtpGroupInfo, SignetError> = {
     id: "conversation.info",
+    description: "Get group conversation details",
+    intent: "read",
+    idempotent: true,
     input: z.object({
       groupId: z.string(),
     }),
     handler: async (input) => deps.getGroupInfo(input.groupId),
     cli: {
       command: "conversation:info",
-      rpcMethod: "conversation.info",
     },
-    mcp: {
-      toolName: "signet/conversation/info",
-      description: "Get group conversation details",
-      readOnly: true,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 
@@ -211,6 +213,8 @@ export function createConversationActions(
     SignetError
   > = {
     id: "conversation.join",
+    description: "Join a Convos conversation via invite URL",
+    intent: "write",
     input: z.object({
       inviteUrl: z.string(),
       label: z.string().optional(),
@@ -251,13 +255,10 @@ export function createConversationActions(
     },
     cli: {
       command: "conversation:join",
-      rpcMethod: "conversation.join",
-      description: "Join a Convos conversation via invite URL",
     },
-    mcp: {
-      toolName: "signet/conversation/join",
-      description: "Join a Convos conversation via invite URL",
-      readOnly: false,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 
@@ -278,6 +279,8 @@ export function createConversationActions(
     SignetError
   > = {
     id: "conversation.invite",
+    description: "Generate a Convos-compatible invite URL for a group",
+    intent: "write",
     input: z.object({
       groupId: z.string(),
       identityLabel: z.string().optional(),
@@ -362,13 +365,10 @@ export function createConversationActions(
     },
     cli: {
       command: "conversation:invite",
-      rpcMethod: "conversation.invite",
-      description: "Generate a Convos-compatible invite URL for a group",
     },
-    mcp: {
-      toolName: "signet/conversation/invite",
-      description: "Generate a Convos-compatible invite URL for a group",
-      readOnly: true,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 
@@ -382,6 +382,8 @@ export function createConversationActions(
     SignetError
   > = {
     id: "conversation.add-member",
+    description: "Add a member to a group conversation",
+    intent: "write",
     input: z.object({
       groupId: z.string(),
       inboxId: z.string(),
@@ -420,12 +422,10 @@ export function createConversationActions(
     },
     cli: {
       command: "conversation:add-member",
-      rpcMethod: "conversation.add-member",
     },
-    mcp: {
-      toolName: "signet/conversation/add-member",
-      description: "Add a member to a group conversation",
-      readOnly: false,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 
@@ -439,6 +439,9 @@ export function createConversationActions(
     SignetError
   > = {
     id: "conversation.members",
+    description: "List members of a group conversation",
+    intent: "read",
+    idempotent: true,
     input: z.object({
       groupId: z.string(),
     }),
@@ -454,12 +457,10 @@ export function createConversationActions(
     },
     cli: {
       command: "conversation:members",
-      rpcMethod: "conversation.members",
     },
-    mcp: {
-      toolName: "signet/conversation/members",
-      description: "List members of a group conversation",
-      readOnly: true,
+    mcp: {},
+    http: {
+      auth: "admin",
     },
   };
 

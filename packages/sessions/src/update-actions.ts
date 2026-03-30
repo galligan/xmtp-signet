@@ -43,6 +43,8 @@ export function createUpdateActions(
     SignetError
   > = {
     id: "credential.updateScopes",
+    description: "Update the scope set on an active credential",
+    intent: "write",
     input: z.object({
       credentialId: z.string(),
       scopes: ScopeSet,
@@ -106,7 +108,9 @@ export function createUpdateActions(
     },
     cli: {
       command: "credential:update-scopes",
-      rpcMethod: "credential.updateScopes",
+    },
+    http: {
+      auth: "admin",
     },
   };
 

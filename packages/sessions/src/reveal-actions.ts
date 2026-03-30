@@ -67,12 +67,14 @@ function resolveCredentialTarget(
   return Result.ok(requestedCredentialId);
 }
 
-/** Create CLI and MCP actions for content reveal workflows. */
+/** Create reveal actions for content reveal workflows. */
 export function createRevealActions(
   deps: RevealActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {
   const request: ActionSpec<RevealRequestInput, RevealAccess, SignetError> = {
     id: "reveal.request",
+    description: "Request content to be revealed to a credential holder",
+    intent: "write",
     input: RevealRequestInput,
     handler: async (input, ctx) => {
       const targetResult = resolveCredentialTarget(
@@ -154,12 +156,10 @@ export function createRevealActions(
     },
     cli: {
       command: "reveal:request",
-      rpcMethod: "reveal.request",
     },
-    mcp: {
-      toolName: "signet/reveal/request",
-      description: "Request content to be revealed to a credential holder",
-      readOnly: false,
+    mcp: {},
+    http: {
+      auth: "credential",
     },
   };
 
@@ -169,6 +169,9 @@ export function createRevealActions(
     SignetError
   > = {
     id: "reveal.list",
+    description: "List active reveals for a credential",
+    intent: "read",
+    idempotent: true,
     input: z.object({
       credentialId: z.string(),
     }),
@@ -191,12 +194,10 @@ export function createRevealActions(
     },
     cli: {
       command: "reveal:list",
-      rpcMethod: "reveal.list",
     },
-    mcp: {
-      toolName: "signet/reveal/list",
-      description: "List active reveals for a credential",
-      readOnly: true,
+    mcp: {},
+    http: {
+      auth: "credential",
     },
   };
 

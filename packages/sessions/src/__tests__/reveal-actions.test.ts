@@ -39,6 +39,24 @@ beforeEach(async () => {
   credentialId = issued.value.credential.id;
 });
 
+describe("reveal action surfaces", () => {
+  test("declare top-level semantics and credential HTTP auth", () => {
+    const actions = createRevealActions(deps);
+
+    const requestAction = actions.find((a) => a.id === "reveal.request");
+    const listAction = actions.find((a) => a.id === "reveal.list");
+
+    expect(requestAction?.intent).toBe("write");
+    expect(requestAction?.mcp).toBeDefined();
+    expect(requestAction?.http?.auth).toBe("credential");
+
+    expect(listAction?.intent).toBe("read");
+    expect(listAction?.idempotent).toBe(true);
+    expect(listAction?.mcp).toBeDefined();
+    expect(listAction?.http?.auth).toBe("credential");
+  });
+});
+
 describe("reveal.request action", () => {
   test("creates reveal access for a chat in credential scope", async () => {
     const actions = createRevealActions(deps);
