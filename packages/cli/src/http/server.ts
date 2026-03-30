@@ -1,9 +1,20 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
-import { InternalError } from "@xmtp/signet-schemas";
+import { InternalError, ValidationError } from "@xmtp/signet-schemas";
 import type { AdminJwtPayload } from "@xmtp/signet-keys";
-import type { CredentialManager } from "@xmtp/signet-contracts";
+import type {
+  ActionRegistry,
+  CredentialManager,
+  CredentialRecord,
+  HandlerContext,
+  SignerProvider,
+} from "@xmtp/signet-contracts";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
+import {
+  buildHttpActionRoutes,
+  matchHttpActionRoute,
+  type HttpActionRoute,
+} from "./action-routes.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,7 +29,10 @@ export interface HttpServerConfig {
 /** Dependencies required to serve HTTP admin and status routes. */
 export interface HttpServerDeps {
   readonly dispatcher: AdminDispatcher;
+  readonly registry: ActionRegistry;
   readonly credentialManager: CredentialManager;
+  readonly signetId: string;
+  readonly signerProvider: SignerProvider;
   readonly verifyAdminJwt: (
     token: string,
   ) => Promise<Result<AdminJwtPayload, SignetError>>;
@@ -100,21 +114,55 @@ export function createHttpServer(
 ): HttpServer {
   let serverState: "idle" | "listening" | "stopped" = "idle";
   let bunServer: ReturnType<typeof Bun.serve> | undefined;
+  let actionRoutes: readonly HttpActionRoute[] = [];
 
-  function makeHandlerContext(adminAuth?: {
-    adminKeyFingerprint: string;
-  }): import("@xmtp/signet-contracts").HandlerContext {
-    const base = {
-      signetId: "signet",
-      signerProvider:
-        {} as import("@xmtp/signet-contracts").HandlerContext["signerProvider"],
+  function makeHandlerContext(options?: {
+    adminAuth?: { adminKeyFingerprint: string };
+    credential?: Pick<CredentialRecord, "credentialId" | "operatorId">;
+  }): HandlerContext {
+    const base: HandlerContext = {
+      signetId: deps.signetId,
+      signerProvider: deps.signerProvider,
       requestId: crypto.randomUUID(),
       signal: AbortSignal.timeout(30_000),
     };
-    if (adminAuth !== undefined) {
-      return { ...base, adminAuth };
+    return {
+      ...base,
+      ...(options?.adminAuth ? { adminAuth: options.adminAuth } : {}),
+      ...(options?.credential
+        ? {
+            credentialId: options.credential.credentialId,
+            operatorId: options.credential.operatorId,
+          }
+        : {}),
+    };
+  }
+
+  async function parseActionParams(
+    req: Request,
+    inputSource: HttpActionRoute["inputSource"],
+  ): Promise<Result<Record<string, unknown>, ValidationError>> {
+    if (inputSource === "query") {
+      const url = new URL(req.url);
+      const params: Record<string, unknown> = {};
+
+      for (const key of new Set(url.searchParams.keys())) {
+        const values = url.searchParams.getAll(key);
+        params[key] = values.length > 1 ? values : (values[0] ?? "");
+      }
+
+      return Result.ok(params);
     }
-    return base;
+
+    try {
+      const text = await req.text();
+      if (text.length === 0) {
+        return Result.ok({});
+      }
+      return Result.ok(JSON.parse(text) as Record<string, unknown>);
+    } catch {
+      return Result.err(ValidationError.create("body", "Invalid JSON body"));
+    }
   }
 
   async function handleAdminRoute(
@@ -146,7 +194,9 @@ export function createHttpServer(
     }
 
     const ctx = makeHandlerContext({
-      adminKeyFingerprint: verifyResult.value.iss,
+      adminAuth: {
+        adminKeyFingerprint: verifyResult.value.iss,
+      },
     });
 
     const actionResult = await deps.dispatcher.dispatch(method, params, ctx);
@@ -207,6 +257,99 @@ export function createHttpServer(
     }
   }
 
+  async function handleActionRoute(
+    req: Request,
+    route: HttpActionRoute,
+  ): Promise<Response> {
+    const token = extractBearerToken(req);
+    if (token === null) {
+      return errorResponse(
+        "auth",
+        route.auth === "admin"
+          ? "Missing authorization token"
+          : "Missing credential token",
+        null,
+      );
+    }
+
+    let ctx: HandlerContext;
+
+    if (route.auth === "admin") {
+      const verifyResult = await deps.verifyAdminJwt(token);
+      if (Result.isError(verifyResult)) {
+        return errorResponse(
+          "auth",
+          verifyResult.error.message,
+          verifyResult.error.context ?? null,
+        );
+      }
+
+      ctx = makeHandlerContext({
+        adminAuth: {
+          adminKeyFingerprint: verifyResult.value.iss,
+        },
+      });
+    } else {
+      const credentialResult =
+        await deps.credentialManager.lookupByToken(token);
+      if (!credentialResult.isOk()) {
+        return errorResponse("auth", "Invalid credential token", null);
+      }
+
+      ctx = makeHandlerContext({
+        credential: {
+          credentialId: credentialResult.value.credentialId,
+          operatorId: credentialResult.value.operatorId,
+        },
+      });
+    }
+
+    const paramsResult = await parseActionParams(req, route.inputSource);
+    if (!paramsResult.isOk()) {
+      return errorResponse(
+        paramsResult.error.category,
+        paramsResult.error.message,
+        paramsResult.error.context ?? null,
+      );
+    }
+
+    const parseResult = route.spec.input.safeParse(paramsResult.value);
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0];
+      const field = firstIssue?.path.join(".") ?? "params";
+      const reason = firstIssue?.message ?? "Validation failed";
+      const error = ValidationError.create(field, reason, {
+        issues: parseResult.error.issues,
+      });
+      return errorResponse(
+        error.category,
+        error.message,
+        error.context ?? null,
+      );
+    }
+
+    try {
+      const result = await route.spec.handler(parseResult.data, ctx);
+      if (result.isOk()) {
+        return successResponse(result.value);
+      }
+
+      return errorResponse(
+        result.error.category,
+        result.error.message,
+        result.error.context ?? null,
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const internalError = InternalError.create(`Handler threw: ${message}`);
+      return errorResponse(
+        internalError.category,
+        internalError.message,
+        internalError.context ?? null,
+      );
+    }
+  }
+
   async function handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -230,6 +373,11 @@ export function createHttpServer(
       return handleCredentialRoute(req, credentialMethod);
     }
 
+    const actionRoute = matchHttpActionRoute(actionRoutes, req.method, path);
+    if (actionRoute !== undefined) {
+      return handleActionRoute(req, actionRoute);
+    }
+
     return errorResponse(
       "not_found",
       `Route not found: ${req.method} ${path}`,
@@ -248,6 +396,12 @@ export function createHttpServer(
       }
 
       try {
+        const routesResult = buildHttpActionRoutes(deps.registry);
+        if (!routesResult.isOk()) {
+          return Result.err(routesResult.error);
+        }
+        actionRoutes = routesResult.value;
+
         bunServer = Bun.serve({
           port: config.port,
           hostname: config.host,

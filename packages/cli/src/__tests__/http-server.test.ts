@@ -1,7 +1,13 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
+import { z } from "zod";
 import { AuthError } from "@xmtp/signet-schemas";
 import type { AdminJwtPayload } from "@xmtp/signet-keys";
+import {
+  createActionRegistry,
+  type ActionSpec,
+  type HandlerContext,
+} from "@xmtp/signet-contracts";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 import {
   createHttpServer,
@@ -33,9 +39,13 @@ function makeDispatcher(overrides?: Partial<AdminDispatcher>): AdminDispatcher {
 function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   return {
     dispatcher: overrides?.dispatcher ?? makeDispatcher(),
+    registry: overrides?.registry ?? createActionRegistry(),
     credentialManager:
       overrides?.credentialManager ??
       ({} as HttpServerDeps["credentialManager"]),
+    signetId: overrides?.signetId ?? "test-signet",
+    signerProvider:
+      overrides?.signerProvider ?? ({} as HttpServerDeps["signerProvider"]),
     verifyAdminJwt:
       overrides?.verifyAdminJwt ??
       (async () =>
@@ -47,6 +57,19 @@ function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
           jti: "test-jti",
         } satisfies AdminJwtPayload)),
     status: overrides?.status ?? (() => ({ state: "running", pid: 1 })),
+  };
+}
+
+function makeHttpActionSpec(
+  id: string,
+  overrides?: Partial<ActionSpec<unknown, unknown>>,
+): ActionSpec<unknown, unknown> {
+  return {
+    id,
+    input: z.object({}).passthrough(),
+    handler: async (_input: unknown, _ctx: HandlerContext) =>
+      Result.ok(undefined),
+    ...overrides,
   };
 }
 
@@ -119,6 +142,117 @@ describe("HttpServer", () => {
     expect(body.ok).toBe(true);
     expect(body.data).toEqual({ credentials: [] });
     expect(seenFingerprint).toBe("admin-fingerprint");
+  });
+
+  test("derived admin action route executes directly from the registry", async () => {
+    const registry = createActionRegistry();
+    registry.register(
+      makeHttpActionSpec("credential.list", {
+        description: "List credentials",
+        intent: "read",
+        input: z.object({
+          operatorId: z.string().optional(),
+        }),
+        handler: async (input, ctx) =>
+          Result.ok({
+            adminKeyFingerprint: ctx.adminAuth?.adminKeyFingerprint ?? null,
+            operatorId: (input as { operatorId?: string }).operatorId ?? null,
+          }),
+        http: {
+          auth: "admin",
+        },
+      }),
+    );
+
+    const deps = makeDeps({ registry });
+    const port = await startTestServer(deps);
+
+    const res = await fetch(
+      `http://127.0.0.1:${port}/v1/actions/credential/list?operatorId=op_123`,
+      {
+        headers: {
+          Authorization: "Bearer valid-admin-jwt",
+        },
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toEqual({
+      adminKeyFingerprint: "admin-fingerprint",
+      operatorId: "op_123",
+    });
+  });
+
+  test("derived credential action route executes directly from the registry", async () => {
+    const registry = createActionRegistry();
+    registry.register(
+      makeHttpActionSpec("reveal.list", {
+        description: "List active reveals",
+        intent: "read",
+        idempotent: true,
+        input: z.object({
+          credentialId: z.string(),
+        }),
+        handler: async (input, ctx) =>
+          Result.ok({
+            authenticatedCredentialId: ctx.credentialId ?? null,
+            requestedCredentialId: (input as { credentialId: string })
+              .credentialId,
+          }),
+        http: {
+          auth: "credential",
+        },
+      }),
+    );
+
+    const deps = makeDeps({
+      registry,
+      credentialManager: {
+        lookupByToken: async () =>
+          Result.ok({
+            id: "cred_123",
+            config: {
+              operatorId: "op_123",
+              chatIds: [],
+              allow: [],
+              deny: [],
+            },
+            inboxIds: [],
+            credentialId: "cred_123",
+            operatorId: "op_123",
+            effectiveScopes: {
+              allow: [],
+              deny: [],
+            },
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            issuedBy: "owner",
+            isExpired: false,
+            lastHeartbeat: new Date().toISOString(),
+          }),
+      } as HttpServerDeps["credentialManager"],
+    });
+    const port = await startTestServer(deps);
+
+    const res = await fetch(
+      `http://127.0.0.1:${port}/v1/actions/reveal/list?credentialId=cred_123`,
+      {
+        headers: {
+          Authorization: "Bearer credential-token",
+        },
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toEqual({
+      authenticatedCredentialId: "cred_123",
+      requestedCredentialId: "cred_123",
+    });
   });
 
   test("unauthenticated request to /v1/admin returns 401", async () => {
