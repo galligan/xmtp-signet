@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { Result } from "better-result";
 import type { AdminJwtPayload } from "@xmtp/signet-keys";
+import { createActionRegistry } from "@xmtp/signet-contracts";
 import type { AdminDispatcher } from "../admin/dispatcher.js";
 import {
   createHttpServer,
@@ -32,9 +33,13 @@ function makeDispatcher(overrides?: Partial<AdminDispatcher>): AdminDispatcher {
 function makeDeps(overrides?: Partial<HttpServerDeps>): HttpServerDeps {
   return {
     dispatcher: overrides?.dispatcher ?? makeDispatcher(),
+    registry: overrides?.registry ?? createActionRegistry(),
     credentialManager:
       overrides?.credentialManager ??
       ({} as HttpServerDeps["credentialManager"]),
+    signetId: overrides?.signetId ?? "test-signet",
+    signerProvider:
+      overrides?.signerProvider ?? ({} as HttpServerDeps["signerProvider"]),
     verifyAdminJwt:
       overrides?.verifyAdminJwt ??
       (async () =>

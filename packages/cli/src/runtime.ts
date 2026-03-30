@@ -291,7 +291,10 @@ export async function createSignetRuntime(
       { port: config.http.port, host: config.http.host },
       {
         dispatcher,
+        registry,
         credentialManager,
+        signetId: "signet",
+        signerProvider: adminSignerStub,
         verifyAdminJwt: async (token: string) => {
           return keyManager.admin.verifyJwt(token);
         },
