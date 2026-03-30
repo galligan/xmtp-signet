@@ -27,6 +27,7 @@ export type {
 // Action types
 export type {
   ActionSpec,
+  ActionSurface,
   ActionIntent,
   ActionExample,
   CliSurface,
@@ -34,10 +35,32 @@ export type {
   HttpSurface,
   CliOption,
 } from "./action-spec.js";
+export { ACTION_SURFACES } from "./action-spec.js";
+
+// Action derivation
+export {
+  deriveCliCommand,
+  deriveRpcMethod,
+  deriveStandardMcpAnnotations,
+  deriveMcpToolName,
+  deriveMcpAnnotations,
+  deriveHttpMethod,
+  deriveHttpPath,
+  deriveHttpInputSource,
+} from "./action-derive.js";
+export type {
+  HttpMethod,
+  HttpInputSource,
+  McpAnnotations,
+} from "./action-derive.js";
 
 // Action registry
 export { createActionRegistry } from "./action-registry.js";
 export type { ActionRegistry } from "./action-registry.js";
+
+// Action validation
+export { validateActionSpecs } from "./action-validate.js";
+export type { ActionContractIssue } from "./action-validate.js";
 
 // Result envelope
 export { toActionResult } from "./result-envelope.js";
