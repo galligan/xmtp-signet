@@ -28,12 +28,14 @@ function widenActionSpec<TInput, TOutput>(
   return spec as ActionSpec<unknown, unknown, SignetError>;
 }
 
-/** Create CLI and MCP actions for credential lifecycle operations. */
+/** Create credential lifecycle actions for CLI and future HTTP surfaces. */
 export function createCredentialActions(
   deps: CredentialActionDeps,
 ): ActionSpec<unknown, unknown, SignetError>[] {
   const issue: ActionSpec<CredentialConfigType, unknown, SignetError> = {
     id: "credential.issue",
+    description: "Issue a credential for an operator and chat scope",
+    intent: "write",
     input: CredentialConfig,
     handler: async (input, ctx) => {
       const issuedBy = ctx.adminAuth !== undefined ? "owner" : ctx.operatorId;
@@ -44,7 +46,9 @@ export function createCredentialActions(
     },
     cli: {
       command: "credential:issue",
-      rpcMethod: "credential.issue",
+    },
+    http: {
+      auth: "admin",
     },
   };
 
@@ -54,25 +58,35 @@ export function createCredentialActions(
     SignetError
   > = {
     id: "credential.list",
+    description: "List credentials, optionally filtered by operator",
+    intent: "read",
+    idempotent: true,
     input: z.object({
       operatorId: z.string().optional(),
     }),
     handler: async (input) => deps.credentialManager.list(input.operatorId),
     cli: {
       command: "credential:list",
-      rpcMethod: "credential.list",
+    },
+    http: {
+      auth: "admin",
     },
   };
 
   const inspect: ActionSpec<{ credentialId: string }, unknown, SignetError> = {
     id: "credential.lookup",
+    description: "Look up a credential by id",
+    intent: "read",
+    idempotent: true,
     input: z.object({
       credentialId: z.string(),
     }),
     handler: async (input) => deps.credentialManager.lookup(input.credentialId),
     cli: {
       command: "credential:inspect",
-      rpcMethod: "credential.lookup",
+    },
+    http: {
+      auth: "admin",
     },
   };
 
@@ -85,6 +99,8 @@ export function createCredentialActions(
     SignetError
   > = {
     id: "credential.revoke",
+    description: "Revoke an issued credential",
+    intent: "destroy",
     input: z.object({
       credentialId: z.string(),
       reason: CredentialRevocationReason.default("owner-initiated"),
@@ -101,7 +117,9 @@ export function createCredentialActions(
     },
     cli: {
       command: "credential:revoke",
-      rpcMethod: "credential.revoke",
+    },
+    http: {
+      auth: "admin",
     },
   };
 

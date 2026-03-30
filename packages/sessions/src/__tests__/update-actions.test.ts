@@ -57,6 +57,8 @@ describe("credential.updateScopes action", () => {
     expect(updateScopes).toBeDefined();
     expect(updateScopes?.cli).toBeDefined();
     expect(updateScopes?.mcp).toBeUndefined();
+    expect(updateScopes?.http?.auth).toBe("admin");
+    expect(updateScopes?.intent).toBe("write");
   });
 
   test("applies non-material scope change immediately", async () => {

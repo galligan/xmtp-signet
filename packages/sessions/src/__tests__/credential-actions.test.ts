@@ -51,7 +51,18 @@ describe("credential action surfaces", () => {
       expect(action).toBeDefined();
       expect(action?.cli).toBeDefined();
       expect(action?.mcp).toBeUndefined();
+      expect(action?.http?.auth).toBe("admin");
     }
+
+    expect(
+      actions.find((candidate) => candidate.id === "credential.list")?.intent,
+    ).toBe("read");
+    expect(
+      actions.find((candidate) => candidate.id === "credential.lookup")?.intent,
+    ).toBe("read");
+    expect(
+      actions.find((candidate) => candidate.id === "credential.revoke")?.intent,
+    ).toBe("destroy");
   });
 
   test("credential.issue stamps owner provenance for admin callers", async () => {
