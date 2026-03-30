@@ -52,8 +52,23 @@ export interface CliOption {
  * and format output.
  */
 export interface CliSurface {
-  /** Optional command override. When omitted, transports may derive from `id`. */
-  readonly command?: string;
+  /**
+   * Command name for the pre-derivation CLI adapter.
+   * Transitional only; later cleanup derives this from `id`.
+   */
+  readonly command: string;
+
+  /**
+   * Legacy RPC method override used by the pre-derivation admin dispatcher.
+   * Transitional only; removed once transports fully derive from `id`.
+   */
+  readonly rpcMethod?: string;
+
+  /**
+   * Legacy help text override used by the pre-derivation CLI adapter.
+   * Transitional only; prefer top-level `description`.
+   */
+  readonly description?: string;
 
   /** Short aliases (e.g., `["sl"]`). */
   readonly aliases?: readonly string[];
@@ -74,10 +89,28 @@ export interface CliSurface {
  */
 export interface McpSurface {
   /**
-   * Optional tool name override. When omitted, transports may derive
-   * from `id`.
+   * Tool name for the pre-derivation MCP adapter.
+   * Transitional only; later cleanup derives this from `id`.
    */
-  readonly toolName?: string;
+  readonly toolName: string;
+
+  /**
+   * Legacy tool description override used by the pre-derivation MCP adapter.
+   * Transitional only; prefer top-level `description`.
+   */
+  readonly description: string;
+
+  /**
+   * Legacy read-only hint used by the pre-derivation MCP adapter.
+   * Transitional only; prefer top-level `intent`.
+   */
+  readonly readOnly: boolean;
+
+  /**
+   * Legacy destructive hint used by the pre-derivation MCP adapter.
+   * Transitional only; prefer top-level `intent`.
+   */
+  readonly destructive?: boolean;
 
   /**
    * Additional MCP tool annotations. Passed through to the MCP
