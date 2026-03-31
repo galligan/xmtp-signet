@@ -62,9 +62,9 @@ describe("conversation action examples", () => {
     mappingDb.close();
   });
 
-  test("conversation.info examples execute and match the declared output schema", async () => {
+  test("chat.info examples execute and match the declared output schema", async () => {
     const action = createConversationActions(deps).find(
-      (candidate) => candidate.id === "conversation.info",
+      (candidate) => candidate.id === "chat.info",
     );
 
     expect(action?.examples?.length).toBeGreaterThan(0);
@@ -85,9 +85,9 @@ describe("conversation action examples", () => {
     }
   });
 
-  test("conversation.members examples execute and match the declared output schema", async () => {
+  test("chat.members examples execute and match the declared output schema", async () => {
     const action = createConversationActions(deps).find(
-      (candidate) => candidate.id === "conversation.members",
+      (candidate) => candidate.id === "chat.members",
     );
 
     expect(action?.examples?.length).toBeGreaterThan(0);

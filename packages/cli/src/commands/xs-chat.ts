@@ -2,8 +2,7 @@
  * Chat management commands for the `xs chat` subcommand group.
  *
  * Daemon-backed conversation lifecycle operations via the admin socket.
- * The CLI group name is `chat` but RPC calls use the current `conversation.*`
- * action IDs registered in the runtime (the rename to `chat.*` is deferred).
+ * RPC calls use `chat.*` action IDs registered in the runtime.
  *
  * Follows the same contract-first pattern as `xs-credential.ts`.
  *
@@ -104,7 +103,7 @@ export function createChatCommands(
 
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("conversation.create", payload),
+          (client) => client.request("chat.create", payload),
         );
 
         if (result.isErr()) {
@@ -139,7 +138,7 @@ export function createChatCommands(
 
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("conversation.list", payload),
+          (client) => client.request("chat.list", payload),
         );
 
         if (result.isErr()) {
@@ -166,7 +165,7 @@ export function createChatCommands(
         const json = opts.json === true;
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("conversation.info", { chatId: id }),
+          (client) => client.request("chat.info", { chatId: id }),
         );
 
         if (result.isErr()) {
@@ -226,7 +225,7 @@ export function createChatCommands(
 
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("conversation.join", payload),
+          (client) => client.request("chat.join", payload),
         );
 
         if (result.isErr()) {
@@ -268,7 +267,7 @@ export function createChatCommands(
 
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("conversation.invite", payload),
+          (client) => client.request("chat.invite", payload),
         );
 
         if (result.isErr()) {
@@ -317,7 +316,7 @@ export function createChatCommands(
       const json = opts.json === true;
       const result = await resolvedDeps.withDaemonClient(
         { configPath: opts.config },
-        (client) => client.request("conversation.members", { chatId: id }),
+        (client) => client.request("chat.members", { chatId: id }),
       );
 
       if (result.isErr()) {
@@ -348,7 +347,7 @@ export function createChatCommands(
 
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("conversation.add-member", payload),
+          (client) => client.request("chat.add-member", payload),
         );
 
         if (result.isErr()) {

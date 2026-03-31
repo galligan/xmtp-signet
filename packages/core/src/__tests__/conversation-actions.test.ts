@@ -118,10 +118,10 @@ describe("conversation actions", () => {
     setupDeps();
 
     const actions = createConversationActions(deps);
-    const createAction = actions.find((a) => a.id === "conversation.create");
-    const listAction = actions.find((a) => a.id === "conversation.list");
-    const inviteAction = actions.find((a) => a.id === "conversation.invite");
-    const membersAction = actions.find((a) => a.id === "conversation.members");
+    const createAction = actions.find((a) => a.id === "chat.create");
+    const listAction = actions.find((a) => a.id === "chat.list");
+    const inviteAction = actions.find((a) => a.id === "chat.invite");
+    const membersAction = actions.find((a) => a.id === "chat.members");
 
     expect(createAction?.description).toBe("Create a new group conversation");
     expect(createAction?.intent).toBe("write");
@@ -156,13 +156,13 @@ describe("conversation actions", () => {
     return managed;
   }
 
-  describe("conversation.create", () => {
+  describe("chat.create", () => {
     test("creates a group with members and returns metadata", async () => {
       const managed = await seedIdentity("agent-1");
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const createAction = actions.find((a) => a.id === "conversation.create");
+      const createAction = actions.find((a) => a.id === "chat.create");
       expect(createAction).toBeDefined();
 
       const result = await createAction!.handler(
@@ -197,7 +197,7 @@ describe("conversation actions", () => {
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const createAction = actions.find((a) => a.id === "conversation.create");
+      const createAction = actions.find((a) => a.id === "chat.create");
 
       const result = await createAction!.handler(
         {
@@ -218,7 +218,7 @@ describe("conversation actions", () => {
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const createAction = actions.find((a) => a.id === "conversation.create");
+      const createAction = actions.find((a) => a.id === "chat.create");
 
       const result = await createAction!.handler(
         {
@@ -241,7 +241,7 @@ describe("conversation actions", () => {
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const createAction = actions.find((a) => a.id === "conversation.create");
+      const createAction = actions.find((a) => a.id === "chat.create");
 
       const result = await createAction!.handler(
         {
@@ -258,7 +258,7 @@ describe("conversation actions", () => {
     });
   });
 
-  describe("conversation.list", () => {
+  describe("chat.list", () => {
     test("delegates to SDK client listGroups", async () => {
       const testGroups: XmtpGroupInfo[] = [
         {
@@ -282,7 +282,7 @@ describe("conversation actions", () => {
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const listAction = actions.find((a) => a.id === "conversation.list");
+      const listAction = actions.find((a) => a.id === "chat.list");
       expect(listAction).toBeDefined();
 
       const result = await listAction!.handler(
@@ -304,7 +304,7 @@ describe("conversation actions", () => {
     });
   });
 
-  describe("conversation.info", () => {
+  describe("chat.info", () => {
     test("returns group details via deps.getGroupInfo with raw groupId", async () => {
       const groupInfo: XmtpGroupInfo = {
         groupId: "g-info",
@@ -316,7 +316,7 @@ describe("conversation actions", () => {
       setupDeps(async () => Result.ok(groupInfo));
 
       const actions = createConversationActions(deps);
-      const infoAction = actions.find((a) => a.id === "conversation.info");
+      const infoAction = actions.find((a) => a.id === "chat.info");
       expect(infoAction).toBeDefined();
 
       const result = await infoAction!.handler({ chatId: "g-info" }, stubCtx());
@@ -349,7 +349,7 @@ describe("conversation actions", () => {
       });
 
       const actions = createConversationActions(deps);
-      const infoAction = actions.find((a) => a.id === "conversation.info");
+      const infoAction = actions.find((a) => a.id === "chat.info");
 
       const result = await infoAction!.handler(
         { chatId: "conv_0123456789abcdef" },
@@ -365,7 +365,7 @@ describe("conversation actions", () => {
     });
   });
 
-  describe("conversation.add-member", () => {
+  describe("chat.add-member", () => {
     test("adds a member to a group and returns updated member count", async () => {
       const testGroup: XmtpGroupInfo = {
         groupId: "g-add",
@@ -407,9 +407,7 @@ describe("conversation actions", () => {
       setupDeps(async (groupId) => trackedClient.getGroupInfo(groupId));
 
       const actions = createConversationActions(deps);
-      const addMemberAction = actions.find(
-        (a) => a.id === "conversation.add-member",
-      );
+      const addMemberAction = actions.find((a) => a.id === "chat.add-member");
       expect(addMemberAction).toBeDefined();
 
       const result = await addMemberAction!.handler(
@@ -435,9 +433,7 @@ describe("conversation actions", () => {
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const addMemberAction = actions.find(
-        (a) => a.id === "conversation.add-member",
-      );
+      const addMemberAction = actions.find((a) => a.id === "chat.add-member");
       expect(addMemberAction).toBeDefined();
 
       const result = await addMemberAction!.handler(
@@ -456,7 +452,7 @@ describe("conversation actions", () => {
     });
   });
 
-  describe("conversation.members", () => {
+  describe("chat.members", () => {
     test("returns member list for a group", async () => {
       const testGroup: XmtpGroupInfo = {
         groupId: "g-members",
@@ -468,9 +464,7 @@ describe("conversation actions", () => {
       setupDeps(async () => Result.ok(testGroup));
 
       const actions = createConversationActions(deps);
-      const membersAction = actions.find(
-        (a) => a.id === "conversation.members",
-      );
+      const membersAction = actions.find((a) => a.id === "chat.members");
       expect(membersAction).toBeDefined();
 
       const result = await membersAction!.handler(
@@ -497,9 +491,7 @@ describe("conversation actions", () => {
       setupDeps(); // default returns NotFoundError
 
       const actions = createConversationActions(deps);
-      const membersAction = actions.find(
-        (a) => a.id === "conversation.members",
-      );
+      const membersAction = actions.find((a) => a.id === "chat.members");
 
       const result = await membersAction!.handler(
         { chatId: "nonexistent" },
@@ -536,7 +528,7 @@ describe("conversation actions", () => {
       setupDeps();
 
       const actions = createConversationActions(deps);
-      const listAction = actions.find((a) => a.id === "conversation.list");
+      const listAction = actions.find((a) => a.id === "chat.list");
 
       const result = await listAction!.handler({}, stubCtx());
 

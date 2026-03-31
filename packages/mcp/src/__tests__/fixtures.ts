@@ -191,7 +191,7 @@ export function createListSpec(
 
 export function createReadOnlySpec(): ActionSpec<unknown, unknown> {
   return {
-    id: "conversation.list",
+    id: "chat.list",
     description: "List conversations",
     intent: "read",
     handler: async () => Result.ok({ conversations: [] }),
@@ -202,7 +202,7 @@ export function createReadOnlySpec(): ActionSpec<unknown, unknown> {
 
 export function createDestructiveSpec(): ActionSpec<unknown, unknown> {
   return {
-    id: "conversation.delete",
+    id: "chat.delete",
     description: "Delete a conversation",
     intent: "destroy",
     handler: async () => Result.ok(undefined),

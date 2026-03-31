@@ -105,7 +105,7 @@ describe("action surface map", () => {
 
     expect(surfaceMap.entries.length).toBeGreaterThan(0);
     expect(hash).toBe(
-      "31cb38ef9d7484bd3d56db001545f93317b435097ca0b6c4259b0e6030bb6f0b",
+      "1e034cb49a77348db5b512ddf9867cfe4e9819083ab596f423521169958c44cf",
     );
   });
 });

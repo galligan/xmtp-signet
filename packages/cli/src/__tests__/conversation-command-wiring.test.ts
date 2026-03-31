@@ -112,7 +112,7 @@ describe("conversation create", () => {
     expect(harness.withDaemonCalls).toEqual([{ configPath: "/tmp/test.toml" }]);
     expect(harness.requestCalls).toEqual([
       {
-        method: "conversation.create",
+        method: "chat.create",
         params: {
           name: "Test Group",
           memberInboxIds: ["inbox1", "inbox2", "inbox3"],
@@ -185,7 +185,7 @@ describe("conversation list", () => {
 
     expect(harness.requestCalls).toEqual([
       {
-        method: "conversation.list",
+        method: "chat.list",
         params: { identityLabel: undefined },
       },
     ]);
@@ -232,7 +232,7 @@ describe("conversation info", () => {
 
     expect(harness.requestCalls).toEqual([
       {
-        method: "conversation.info",
+        method: "chat.info",
         params: { chatId: "grp_abc" },
       },
     ]);
@@ -259,7 +259,7 @@ describe("conversation add-member", () => {
 
     expect(harness.requestCalls).toEqual([
       {
-        method: "conversation.add-member",
+        method: "chat.add-member",
         params: { chatId: "grp_abc", inboxId: "inbox_xyz" },
       },
     ]);

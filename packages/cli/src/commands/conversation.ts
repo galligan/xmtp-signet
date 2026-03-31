@@ -62,7 +62,7 @@ export function createConversationCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<unknown>("conversation.create", {
+          client.request<unknown>("chat.create", {
             name: typeof options.name === "string" ? options.name : undefined,
             memberInboxIds,
             creatorIdentityLabel:
@@ -93,7 +93,7 @@ export function createConversationCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<unknown>("conversation.list", {
+          client.request<unknown>("chat.list", {
             identityLabel:
               typeof options.as === "string" ? options.as : undefined,
           }),
@@ -121,7 +121,7 @@ export function createConversationCommands(
           configPath:
             typeof options.config === "string" ? options.config : undefined,
         },
-        (client) => client.request<unknown>("conversation.info", { chatId }),
+        (client) => client.request<unknown>("chat.info", { chatId }),
       );
 
       if (result.isErr()) {
@@ -148,7 +148,7 @@ export function createConversationCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<unknown>("conversation.add-member", {
+          client.request<unknown>("chat.add-member", {
             chatId,
             inboxId,
           }),
@@ -188,7 +188,7 @@ export function createConversationCommands(
           configPath:
             typeof options.config === "string" ? options.config : undefined,
         },
-        (client) => client.request<unknown>("conversation.invite", params),
+        (client) => client.request<unknown>("chat.invite", params),
       );
 
       if (result.isErr()) {
@@ -249,7 +249,7 @@ export function createConversationCommands(
             typeof options.config === "string" ? options.config : undefined,
         },
         (client) =>
-          client.request<unknown>("conversation.join", {
+          client.request<unknown>("chat.join", {
             inviteUrl,
             label:
               typeof options.label === "string" ? options.label : undefined,
@@ -282,7 +282,7 @@ export function createConversationCommands(
 
       const fetchMembers = async (): Promise<unknown | undefined> => {
         const result = await d.withDaemonClient({ configPath }, (client) =>
-          client.request<unknown>("conversation.info", { chatId }),
+          client.request<unknown>("chat.info", { chatId }),
         );
 
         if (result.isErr()) {

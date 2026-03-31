@@ -138,7 +138,7 @@ export function createConversationActions(
     },
     SignetError
   > = {
-    id: "conversation.create",
+    id: "chat.create",
     description: "Create a new group conversation",
     intent: "write",
     input: z.object({
@@ -181,7 +181,7 @@ export function createConversationActions(
       });
     },
     cli: {
-      command: "conversation:create",
+      command: "chat:create",
     },
     mcp: {},
     http: {
@@ -194,7 +194,7 @@ export function createConversationActions(
     { groups: readonly XmtpGroupInfo[] },
     SignetError
   > = {
-    id: "conversation.list",
+    id: "chat.list",
     description: "List group conversations",
     intent: "read",
     idempotent: true,
@@ -229,7 +229,7 @@ export function createConversationActions(
       return Result.ok({ groups });
     },
     cli: {
-      command: "conversation:list",
+      command: "chat:list",
     },
     mcp: {},
     http: {
@@ -242,7 +242,7 @@ export function createConversationActions(
     XmtpGroupInfo & { chatId?: string | undefined },
     SignetError
   > = {
-    id: "conversation.info",
+    id: "chat.info",
     description: "Get group conversation details",
     intent: "read",
     idempotent: true,
@@ -273,7 +273,7 @@ export function createConversationActions(
       return Result.ok({ ...result.value, chatId: input.chatId });
     },
     cli: {
-      command: "conversation:info",
+      command: "chat:info",
     },
     mcp: {},
     http: {
@@ -298,7 +298,7 @@ export function createConversationActions(
     },
     SignetError
   > = {
-    id: "conversation.join",
+    id: "chat.join",
     description: "Join a Convos conversation via invite URL",
     intent: "write",
     input: z.object({
@@ -344,7 +344,7 @@ export function createConversationActions(
       return Result.ok({ ...joinResult.value, chatId });
     },
     cli: {
-      command: "conversation:join",
+      command: "chat:join",
     },
     mcp: {},
     http: {
@@ -369,7 +369,7 @@ export function createConversationActions(
     },
     SignetError
   > = {
-    id: "conversation.invite",
+    id: "chat.invite",
     description: "Generate a Convos-compatible invite URL for a group",
     intent: "write",
     input: z.object({
@@ -462,7 +462,7 @@ export function createConversationActions(
       });
     },
     cli: {
-      command: "conversation:invite",
+      command: "chat:invite",
     },
     mcp: {},
     http: {
@@ -479,7 +479,7 @@ export function createConversationActions(
     { chatId?: string | undefined; groupId: string; memberCount: number },
     SignetError
   > = {
-    id: "conversation.add-member",
+    id: "chat.add-member",
     description: "Add a member to a group conversation",
     intent: "write",
     input: z.object({
@@ -521,7 +521,7 @@ export function createConversationActions(
       });
     },
     cli: {
-      command: "conversation:add-member",
+      command: "chat:add-member",
     },
     mcp: {},
     http: {
@@ -539,7 +539,7 @@ export function createConversationActions(
     },
     SignetError
   > = {
-    id: "conversation.members",
+    id: "chat.members",
     description: "List members of a group conversation",
     intent: "read",
     idempotent: true,
@@ -574,7 +574,7 @@ export function createConversationActions(
       });
     },
     cli: {
-      command: "conversation:members",
+      command: "chat:members",
     },
     mcp: {},
     http: {
