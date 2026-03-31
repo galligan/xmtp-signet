@@ -14,6 +14,7 @@ import {
   createCredentialActions,
   createRevealActions,
   createUpdateActions,
+  createOperatorActions,
 } from "@xmtp/signet-sessions";
 import type { InternalCredentialManager } from "@xmtp/signet-sessions";
 import type { AdminServer } from "./admin/server.js";
@@ -91,6 +92,9 @@ export interface SignetRuntimeDeps {
 
   /** Optional factory to expose the internal credential manager for update actions. */
   getInternalCredentialManager?: () => InternalCredentialManager;
+
+  /** Optional factory for operator action specs, wired in production by start.ts. */
+  createOperatorManager?: () => import("@xmtp/signet-contracts").OperatorManager;
 
   /** Optional callback to list registered identities with their inbox IDs. */
   listIdentities?: () => Promise<readonly { inboxId: string | null }[]>;
@@ -261,6 +265,13 @@ export async function createSignetRuntime(
     },
   })) {
     registry.register(spec);
+  }
+
+  if (deps.createOperatorManager) {
+    const operatorManager = deps.createOperatorManager();
+    for (const spec of createOperatorActions({ operatorManager })) {
+      registry.register(spec);
+    }
   }
 
   if (deps.createConversationActions) {

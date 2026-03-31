@@ -21,5 +21,7 @@ export { createPendingActionStore } from "./pending-actions.js";
 export type { PendingAction, PendingActionStore } from "./pending-actions.js";
 export { createOperatorManager } from "./operator-manager.js";
 export type { OperatorManagerInternal } from "./operator-manager.js";
+export { createOperatorActions } from "./operator-actions.js";
+export type { OperatorActionDeps } from "./operator-actions.js";
 export { createPolicyManager } from "./policy-manager.js";
 export type { PolicyManagerInternal } from "./policy-manager.js";

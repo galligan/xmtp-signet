@@ -29,6 +29,7 @@ import {
 import {
   createCredentialManager as createCredentialManagerImpl,
   createCredentialService,
+  createOperatorManager as createOperatorManagerImpl,
   type InternalCredentialManager,
 } from "@xmtp/signet-sessions";
 import { createSealManager as createSealManagerImpl } from "@xmtp/signet-seals";
@@ -480,6 +481,10 @@ export function createProductionDeps(): SignetRuntimeDeps {
       const cfg = config as HttpServerImplConfig;
       const d = deps as HttpServerDeps;
       return createHttpServerImpl(cfg, d);
+    },
+
+    createOperatorManager() {
+      return createOperatorManagerImpl();
     },
 
     createConversationActions() {
