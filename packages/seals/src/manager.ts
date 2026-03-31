@@ -12,6 +12,7 @@ import {
 } from "@xmtp/signet-schemas";
 import type {
   SealManager,
+  SealListFilter,
   SealPublisher,
   SealStamper,
   PolicyDelta,
@@ -297,6 +298,59 @@ export function createSealManager(deps: SealManagerDeps): SealManagerImpl {
       return Result.ok(current);
     },
 
+    async list(
+      filter: SealListFilter = {},
+    ): Promise<Result<readonly SealEnvelopeType[], SignetError>> {
+      const seals = Array.from(currentSeals.values())
+        .filter((envelope) => matchesFilter(envelope, filter))
+        .sort(compareNewestFirst);
+      return Result.ok(seals);
+    },
+
+    async lookup(
+      sealId: string,
+    ): Promise<Result<SealEnvelopeType, SignetError>> {
+      const envelope = sealsById.get(sealId);
+      if (!envelope) {
+        return Result.err(SealError.create(sealId, "Seal not found"));
+      }
+      return Result.ok(envelope);
+    },
+
+    async history(
+      credentialId: string,
+      chatId: string,
+    ): Promise<Result<readonly SealEnvelopeType[], SignetError>> {
+      const envelopes = Array.from(sealsById.values()).filter(
+        (envelope) =>
+          envelope.chain.current.credentialId === credentialId &&
+          envelope.chain.current.chatId === chatId,
+      );
+
+      if (envelopes.length === 0) {
+        return Result.ok([]);
+      }
+
+      const activeHead = currentSeals.get(chainKey(credentialId, chatId));
+      const head =
+        activeHead ??
+        findHistoryHead(envelopes) ??
+        envelopes.sort(compareNewestFirst)[0];
+
+      const history: SealEnvelopeType[] = [];
+      const seen = new Set<string>();
+      let cursor: SealEnvelopeType | undefined = head;
+
+      while (cursor && !seen.has(cursor.chain.current.sealId)) {
+        history.push(cursor);
+        seen.add(cursor.chain.current.sealId);
+        const previousId = cursor.chain.previous?.sealId;
+        cursor = previousId ? sealsById.get(previousId) : undefined;
+      }
+
+      return Result.ok(history);
+    },
+
     needsRenewal(payload: SealPayloadType): boolean {
       const issuedAt = new Date(payload.issuedAt).getTime();
       const now = Date.now();
@@ -325,4 +379,49 @@ function hasInputChanges(previous: SealInput, next: SealInput): boolean {
 
 function stableSerialize(value: unknown): string {
   return new TextDecoder().decode(canonicalize(value));
+}
+
+function matchesFilter(
+  envelope: SealEnvelopeType,
+  filter: SealListFilter,
+): boolean {
+  if (
+    filter.chatId !== undefined &&
+    envelope.chain.current.chatId !== filter.chatId
+  ) {
+    return false;
+  }
+
+  if (
+    filter.credentialId !== undefined &&
+    envelope.chain.current.credentialId !== filter.credentialId
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function compareNewestFirst(
+  left: SealEnvelopeType,
+  right: SealEnvelopeType,
+): number {
+  return (
+    new Date(right.chain.current.issuedAt).getTime() -
+    new Date(left.chain.current.issuedAt).getTime()
+  );
+}
+
+function findHistoryHead(
+  envelopes: readonly SealEnvelopeType[],
+): SealEnvelopeType | undefined {
+  const referenced = new Set(
+    envelopes
+      .map((envelope) => envelope.chain.previous?.sealId)
+      .filter((value): value is string => value !== undefined),
+  );
+
+  return envelopes.find(
+    (envelope) => !referenced.has(envelope.chain.current.sealId),
+  );
 }

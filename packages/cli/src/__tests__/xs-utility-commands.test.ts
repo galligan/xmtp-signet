@@ -120,11 +120,13 @@ describe("seal commands", () => {
     expect(cmd.description()).toBeTruthy();
   });
 
-  test("list subcommand has --json option", async () => {
+  test("list subcommand has filter options and --json", async () => {
     const cmd = await load();
     const list = findSub(cmd, "list");
     expect(list).toBeDefined();
     const flags = optionFlags(list!);
+    expect(flags).toContain("--chat");
+    expect(flags).toContain("--credential");
     expect(flags).toContain("--json");
   });
 
@@ -139,22 +141,27 @@ describe("seal commands", () => {
     expect(flags).toContain("--json");
   });
 
-  test("verify subcommand accepts an id argument", async () => {
+  test("verify subcommand accepts an id argument and --json option", async () => {
     const cmd = await load();
     const verify = findSub(cmd, "verify");
     expect(verify).toBeDefined();
     const args = verify!.registeredArguments;
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("id");
+    const flags = optionFlags(verify!);
+    expect(flags).toContain("--json");
   });
 
-  test("history subcommand accepts a cred-id argument", async () => {
+  test("history subcommand accepts a cred-id argument and requires --chat", async () => {
     const cmd = await load();
     const history = findSub(cmd, "history");
     expect(history).toBeDefined();
     const args = history!.registeredArguments;
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("cred-id");
+    const flags = optionFlags(history!);
+    expect(flags).toContain("--chat");
+    expect(flags).toContain("--json");
   });
 
   test("has exactly 4 subcommands", async () => {

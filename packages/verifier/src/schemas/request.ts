@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { SealPayload } from "@xmtp/signet-schemas";
-import type { SealPayloadType } from "@xmtp/signet-schemas";
+import { SealPayload, SealChain } from "@xmtp/signet-schemas";
+import type { SealPayloadType, SealEnvelopeType } from "@xmtp/signet-schemas";
 import { TrustTier } from "./trust-tier.js";
 import type { TrustTier as TrustTierType } from "./trust-tier.js";
 
@@ -11,6 +11,8 @@ export type VerificationRequest = {
   signetInboxId: string;
   groupId: string | null;
   seal: SealPayloadType | null;
+  sealEnvelope?: SealEnvelopeType | null | undefined;
+  sealPublicKey?: string | null | undefined;
   artifactDigest: string;
   buildProvenanceBundle: string | null;
   sourceRepoUrl: string;
@@ -36,6 +38,21 @@ export const VerificationRequestSchema: z.ZodType<VerificationRequest> = z
     seal: SealPayload.nullable().describe(
       "Seal to verify, null if only checking provenance",
     ),
+    sealEnvelope: z
+      .object({
+        chain: SealChain,
+        signature: z.string(),
+        keyId: z.string(),
+        algorithm: z.literal("Ed25519"),
+      })
+      .nullable()
+      .optional()
+      .describe("Full seal envelope when local verification has access to it"),
+    sealPublicKey: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Hex-encoded Ed25519 public key for local signature checks"),
     artifactDigest: z
       .string()
       .describe("SHA-256 digest of the signet artifact (hex-encoded)"),

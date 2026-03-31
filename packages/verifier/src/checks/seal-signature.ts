@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import type { InternalError } from "@xmtp/signet-schemas";
+import { InternalError as InternalErrorClass } from "@xmtp/signet-schemas";
+import { canonicalize } from "../canonicalize.js";
 import type { VerificationCheck } from "../schemas/check.js";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { CheckHandler } from "./handler.js";
@@ -15,13 +17,9 @@ export const SEAL_SIGNATURE_CHECK_ID = "seal_signature" as const;
  * - Seal's operatorId is non-empty
  * - Seal has required fields (scopeMode, permissions)
  *
- * Full Ed25519 signature verification requires the SealEnvelope
- * (which includes the signature bytes and keyId) and the signer's
- * public key. Both are deferred -- the verification request currently
- * only carries the SealPayload, not the envelope.
- *
- * TODO: Extend VerificationRequest to include envelope, then verify
- * signature against the canonical seal bytes.
+ * When the full envelope and signer's public key are present on the request,
+ * the check performs a local Ed25519 verification against the canonical seal
+ * payload bytes. Otherwise it degrades gracefully to a skip verdict.
  */
 export function createSealSignatureCheck(): CheckHandler {
   return {
@@ -75,18 +73,143 @@ export function createSealSignatureCheck(): CheckHandler {
         });
       }
 
-      // Structural checks pass -- signature verification requires the
-      // SealEnvelope and signer public key (not yet in VerificationRequest)
+      if (request.sealEnvelope == null || request.sealPublicKey == null) {
+        return Result.ok({
+          checkId: SEAL_SIGNATURE_CHECK_ID,
+          verdict: "skip",
+          reason:
+            "Seal structural validation passed; signature verification requires a local envelope and signer public key",
+          evidence: {
+            operatorId: seal.operatorId,
+            signatureVerified: null,
+          },
+        });
+      }
+
+      if (request.sealEnvelope.chain.current.sealId !== seal.sealId) {
+        return Result.ok({
+          checkId: SEAL_SIGNATURE_CHECK_ID,
+          verdict: "fail",
+          reason: "Seal envelope does not match the requested seal payload",
+          evidence: {
+            expectedSealId: seal.sealId,
+            envelopeSealId: request.sealEnvelope.chain.current.sealId,
+            signatureVerified: false,
+          },
+        });
+      }
+
+      const importResult = await importEd25519PublicKey(request.sealPublicKey);
+      if (Result.isError(importResult)) {
+        return importResult;
+      }
+
+      const signatureBytes = decodeBase64(request.sealEnvelope.signature);
+      if (Result.isError(signatureBytes)) {
+        return signatureBytes;
+      }
+
+      const verified = await verifyEd25519Signature(
+        importResult.value,
+        canonicalize(request.sealEnvelope.chain.current),
+        signatureBytes.value,
+      );
+      if (Result.isError(verified)) {
+        return verified;
+      }
+
+      if (!verified.value) {
+        return Result.ok({
+          checkId: SEAL_SIGNATURE_CHECK_ID,
+          verdict: "fail",
+          reason: "Seal signature verification failed",
+          evidence: {
+            keyId: request.sealEnvelope.keyId,
+            signatureVerified: false,
+          },
+        });
+      }
+
       return Result.ok({
         checkId: SEAL_SIGNATURE_CHECK_ID,
-        verdict: "skip",
-        reason:
-          "Seal structural validation passed; Ed25519 signature verification requires envelope and key lookup (not yet implemented)",
+        verdict: "pass",
+        reason: "Seal signature verified against the local signer public key",
         evidence: {
-          operatorId: seal.operatorId,
-          signatureVerified: null,
+          keyId: request.sealEnvelope.keyId,
+          signatureVerified: true,
         },
       });
     },
   };
+}
+
+async function importEd25519PublicKey(
+  publicKeyHex: string,
+): Promise<Result<CryptoKey, InternalError>> {
+  try {
+    const publicKey = await crypto.subtle.importKey(
+      "raw",
+      toArrayBuffer(hexToBytes(publicKeyHex)),
+      { name: "Ed25519" },
+      false,
+      ["verify"],
+    );
+    return Result.ok(publicKey);
+  } catch (error) {
+    return Result.err(
+      InternalErrorClass.create("Failed to import Ed25519 public key", {
+        cause: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
+async function verifyEd25519Signature(
+  publicKey: CryptoKey,
+  data: Uint8Array,
+  signature: Uint8Array,
+): Promise<Result<boolean, InternalError>> {
+  try {
+    const valid = await crypto.subtle.verify(
+      { name: "Ed25519" },
+      publicKey,
+      toArrayBuffer(signature),
+      toArrayBuffer(data),
+    );
+    return Result.ok(valid);
+  } catch (error) {
+    return Result.err(
+      InternalErrorClass.create("Ed25519 verification failed", {
+        cause: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
+function decodeBase64(value: string): Result<Uint8Array, InternalError> {
+  try {
+    return Result.ok(Uint8Array.from(Buffer.from(value, "base64")));
+  } catch (error) {
+    return Result.err(
+      InternalErrorClass.create("Failed to decode base64 signature", {
+        cause: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const normalized = hex.toLowerCase();
+  const bytes = new Uint8Array(normalized.length / 2);
+  for (let index = 0; index < normalized.length; index += 2) {
+    bytes[index / 2] = Number.parseInt(normalized.slice(index, index + 2), 16);
+  }
+  return bytes;
+}
+
+function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+  return data.buffer.slice(
+    data.byteOffset,
+    data.byteOffset + data.byteLength,
+  ) as ArrayBuffer;
 }

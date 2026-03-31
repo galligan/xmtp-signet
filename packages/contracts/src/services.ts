@@ -135,6 +135,15 @@ export interface ScopeGuard {
   ): Promise<Result<ScopeSetType, SignetError>>;
 }
 
+/** Optional filter for listing active seals. */
+export interface SealListFilter {
+  /** Restrict to seals for a specific chat. */
+  readonly chatId?: string;
+
+  /** Restrict to seals for a specific credential. */
+  readonly credentialId?: string;
+}
+
 /** Seal lifecycle: issue, refresh, revoke, query. */
 export interface SealManager {
   /** Issue a seal for a credential in a chat. */
@@ -157,4 +166,21 @@ export interface SealManager {
     credentialId: string,
     chatId: string,
   ): Promise<Result<SealEnvelopeType | null, SignetError>>;
+
+  /** List active current seals, optionally filtered by chat or credential. */
+  list(
+    filter?: SealListFilter,
+  ): Promise<Result<readonly SealEnvelopeType[], SignetError>>;
+
+  /** Look up a seal envelope by its seal ID. */
+  lookup(sealId: string): Promise<Result<SealEnvelopeType, SignetError>>;
+
+  /**
+   * Walk the seal chain for a credential in a chat, newest first.
+   * Returns an empty list when no seals are known for the pair.
+   */
+  history(
+    credentialId: string,
+    chatId: string,
+  ): Promise<Result<readonly SealEnvelopeType[], SignetError>>;
 }

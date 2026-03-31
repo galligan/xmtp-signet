@@ -83,6 +83,7 @@ export type {
   OperatorManager,
   PolicyManager,
   ScopeGuard,
+  SealListFilter,
   SealManager,
 } from "./services.js";
 

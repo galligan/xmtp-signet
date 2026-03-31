@@ -19,6 +19,7 @@
     "@noble/curves": "^2.0.1",
     "@xmtp/signet-contracts": "workspace:*",
     "@xmtp/signet-schemas": "workspace:*",
+    "@xmtp/signet-seals": "workspace:*",
     "better-result": "catalog:",
     "zod": "catalog:"
   },

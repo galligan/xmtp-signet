@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createSealChainCheck } from "../checks/seal-chain.js";
-import { createTestVerificationRequest, createTestSeal } from "./fixtures.js";
+import {
+  createTestSealEnvelope,
+  createTestVerificationRequest,
+  createTestSeal,
+} from "./fixtures.js";
 
 describe("seal_chain check", () => {
   test("skips when no seal provided", async () => {
@@ -16,7 +20,7 @@ describe("seal_chain check", () => {
     }
   });
 
-  test("validates initial seal (null previous)", async () => {
+  test("skips when only payload structure is available", async () => {
     const check = createSealChainCheck();
     const result = await check.execute(createTestVerificationRequest());
 
@@ -28,6 +32,57 @@ describe("seal_chain check", () => {
       expect(evidence["sealId"]).toBe("seal_a1b2c3d4feedbabe");
       expect(evidence["chainValid"]).toBe(true);
       expect(evidence["chainWalked"]).toBe(false);
+    }
+  });
+
+  test("passes when the local seal envelope chain is structurally valid", async () => {
+    const check = createSealChainCheck();
+    const result = await check.execute(
+      createTestVerificationRequest({
+        sealEnvelope: createTestSealEnvelope(),
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.verdict).toBe("pass");
+      const evidence = result.value.evidence as Record<string, unknown>;
+      expect(evidence["chainValid"]).toBe(true);
+    }
+  });
+
+  test("fails when the envelope delta does not match the inline previous seal", async () => {
+    const previous = createTestSeal({
+      sealId: "seal_11111111feedbabe",
+      issuedAt: "2025-01-14T00:00:00.000Z",
+    });
+    const current = createTestSeal({
+      sealId: "seal_22222222feedbabe",
+      issuedAt: "2025-01-15T00:00:00.000Z",
+      permissions: {
+        allow: ["send", "reply", "react"],
+        deny: [],
+      },
+    });
+
+    const check = createSealChainCheck();
+    const result = await check.execute(
+      createTestVerificationRequest({
+        seal: current,
+        sealEnvelope: createTestSealEnvelope({
+          chain: {
+            current,
+            previous,
+            delta: { added: [], removed: [], changed: [] },
+          },
+        }),
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.verdict).toBe("fail");
+      expect(result.value.reason).toContain("Delta mismatch");
     }
   });
 

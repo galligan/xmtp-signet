@@ -1,6 +1,7 @@
-import type { SealPayloadType } from "@xmtp/signet-schemas";
+import type { SealEnvelopeType, SealPayloadType } from "@xmtp/signet-schemas";
 import type { VerificationRequest } from "../schemas/request.js";
 import type { VerifierConfig } from "../config.js";
+import { canonicalize } from "../canonicalize.js";
 
 const BASE_TIME = new Date("2025-01-15T00:00:00.000Z");
 
@@ -40,6 +41,50 @@ export function createTestVerificationRequest(
     requestedTier: "source-verified",
     challengeNonce: "deadbeef".repeat(8),
     ...overrides,
+  };
+}
+
+export function createTestSealEnvelope(
+  overrides?: Partial<SealEnvelopeType>,
+): SealEnvelopeType {
+  return {
+    chain: {
+      current: createTestSeal(),
+      delta: { added: [], removed: [], changed: [] },
+    },
+    signature: "bW9jay1zaWduYXR1cmU=",
+    keyId: "key_12345678feedbabe",
+    algorithm: "Ed25519",
+    ...overrides,
+  };
+}
+
+export async function createSignedTestSealEnvelope(
+  overrides?: Partial<SealPayloadType>,
+): Promise<{ envelope: SealEnvelopeType; publicKeyHex: string }> {
+  const payload = createTestSeal(overrides);
+  const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, [
+    "sign",
+    "verify",
+  ]);
+
+  const rawPublicKey = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+  const signature = await crypto.subtle.sign(
+    { name: "Ed25519" },
+    keyPair.privateKey,
+    canonicalize(payload),
+  );
+
+  return {
+    envelope: createTestSealEnvelope({
+      chain: {
+        current: payload,
+        delta: { added: [], removed: [], changed: [] },
+      },
+      signature: Buffer.from(signature).toString("base64"),
+      keyId: Buffer.from(rawPublicKey).toString("hex"),
+    }),
+    publicKeyHex: Buffer.from(rawPublicKey).toString("hex"),
   };
 }
 

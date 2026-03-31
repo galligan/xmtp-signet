@@ -220,6 +220,15 @@ describe("contract-verification", () => {
       async current(_credentialId: string, _chatId: string) {
         return Result.ok(null);
       },
+      async list() {
+        return Result.ok([]);
+      },
+      async lookup(_sealId: string) {
+        return Result.err(InternalError.create("stub"));
+      },
+      async history(_credentialId: string, _chatId: string) {
+        return Result.ok([]);
+      },
     };
 
     const _signerProvider: SignerProvider = {
