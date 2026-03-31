@@ -48,6 +48,24 @@ describe("SealManager", () => {
       expect(result.value.algorithm).toBe("Ed25519");
     });
 
+    test("preserves the bypassed marker on the issued seal payload", async () => {
+      const overrides = new Map<string, SealInput>();
+      overrides.set(
+        "cred_abcd1234feedbabe:conv_abcd1234feedbabe",
+        validInput({ bypassed: true }),
+      );
+
+      const { manager } = createTestManager(overrides);
+      const result = await manager.issue(
+        "cred_abcd1234feedbabe",
+        "conv_abcd1234feedbabe",
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) return;
+      expect(result.value.chain.current.bypassed).toBe(true);
+    });
+
     test("first seal has no previous payload", async () => {
       const { manager } = createTestManager();
       const result = await manager.issue(

@@ -56,6 +56,8 @@ export type SealPayloadType = {
   permissions: ScopeSetType;
   adminAccess?: { operatorId: string; expiresAt: string } | undefined;
   issuedAt: string;
+  /** True when the seal used synthetic fallback input via SIGNET_SEAL_BYPASS. */
+  bypassed?: true | undefined;
   /** Signet-managed trust tier for this operator/runtime. */
   trustTier?: TrustTierType | undefined;
   /** Operator-declared claims about the runtime environment. */
@@ -185,6 +187,8 @@ export const SealPayload: z.ZodType<SealPayloadType> = z
       .optional(),
     /** When this seal was issued. */
     issuedAt: z.string().datetime(),
+    /** Present only when seal input resolution was bypassed. */
+    bypassed: z.literal(true).optional(),
     /** Signet-managed trust tier for this operator/runtime. */
     trustTier: TrustTier.optional(),
     /** Operator-declared claims about the runtime environment. */

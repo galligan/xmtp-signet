@@ -43,6 +43,12 @@ describe("SealPayload", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts payload with bypassed marker", () => {
+    expect(SealPayload.safeParse({ ...valid, bypassed: true }).success).toBe(
+      true,
+    );
+  });
+
   it("rejects invalid sealId prefix", () => {
     expect(SealPayload.safeParse({ ...valid, sealId: "bad_id" }).success).toBe(
       false,
