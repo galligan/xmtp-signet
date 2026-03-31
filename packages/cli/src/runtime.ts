@@ -15,6 +15,7 @@ import {
   createRevealActions,
   createUpdateActions,
   createOperatorActions,
+  createPolicyActions,
 } from "@xmtp/signet-sessions";
 import type { InternalCredentialManager } from "@xmtp/signet-sessions";
 import type { AdminServer } from "./admin/server.js";
@@ -96,6 +97,9 @@ export interface SignetRuntimeDeps {
   /** Optional factory for operator action specs, wired in production by start.ts. */
   createOperatorManager?: () => import("@xmtp/signet-contracts").OperatorManager;
 
+  /** Optional factory for policy action specs, wired in production by start.ts. */
+  createPolicyManager?: () => import("@xmtp/signet-contracts").PolicyManager;
+
   /** Optional callback to list registered identities with their inbox IDs. */
   listIdentities?: () => Promise<readonly { inboxId: string | null }[]>;
 }
@@ -144,6 +148,11 @@ export async function createSignetRuntime(
     null, // signerFactory -- wired by production code
     null, // clientFactory -- wired by production code
   );
+
+  // Create operator and policy managers BEFORE credential manager so their
+  // refs are available when createCredentialService captures policyManagerRef.
+  const operatorManager = deps.createOperatorManager?.() ?? null;
+  const policyManager = deps.createPolicyManager?.() ?? null;
 
   const credentialManager = deps.createCredentialManager(
     {
@@ -267,9 +276,14 @@ export async function createSignetRuntime(
     registry.register(spec);
   }
 
-  if (deps.createOperatorManager) {
-    const operatorManager = deps.createOperatorManager();
+  if (operatorManager) {
     for (const spec of createOperatorActions({ operatorManager })) {
+      registry.register(spec);
+    }
+  }
+
+  if (policyManager) {
+    for (const spec of createPolicyActions({ policyManager })) {
       registry.register(spec);
     }
   }
