@@ -129,6 +129,9 @@ async function resolveOperator(
     if (Result.isError(direct)) {
       return direct;
     }
+    if (direct.value.status === "removed") {
+      return Result.err(NotFoundError.create("operator", operatorId));
+    }
 
     return Result.ok({ id: direct.value.id });
   }

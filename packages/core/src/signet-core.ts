@@ -152,6 +152,7 @@ export class SignetCoreImpl {
       registerNetworkIdentity: true,
     });
     if (Result.isError(hydrated)) {
+      await this.detachManagedIdentity(created.value.id);
       await this.#identityStore.remove(created.value.id);
       return hydrated;
     }
