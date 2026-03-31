@@ -94,7 +94,14 @@ async function resolveOperator(
         ),
       );
     }
-    return manager.lookup(operatorId);
+    const record = await manager.lookup(operatorId);
+    if (Result.isError(record)) {
+      return record;
+    }
+    if (record.value.status === "removed") {
+      return Result.err(NotFoundError.create("operator", operatorId));
+    }
+    return Result.ok(record.value);
   }
 
   const listed = await manager.list();
