@@ -110,10 +110,10 @@ export function createConversationCommands(
   cmd
     .command("info")
     .description("Show group conversation details")
-    .argument("<group-id>", "Group conversation ID")
+    .argument("<chat-id>", "Conversation ID (conv_ or raw group ID)")
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(async (groupId, options) => {
+    .action(async (chatId, options) => {
       const json = options.json === true;
 
       const result = await d.withDaemonClient(
@@ -121,7 +121,7 @@ export function createConversationCommands(
           configPath:
             typeof options.config === "string" ? options.config : undefined,
         },
-        (client) => client.request<unknown>("conversation.info", { groupId }),
+        (client) => client.request<unknown>("conversation.info", { chatId }),
       );
 
       if (result.isErr()) {
@@ -135,11 +135,11 @@ export function createConversationCommands(
   cmd
     .command("add-member")
     .description("Add a member to a group conversation")
-    .argument("<group-id>", "Group conversation ID")
+    .argument("<chat-id>", "Conversation ID (conv_ or raw group ID)")
     .argument("<inbox-id>", "Member inbox ID to add")
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(async (groupId, inboxId, options) => {
+    .action(async (chatId, inboxId, options) => {
       const json = options.json === true;
 
       const result = await d.withDaemonClient(
@@ -149,7 +149,7 @@ export function createConversationCommands(
         },
         (client) =>
           client.request<unknown>("conversation.add-member", {
-            groupId,
+            chatId,
             inboxId,
           }),
       );
@@ -165,19 +165,19 @@ export function createConversationCommands(
   cmd
     .command("invite")
     .description("Generate a Convos-compatible invite URL for a group")
-    .argument("<group-id>", "Group conversation ID")
+    .argument("<chat-id>", "Conversation ID (conv_ or raw group ID)")
     .option("--as <label>", "Identity label")
     .option("--name <name>", "Override group name in invite")
     .option("--description <desc>", "Override description in invite")
     .option("--config <path>", "Path to config file")
     .option("--format <type>", "Output format: link, qr, or both", "both")
     .option("--json", "JSON output")
-    .action(async (groupId: string, options) => {
+    .action(async (chatId: string, options) => {
       const json = options.json === true;
       const format =
         typeof options.format === "string" ? options.format : "both";
 
-      const params: Record<string, unknown> = { groupId };
+      const params: Record<string, unknown> = { chatId };
       if (typeof options.as === "string") params["identityLabel"] = options.as;
       if (typeof options.name === "string") params["name"] = options.name;
       if (typeof options.description === "string")
@@ -215,7 +215,7 @@ export function createConversationCommands(
         return;
       }
 
-      d.writeStdout(`Group: ${groupName} (${groupId})\n`);
+      d.writeStdout(`Group: ${groupName} (${chatId})\n`);
 
       if (format === "link" || format === "both") {
         d.writeStdout(`\nInvite URL:\n${inviteUrl}\n`);
@@ -270,11 +270,11 @@ export function createConversationCommands(
   cmd
     .command("members")
     .description("List members of a group conversation")
-    .argument("<group-id>", "Group conversation ID")
+    .argument("<chat-id>", "Conversation ID (conv_ or raw group ID)")
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .option("--watch", "Poll for membership changes")
-    .action(async (groupId: string, options) => {
+    .action(async (chatId: string, options) => {
       const json = options.json === true;
       const watch = options.watch === true;
       const configPath =
@@ -282,7 +282,7 @@ export function createConversationCommands(
 
       const fetchMembers = async (): Promise<unknown | undefined> => {
         const result = await d.withDaemonClient({ configPath }, (client) =>
-          client.request<unknown>("conversation.info", { groupId }),
+          client.request<unknown>("conversation.info", { chatId }),
         );
 
         if (result.isErr()) {

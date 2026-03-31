@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { Result } from "better-result";
 import type { HandlerContext } from "@xmtp/signet-contracts";
-import type { SignetError } from "@xmtp/signet-schemas";
+import type { SignetError, IdMappingStore } from "@xmtp/signet-schemas";
 import { NotFoundError } from "@xmtp/signet-schemas";
 import { SqliteIdentityStore } from "../identity-store.js";
+import { createSqliteIdMappingStore } from "../id-mapping-store.js";
 import type { ManagedClient } from "../client-registry.js";
 import type { XmtpGroupInfo } from "../xmtp-client-factory.js";
 import {
@@ -20,17 +22,29 @@ function stubCtx(): HandlerContext {
 
 describe("conversation action examples", () => {
   let identityStore: SqliteIdentityStore;
+  let idMappings: IdMappingStore;
+  let mappingDb: Database;
   let deps: ConversationActionDeps;
 
   beforeEach(() => {
     identityStore = new SqliteIdentityStore(":memory:");
+    mappingDb = new Database(":memory:");
+    idMappings = createSqliteIdMappingStore(mappingDb);
+
     const group: XmtpGroupInfo = {
-      groupId: "group-1",
+      groupId: "resolved-network-group-id",
       name: "Example Group",
       description: "Example description",
       memberInboxIds: ["inbox-a", "inbox-b"],
       createdAt: "2026-03-30T00:00:00.000Z",
     };
+
+    // Pre-store the mapping so conv_ examples resolve correctly
+    idMappings.set(
+      "resolved-network-group-id",
+      "conv_0123456789abcdef",
+      "conversation",
+    );
 
     deps = {
       identityStore,
@@ -39,11 +53,13 @@ describe("conversation action examples", () => {
         groupId === group.groupId
           ? Result.ok(group)
           : Result.err(NotFoundError.create("group", groupId) as SignetError),
+      idMappings,
     };
   });
 
   afterEach(() => {
     identityStore.close();
+    mappingDb.close();
   });
 
   test("conversation.info examples execute and match the declared output schema", async () => {

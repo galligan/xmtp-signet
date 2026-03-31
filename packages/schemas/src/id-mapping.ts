@@ -67,9 +67,18 @@ export const IdMapping: z.ZodType<IdMappingType> = z
  * Implementations translate between XMTP network IDs and local
  * signet resource IDs. The store is not a Zod schema — it defines
  * the interface that concrete storage backends must satisfy.
+ *
+ * The `networkId` parameter accepts raw XMTP SDK identifiers (e.g.,
+ * group IDs) which may not conform to the `xmtp_`-prefixed `NetworkId`
+ * Zod schema. The `IdMapping` Zod type is for validated serialization;
+ * this interface is the working-level runtime contract.
  */
 export interface IdMappingStore {
-  /** Store a bidirectional mapping between a network ID and a local ID. */
+  /**
+   * Store a bidirectional mapping between a network ID and a local ID.
+   * The networkId may be a raw XMTP SDK identifier (not necessarily
+   * `xmtp_`-prefixed).
+   */
   set(
     networkId: string,
     localId: string,
