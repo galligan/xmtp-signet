@@ -30,8 +30,10 @@ import {
   createCredentialManager as createCredentialManagerImpl,
   createCredentialService,
   createOperatorManager as createOperatorManagerImpl,
+  createPolicyManager as createPolicyManagerImpl,
   type InternalCredentialManager,
 } from "@xmtp/signet-sessions";
+import type { PolicyManager } from "@xmtp/signet-contracts";
 import { createSealManager as createSealManagerImpl } from "@xmtp/signet-seals";
 import { createSealPublisher } from "@xmtp/signet-seals";
 import type { InputResolver } from "@xmtp/signet-seals";
@@ -93,6 +95,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
   let globalSealManagerRef:
     | import("@xmtp/signet-contracts").SealManager
     | null = null;
+  // Late-bound policy manager ref for credential service wiring
+  let policyManagerRef: PolicyManager | null = null;
   // Lazy-initialized ID mapping store for conv_ boundary
   let idMappingStoreRef: import("@xmtp/signet-schemas").IdMappingStore | null =
     null;
@@ -257,9 +261,11 @@ export function createProductionDeps(): SignetRuntimeDeps {
       );
       internalCredentialManagerRef = internal;
 
-      return createCredentialService({
-        manager: internal,
-      });
+      return createCredentialService(
+        policyManagerRef
+          ? { manager: internal, policyManager: policyManagerRef }
+          : { manager: internal },
+      );
     },
 
     getInternalCredentialManager() {
@@ -485,6 +491,12 @@ export function createProductionDeps(): SignetRuntimeDeps {
 
     createOperatorManager() {
       return createOperatorManagerImpl();
+    },
+
+    createPolicyManager() {
+      const pm = createPolicyManagerImpl();
+      policyManagerRef = pm;
+      return pm;
     },
 
     createConversationActions() {

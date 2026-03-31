@@ -25,3 +25,5 @@ export { createOperatorActions } from "./operator-actions.js";
 export type { OperatorActionDeps } from "./operator-actions.js";
 export { createPolicyManager } from "./policy-manager.js";
 export type { PolicyManagerInternal } from "./policy-manager.js";
+export { createPolicyActions } from "./policy-actions.js";
+export type { PolicyActionDeps } from "./policy-actions.js";
