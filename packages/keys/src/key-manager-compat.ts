@@ -38,7 +38,12 @@ import {
 import { join } from "node:path";
 import { createVault, type Vault } from "./vault.js";
 import { resolveGatePrompter } from "./se-gate-prompter.js";
-import type { VaultSecretProvider } from "./vault-secret-provider.js";
+import {
+  resolveVaultSecretProvider,
+  type VaultSecretProvider,
+} from "./vault-secret-provider.js";
+import { createInternalKeyBackend } from "./key-manager.js";
+import type { AccountInfo, KeyBackend, WalletInfo } from "./key-backend.js";
 
 type AdminKeyInfo = string & {
   readonly publicKey: string;
@@ -106,6 +111,20 @@ export interface KeyManager {
 
   /** Admin key operations. */
   readonly admin: AdminKeyManager;
+
+  /** Create a new managed wallet backed by the internal provider. */
+  createWallet(label: string): Promise<Result<WalletInfo, SignetError>>;
+
+  /** List all managed wallets. */
+  listWallets(): Promise<Result<readonly WalletInfo[], SignetError>>;
+
+  /** Look up a wallet by ID. */
+  getWallet(walletId: string): Promise<Result<WalletInfo, SignetError>>;
+
+  /** List derived accounts for a wallet. */
+  listWalletAccounts(
+    walletId: string,
+  ): Promise<Result<readonly AccountInfo[], SignetError>>;
 
   /** Create an Ed25519 operational key for an identity. */
   createOperationalKey(
@@ -382,16 +401,20 @@ export async function createKeyManager(
 
   const config = parsed.data;
   mkdirSync(config.dataDir, { recursive: true });
+  const resolvedVaultSecretProvider =
+    vaultSecretProvider ??
+    resolveVaultSecretProvider(config.dataDir, config.vaultKeyPolicy);
 
   const vaultResult = await createVault(config.dataDir, {
-    secretProvider: vaultSecretProvider,
+    secretProvider: resolvedVaultSecretProvider,
     vaultKeyPolicy: config.vaultKeyPolicy,
   });
   if (Result.isError(vaultResult)) {
     return vaultResult;
   }
+  const vault = vaultResult.value;
 
-  const kv = createCompatSecretStore(config.dataDir, vaultResult.value);
+  const kv = createCompatSecretStore(config.dataDir, vault);
   const opKeys = new Map<string, OperationalKeyEntry>();
   const groupIdIndex = new Map<string, string>();
   const credentialKeys = new Map<string, CredentialKeyEntry>();
@@ -406,6 +429,25 @@ export async function createKeyManager(
   let rotationTimer: ReturnType<typeof setInterval> | null = null;
   let adminPublicKeyHex: string | null = null;
   let adminPrivateKey: CryptoKey | null = null;
+  let walletBackend: KeyBackend | null = null;
+
+  async function getWalletBackend(): Promise<Result<KeyBackend, SignetError>> {
+    if (walletBackend !== null) {
+      return Result.ok(walletBackend);
+    }
+
+    const walletPassphraseResult =
+      await resolvedVaultSecretProvider.getSecret();
+    if (Result.isError(walletPassphraseResult)) {
+      return walletPassphraseResult;
+    }
+
+    walletBackend = createInternalKeyBackend(
+      vault,
+      walletPassphraseResult.value,
+    );
+    return Result.ok(walletBackend);
+  }
 
   async function readAdminInfo(): Promise<
     Result<AdminKeyInfo, NotFoundError | InternalError>
@@ -570,6 +612,38 @@ export async function createKeyManager(
 
     get admin() {
       return admin;
+    },
+
+    async createWallet(label) {
+      const backend = await getWalletBackend();
+      if (Result.isError(backend)) {
+        return backend;
+      }
+      return backend.value.createWallet(label, "");
+    },
+
+    async listWallets() {
+      const backend = await getWalletBackend();
+      if (Result.isError(backend)) {
+        return backend;
+      }
+      return backend.value.listWallets();
+    },
+
+    async getWallet(walletId) {
+      const backend = await getWalletBackend();
+      if (Result.isError(backend)) {
+        return backend;
+      }
+      return backend.value.getWallet(walletId);
+    },
+
+    async listWalletAccounts(walletId) {
+      const backend = await getWalletBackend();
+      if (Result.isError(backend)) {
+        return backend;
+      }
+      return backend.value.listAccounts(walletId);
     },
 
     async initialize(): Promise<

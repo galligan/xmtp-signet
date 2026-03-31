@@ -129,11 +129,12 @@ describe("v1 subcommand groups", () => {
     expect(subs).toContain("history");
   });
 
-  test("wallet group has list, info, provider subcommands", () => {
+  test("wallet group has create, list, info, provider subcommands", () => {
     const program = createXsProgram();
     const wallet = program.commands.find((c) => c.name() === "wallet");
     expect(wallet).toBeDefined();
     const subs = wallet!.commands.map((c) => c.name());
+    expect(subs).toContain("create");
     expect(subs).toContain("list");
     expect(subs).toContain("info");
     expect(subs).toContain("provider");

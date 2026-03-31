@@ -57,6 +57,15 @@ describe("policy commands", () => {
     expect(flags).toContain("--json");
   });
 
+  test("create subcommand requires --label and supports --json", async () => {
+    const cmd = await load();
+    const create = findSub(cmd, "create");
+    expect(create).toBeDefined();
+    const flags = optionFlags(create!);
+    expect(flags).toContain("--label");
+    expect(flags).toContain("--json");
+  });
+
   test("info subcommand accepts an id argument", async () => {
     const cmd = await load();
     const info = findSub(cmd, "info");
@@ -246,11 +255,13 @@ describe("wallet commands", () => {
     expect(flags).toContain("--json");
   });
 
-  test("has exactly 3 top-level subcommands", async () => {
+  test("has exactly 4 top-level subcommands", async () => {
     const cmd = await load();
-    expect(cmd.commands.length).toBe(3);
+    expect(cmd.commands.length).toBe(4);
     const names = cmd.commands.map((c) => c.name());
-    expect(names).toEqual(expect.arrayContaining(["list", "info", "provider"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["create", "list", "info", "provider"]),
+    );
   });
 });
 
