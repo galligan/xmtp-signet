@@ -27,6 +27,8 @@ export interface SealInput {
   readonly scopeMode: ScopeModeType;
   readonly permissions: ScopeSetType;
   readonly adminAccess?: { operatorId: string; expiresAt: string } | undefined;
+  /** True when the seal should disclose synthetic bypass fallback input. */
+  readonly bypassed?: true | undefined;
   /** Signet-managed trust tier for this operator/runtime. */
   readonly trustTier?: TrustTierType | undefined;
   /** Operator-declared claims about the runtime environment. */
@@ -63,6 +65,7 @@ export function buildSeal(
     },
     adminAccess: input.adminAccess ? { ...input.adminAccess } : undefined,
     issuedAt: now.toISOString(),
+    bypassed: input.bypassed,
     trustTier: input.trustTier,
     operatorDisclosures: input.operatorDisclosures
       ? {

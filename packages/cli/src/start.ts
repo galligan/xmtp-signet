@@ -351,6 +351,12 @@ export function createProductionDeps(): SignetRuntimeDeps {
           d.core.sendMessage(groupId, contentType, content),
       });
 
+      // Seal bypass: when SIGNET_SEAL_BYPASS=1, InputResolver errors are
+      // swallowed and a minimal synthetic SealInput is returned so message
+      // sends proceed without real provenance. The seal will carry a
+      // `bypassed: true` marker so clients can detect it.
+      const sealBypass = process.env["SIGNET_SEAL_BYPASS"] === "1";
+
       // Real InputResolver: derive SealInput from credential + operator records.
       // Fail closed by default — if seal input can't be resolved, the caller
       // should reject the operation unless SIGNET_SEAL_BYPASS is set.
@@ -401,10 +407,29 @@ export function createProductionDeps(): SignetRuntimeDeps {
         });
       };
 
+      // Wrap the resolver with bypass logic when SIGNET_SEAL_BYPASS=1.
+      // In bypass mode, if the real resolver fails, a synthetic SealInput
+      // is returned so issuance proceeds. The seal will contain synthetic
+      // operator/permission data — clients should verify seals cryptographically.
+      const effectiveResolver: InputResolver = sealBypass
+        ? async (credentialId, chatId) => {
+            const result = await resolveInput(credentialId, chatId);
+            if (Result.isOk(result)) return result;
+            return Result.ok({
+              credentialId,
+              operatorId: "op_0000000000000000",
+              chatId,
+              scopeMode: "per-chat" as const,
+              permissions: { allow: [], deny: [] },
+              bypassed: true,
+            });
+          }
+        : resolveInput;
+
       const sealManager = createSealManagerImpl({
         signer,
         publisher,
-        resolveInput,
+        resolveInput: effectiveResolver,
       });
       globalSealManagerRef = sealManager;
       return sealManager;
