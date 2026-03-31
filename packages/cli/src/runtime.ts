@@ -91,6 +91,9 @@ export interface SignetRuntimeDeps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createConversationActions?: () => ActionSpec<any, any, SignetError>[];
 
+  /** Optional factory for message action specs, wired in production by start.ts. */
+  createMessageActions?: () => ActionSpec<unknown, unknown, SignetError>[];
+
   /** Optional factory to expose the internal credential manager for update actions. */
   getInternalCredentialManager?: () => InternalCredentialManager;
 
@@ -290,6 +293,12 @@ export async function createSignetRuntime(
 
   if (deps.createConversationActions) {
     for (const spec of deps.createConversationActions()) {
+      registry.register(spec);
+    }
+  }
+
+  if (deps.createMessageActions) {
+    for (const spec of deps.createMessageActions()) {
       registry.register(spec);
     }
   }

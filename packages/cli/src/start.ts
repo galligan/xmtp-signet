@@ -22,6 +22,7 @@ import {
   SignetCoreConfigSchema,
   createSdkClientFactory,
   createConversationActions,
+  createMessageActions,
   createSqliteIdMappingStore,
   type SignetState,
   type SignerProviderFactory,
@@ -532,6 +533,29 @@ export function createProductionDeps(): SignetRuntimeDeps {
         clientFactory: createSdkClientFactory(),
         signerProviderFactory,
         config: coreImplRef.config,
+        idMappings: idMappingStoreRef,
+      });
+    },
+
+    createMessageActions() {
+      if (coreImplRef === null) {
+        throw new Error(
+          "SignetCoreImpl not initialized before message actions",
+        );
+      }
+
+      // Lazily create the ID mapping store on the same dataDir
+      if (!idMappingStoreRef) {
+        const dbPath =
+          coreImplRef.config.dataDir === ":memory:"
+            ? ":memory:"
+            : `${coreImplRef.config.dataDir}/id-mappings.db`;
+        idMappingStoreRef = createSqliteIdMappingStore(new Database(dbPath));
+      }
+
+      return createMessageActions({
+        identityStore: coreImplRef.identityStore,
+        getManagedClient: (id) => coreImplRef!.getManagedClient(id),
         idMappings: idMappingStoreRef,
       });
     },
