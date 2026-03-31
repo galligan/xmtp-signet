@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { z } from "zod";
 import type { ActionSpec } from "@xmtp/signet-contracts";
-import { NotFoundError } from "@xmtp/signet-schemas";
-import type { SignetError } from "@xmtp/signet-schemas";
+import { NotFoundError, createResourceId } from "@xmtp/signet-schemas";
+import type { SignetError, IdMappingStore } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
 import type {
@@ -15,6 +15,7 @@ import { generateConvosInviteUrl } from "./convos/invite-generator.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
 
 const GroupInfoSchema = z.object({
+  chatId: z.string().optional(),
   groupId: z.string(),
   name: z.string(),
   description: z.string(),
@@ -23,6 +24,7 @@ const GroupInfoSchema = z.object({
 });
 
 const MembersOutputSchema = z.object({
+  chatId: z.string().optional(),
   groupId: z.string(),
   members: z.array(z.string()),
   memberCount: z.number().int().nonnegative(),
@@ -44,6 +46,8 @@ export interface ConversationActionDeps {
   readonly signerProviderFactory?: SignerProviderFactory;
   /** Optional core config snapshot used by invite/join helpers. */
   readonly config?: Pick<SignetCoreConfig, "dataDir" | "env" | "appVersion">;
+  /** Optional ID mapping store for conv_ boundary enforcement. */
+  readonly idMappings?: IdMappingStore;
 }
 
 /**
@@ -81,6 +85,35 @@ async function resolveIdentity(
   });
 }
 
+/**
+ * Resolve a chatId (which may be a conv_ local ID or a raw groupId)
+ * to the underlying network groupId using the mapping store.
+ */
+function resolveGroupId(
+  idMappings: IdMappingStore | undefined,
+  chatId: string,
+): string {
+  if (!idMappings) return chatId;
+  const networkId = idMappings.getNetwork(chatId);
+  return networkId ?? chatId;
+}
+
+/**
+ * Ensure a groupId has a conv_ local mapping. Returns the local ID,
+ * creating one if it doesn't already exist.
+ */
+function ensureLocalId(
+  idMappings: IdMappingStore | undefined,
+  groupId: string,
+): string | undefined {
+  if (!idMappings) return undefined;
+  const existing = idMappings.getLocal(groupId);
+  if (existing) return existing;
+  const localId = createResourceId("conversation");
+  idMappings.set(groupId, localId, "conversation");
+  return localId;
+}
+
 /** Create ActionSpecs for conversation operations. */
 export function createConversationActions(
   deps: ConversationActionDeps,
@@ -93,6 +126,7 @@ export function createConversationActions(
       creatorIdentityLabel?: string | undefined;
     },
     {
+      chatId?: string | undefined;
       groupId: string;
       name: string;
       creatorInboxId: string;
@@ -133,7 +167,9 @@ export function createConversationActions(
       if (Result.isError(groupResult)) return groupResult;
 
       const group = groupResult.value;
+      const chatId = ensureLocalId(deps.idMappings, group.groupId);
       return Result.ok({
+        chatId,
         groupId: group.groupId,
         name: group.name,
         creatorInboxId: managed.inboxId,
@@ -181,7 +217,12 @@ export function createConversationActions(
       const groupsResult = await managed.client.listGroups();
       if (Result.isError(groupsResult)) return groupsResult;
 
-      return Result.ok({ groups: groupsResult.value });
+      const groups = groupsResult.value.map((g) => ({
+        ...g,
+        chatId: ensureLocalId(deps.idMappings, g.groupId),
+      }));
+
+      return Result.ok({ groups });
     },
     cli: {
       command: "conversation:list",
@@ -192,23 +233,28 @@ export function createConversationActions(
     },
   };
 
-  const info: ActionSpec<{ groupId: string }, XmtpGroupInfo, SignetError> = {
+  const info: ActionSpec<
+    { chatId: string },
+    XmtpGroupInfo & { chatId?: string | undefined },
+    SignetError
+  > = {
     id: "conversation.info",
     description: "Get group conversation details",
     intent: "read",
     idempotent: true,
     input: z.object({
-      groupId: z.string(),
+      chatId: z.string(),
     }),
     output: GroupInfoSchema,
     examples: [
       {
-        name: "group info",
+        name: "group info by conv_ ID",
         input: {
-          groupId: "group-1",
+          chatId: "conv_0123456789abcdef",
         },
         expected: {
-          groupId: "group-1",
+          chatId: "conv_0123456789abcdef",
+          groupId: "resolved-network-group-id",
           name: "Example Group",
           description: "Example description",
           memberInboxIds: ["inbox-a", "inbox-b"],
@@ -216,7 +262,12 @@ export function createConversationActions(
         },
       },
     ],
-    handler: async (input) => deps.getGroupInfo(input.groupId),
+    handler: async (input) => {
+      const groupId = resolveGroupId(deps.idMappings, input.chatId);
+      const result = await deps.getGroupInfo(groupId);
+      if (Result.isError(result)) return result;
+      return Result.ok({ ...result.value, chatId: input.chatId });
+    },
     cli: {
       command: "conversation:info",
     },
@@ -233,6 +284,7 @@ export function createConversationActions(
       timeoutSeconds?: number | undefined;
     },
     {
+      chatId?: string | undefined;
       groupId: string;
       identityId: string;
       inboxId: string;
@@ -272,7 +324,7 @@ export function createConversationActions(
       if (maxPollAttempts !== undefined)
         joinOptions.maxPollAttempts = maxPollAttempts;
 
-      return joinConversation(
+      const joinResult = await joinConversation(
         {
           identityStore: deps.identityStore,
           clientFactory: deps.clientFactory,
@@ -282,6 +334,10 @@ export function createConversationActions(
         input.inviteUrl,
         joinOptions,
       );
+      if (Result.isError(joinResult)) return joinResult;
+
+      const chatId = ensureLocalId(deps.idMappings, joinResult.value.groupId);
+      return Result.ok({ ...joinResult.value, chatId });
     },
     cli: {
       command: "conversation:join",
@@ -294,13 +350,14 @@ export function createConversationActions(
 
   const invite: ActionSpec<
     {
-      groupId: string;
+      chatId: string;
       identityLabel?: string | undefined;
       name?: string | undefined;
       description?: string | undefined;
     },
     {
       inviteUrl: string;
+      chatId?: string | undefined;
       groupId: string;
       groupName: string;
       creatorInboxId: string;
@@ -312,12 +369,13 @@ export function createConversationActions(
     description: "Generate a Convos-compatible invite URL for a group",
     intent: "write",
     input: z.object({
-      groupId: z.string(),
+      chatId: z.string(),
       identityLabel: z.string().optional(),
       name: z.string().optional(),
       description: z.string().optional(),
     }),
     handler: async (input) => {
+      const groupId = resolveGroupId(deps.idMappings, input.chatId);
       if (!deps.signerProviderFactory || !deps.config) {
         return Result.err(
           NotFoundError.create(
@@ -345,7 +403,7 @@ export function createConversationActions(
       }
 
       // Get group info
-      const groupResult = await deps.getGroupInfo(input.groupId);
+      const groupResult = await deps.getGroupInfo(groupId);
       if (Result.isError(groupResult)) return groupResult;
 
       // Get the secp256k1 private key for signing
@@ -374,7 +432,7 @@ export function createConversationActions(
           : ("production" as const);
 
       const urlResult = await generateConvosInviteUrl({
-        conversationId: input.groupId,
+        conversationId: groupId,
         creatorInboxId: managed.inboxId,
         walletPrivateKeyHex,
         inviteTag,
@@ -387,7 +445,8 @@ export function createConversationActions(
 
       return Result.ok({
         inviteUrl: urlResult.value,
-        groupId: input.groupId,
+        chatId: input.chatId,
+        groupId,
         groupName: groupResult.value.name,
         creatorInboxId: managed.inboxId,
         inviteTag,
@@ -404,22 +463,23 @@ export function createConversationActions(
 
   const addMember: ActionSpec<
     {
-      groupId: string;
+      chatId: string;
       inboxId: string;
       identityLabel?: string | undefined;
     },
-    { groupId: string; memberCount: number },
+    { chatId?: string | undefined; groupId: string; memberCount: number },
     SignetError
   > = {
     id: "conversation.add-member",
     description: "Add a member to a group conversation",
     intent: "write",
     input: z.object({
-      groupId: z.string(),
+      chatId: z.string(),
       inboxId: z.string(),
       identityLabel: z.string().optional(),
     }),
     handler: async (input) => {
+      const groupId = resolveGroupId(deps.idMappings, input.chatId);
       const resolved = await resolveIdentity(
         deps.identityStore,
         input.identityLabel,
@@ -436,17 +496,18 @@ export function createConversationActions(
         );
       }
 
-      const addResult = await managed.client.addMembers(input.groupId, [
+      const addResult = await managed.client.addMembers(groupId, [
         input.inboxId,
       ]);
       if (Result.isError(addResult)) return addResult;
 
       // Fetch updated group info for member count
-      const groupResult = await deps.getGroupInfo(input.groupId);
+      const groupResult = await deps.getGroupInfo(groupId);
       if (Result.isError(groupResult)) return groupResult;
 
       return Result.ok({
-        groupId: input.groupId,
+        chatId: input.chatId,
+        groupId,
         memberCount: groupResult.value.memberInboxIds.length,
       });
     },
@@ -460,8 +521,9 @@ export function createConversationActions(
   };
 
   const members: ActionSpec<
-    { groupId: string },
+    { chatId: string },
     {
+      chatId?: string | undefined;
       groupId: string;
       members: readonly string[];
       memberCount: number;
@@ -473,28 +535,31 @@ export function createConversationActions(
     intent: "read",
     idempotent: true,
     input: z.object({
-      groupId: z.string(),
+      chatId: z.string(),
     }),
     output: MembersOutputSchema,
     examples: [
       {
-        name: "member list",
+        name: "member list by conv_ ID",
         input: {
-          groupId: "group-1",
+          chatId: "conv_0123456789abcdef",
         },
         expected: {
-          groupId: "group-1",
+          chatId: "conv_0123456789abcdef",
+          groupId: "resolved-network-group-id",
           members: ["inbox-a", "inbox-b"],
           memberCount: 2,
         },
       },
     ],
     handler: async (input) => {
-      const groupResult = await deps.getGroupInfo(input.groupId);
+      const groupId = resolveGroupId(deps.idMappings, input.chatId);
+      const groupResult = await deps.getGroupInfo(groupId);
       if (Result.isError(groupResult)) return groupResult;
 
       return Result.ok({
-        groupId: input.groupId,
+        chatId: input.chatId,
+        groupId,
         members: groupResult.value.memberInboxIds,
         memberCount: groupResult.value.memberInboxIds.length,
       });

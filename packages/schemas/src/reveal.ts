@@ -24,7 +24,9 @@ export type RevealRequest = {
 export const RevealRequest: z.ZodType<RevealRequest> = z
   .object({
     revealId: z.string().describe("Unique reveal request identifier"),
-    groupId: z.string().describe("Group containing the content"),
+    groupId: z
+      .string()
+      .describe("Conversation ID (conv_ prefixed) containing the content"),
     scope: RevealScope.describe("What granularity to reveal"),
     targetId: z
       .string()

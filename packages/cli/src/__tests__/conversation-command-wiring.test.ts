@@ -233,7 +233,7 @@ describe("conversation info", () => {
     expect(harness.requestCalls).toEqual([
       {
         method: "conversation.info",
-        params: { groupId: "grp_abc" },
+        params: { chatId: "grp_abc" },
       },
     ]);
     expect(harness.stderr).toEqual([]);
@@ -260,7 +260,7 @@ describe("conversation add-member", () => {
     expect(harness.requestCalls).toEqual([
       {
         method: "conversation.add-member",
-        params: { groupId: "grp_abc", inboxId: "inbox_xyz" },
+        params: { chatId: "grp_abc", inboxId: "inbox_xyz" },
       },
     ]);
     expect(harness.stderr).toEqual([]);

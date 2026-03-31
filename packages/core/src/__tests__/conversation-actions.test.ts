@@ -1,9 +1,11 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { Database } from "bun:sqlite";
 import { Result } from "better-result";
 import { NotFoundError } from "@xmtp/signet-schemas";
-import type { SignetError } from "@xmtp/signet-schemas";
+import type { SignetError, IdMappingStore } from "@xmtp/signet-schemas";
 import type { HandlerContext } from "@xmtp/signet-contracts";
 import { SqliteIdentityStore } from "../identity-store.js";
+import { createSqliteIdMappingStore } from "../id-mapping-store.js";
 import type { ManagedClient } from "../client-registry.js";
 import type { XmtpClient, XmtpGroupInfo } from "../xmtp-client-factory.js";
 import {
@@ -79,16 +81,21 @@ function emptyAsyncIterable<T>(): AsyncIterable<T> {
 
 describe("conversation actions", () => {
   let identityStore: SqliteIdentityStore;
+  let idMappings: IdMappingStore;
+  let mappingDb: Database;
   let managedClients: Map<string, ManagedClient>;
   let deps: ConversationActionDeps;
 
   beforeEach(async () => {
     identityStore = new SqliteIdentityStore(":memory:");
+    mappingDb = new Database(":memory:");
+    idMappings = createSqliteIdMappingStore(mappingDb);
     managedClients = new Map();
   });
 
   afterEach(() => {
     identityStore.close();
+    mappingDb.close();
   });
 
   function setupDeps(
@@ -103,6 +110,7 @@ describe("conversation actions", () => {
         getGroupInfoFn ??
         (async (groupId) =>
           Result.err(NotFoundError.create("group", groupId) as SignetError)),
+      idMappings,
     };
   }
 
@@ -168,14 +176,19 @@ describe("conversation actions", () => {
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
         const val = result.value as {
+          chatId: string;
           groupId: string;
           name: string;
           creatorInboxId: string;
           memberCount: number;
         };
         expect(val.groupId).toBe("new-group-1");
+        expect(val.chatId).toStartWith("conv_");
         expect(val.creatorInboxId).toBe(managed.inboxId);
         expect(val.memberCount).toBe(3); // creator + 2 peers
+        // Verify mapping was stored
+        expect(idMappings.getLocal("new-group-1")).toBe(val.chatId);
+        expect(idMappings.getNetwork(val.chatId)).toBe("new-group-1");
       }
     });
 
@@ -279,15 +292,20 @@ describe("conversation actions", () => {
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
-        const val = result.value as { groups: readonly XmtpGroupInfo[] };
+        const val = result.value as {
+          groups: readonly (XmtpGroupInfo & { chatId?: string })[];
+        };
         expect(val.groups).toHaveLength(1);
         expect(val.groups[0]!.groupId).toBe("g1");
+        expect(val.groups[0]!.chatId).toStartWith("conv_");
+        // Verify mapping was stored
+        expect(idMappings.getLocal("g1")).toBe(val.groups[0]!.chatId);
       }
     });
   });
 
   describe("conversation.info", () => {
-    test("returns group details via deps.getGroupInfo", async () => {
+    test("returns group details via deps.getGroupInfo with raw groupId", async () => {
       const groupInfo: XmtpGroupInfo = {
         groupId: "g-info",
         name: "Test Group",
@@ -301,17 +319,48 @@ describe("conversation actions", () => {
       const infoAction = actions.find((a) => a.id === "conversation.info");
       expect(infoAction).toBeDefined();
 
+      const result = await infoAction!.handler({ chatId: "g-info" }, stubCtx());
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        const val = result.value as XmtpGroupInfo & { chatId: string };
+        expect(val.groupId).toBe("g-info");
+        expect(val.chatId).toBe("g-info");
+        expect(val.name).toBe("Test Group");
+        expect(val.memberInboxIds).toHaveLength(2);
+      }
+    });
+
+    test("resolves conv_ ID to groupId via mapping", async () => {
+      const groupInfo: XmtpGroupInfo = {
+        groupId: "g-mapped",
+        name: "Mapped Group",
+        description: "A mapped group",
+        memberInboxIds: ["inbox-x"],
+        createdAt: new Date().toISOString(),
+      };
+      // Pre-store a mapping
+      idMappings.set("g-mapped", "conv_0123456789abcdef", "conversation");
+      setupDeps(async (groupId) => {
+        if (groupId === "g-mapped") return Result.ok(groupInfo);
+        return Result.err(
+          NotFoundError.create("group", groupId) as SignetError,
+        );
+      });
+
+      const actions = createConversationActions(deps);
+      const infoAction = actions.find((a) => a.id === "conversation.info");
+
       const result = await infoAction!.handler(
-        { groupId: "g-info" },
+        { chatId: "conv_0123456789abcdef" },
         stubCtx(),
       );
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
-        const val = result.value as XmtpGroupInfo;
-        expect(val.groupId).toBe("g-info");
-        expect(val.name).toBe("Test Group");
-        expect(val.memberInboxIds).toHaveLength(2);
+        const val = result.value as XmtpGroupInfo & { chatId: string };
+        expect(val.groupId).toBe("g-mapped");
+        expect(val.chatId).toBe("conv_0123456789abcdef");
       }
     });
   });
@@ -364,14 +413,19 @@ describe("conversation actions", () => {
       expect(addMemberAction).toBeDefined();
 
       const result = await addMemberAction!.handler(
-        { groupId: "g-add", inboxId: "inbox-new-member" },
+        { chatId: "g-add", inboxId: "inbox-new-member" },
         stubCtx(),
       );
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
-        const val = result.value as { groupId: string; memberCount: number };
+        const val = result.value as {
+          chatId: string;
+          groupId: string;
+          memberCount: number;
+        };
         expect(val.groupId).toBe("g-add");
+        expect(val.chatId).toBe("g-add");
         expect(val.memberCount).toBe(2); // original + new
       }
       expect(addedMembers).toEqual(["inbox-new-member"]);
@@ -388,7 +442,7 @@ describe("conversation actions", () => {
 
       const result = await addMemberAction!.handler(
         {
-          groupId: "g1",
+          chatId: "g1",
           inboxId: "inbox-1",
           identityLabel: "nonexistent",
         },
@@ -420,18 +474,20 @@ describe("conversation actions", () => {
       expect(membersAction).toBeDefined();
 
       const result = await membersAction!.handler(
-        { groupId: "g-members" },
+        { chatId: "g-members" },
         stubCtx(),
       );
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
         const val = result.value as {
+          chatId: string;
           groupId: string;
           members: readonly string[];
           memberCount: number;
         };
         expect(val.groupId).toBe("g-members");
+        expect(val.chatId).toBe("g-members");
         expect(val.members).toEqual(["inbox-a", "inbox-b", "inbox-c"]);
         expect(val.memberCount).toBe(3);
       }
@@ -446,7 +502,7 @@ describe("conversation actions", () => {
       );
 
       const result = await membersAction!.handler(
-        { groupId: "nonexistent" },
+        { chatId: "nonexistent" },
         stubCtx(),
       );
 
@@ -486,8 +542,11 @@ describe("conversation actions", () => {
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
-        const val = result.value as { groups: readonly XmtpGroupInfo[] };
+        const val = result.value as {
+          groups: readonly (XmtpGroupInfo & { chatId?: string })[];
+        };
         expect(val.groups).toHaveLength(1);
+        expect(val.groups[0]!.chatId).toStartWith("conv_");
       }
     });
   });

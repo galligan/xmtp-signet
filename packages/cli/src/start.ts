@@ -16,11 +16,13 @@ import {
   type KeyManager,
 } from "@xmtp/signet-keys";
 import type { KeyManagerConfig } from "@xmtp/signet-keys";
+import { Database } from "bun:sqlite";
 import {
   SignetCoreImpl,
   SignetCoreConfigSchema,
   createSdkClientFactory,
   createConversationActions,
+  createSqliteIdMappingStore,
   type SignetState,
   type SignerProviderFactory,
 } from "@xmtp/signet-core";
@@ -90,6 +92,9 @@ export function createProductionDeps(): SignetRuntimeDeps {
   let globalSealManagerRef:
     | import("@xmtp/signet-contracts").SealManager
     | null = null;
+  // Lazy-initialized ID mapping store for conv_ boundary
+  let idMappingStoreRef: import("@xmtp/signet-schemas").IdMappingStore | null =
+    null;
 
   return {
     async createKeyManager(
@@ -493,6 +498,15 @@ export function createProductionDeps(): SignetRuntimeDeps {
         identityId: string,
       ) => createSignerProvider(km, identityId);
 
+      // Lazily create the ID mapping store on the same dataDir
+      if (!idMappingStoreRef) {
+        const dbPath =
+          coreImplRef.config.dataDir === ":memory:"
+            ? ":memory:"
+            : `${coreImplRef.config.dataDir}/id-mappings.db`;
+        idMappingStoreRef = createSqliteIdMappingStore(new Database(dbPath));
+      }
+
       return createConversationActions({
         identityStore: coreImplRef.identityStore,
         getManagedClient: (id) => coreImplRef!.getManagedClient(id),
@@ -501,6 +515,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
         clientFactory: createSdkClientFactory(),
         signerProviderFactory,
         config: coreImplRef.config,
+        idMappings: idMappingStoreRef,
       });
     },
 
