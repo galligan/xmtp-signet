@@ -187,7 +187,9 @@ export function createChatCommands(
     .option("--image <url>", "New image URL")
     .option("--json", "JSON output")
     .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.writeStderr(
+        "This command requires XMTP client support that is not yet available.\n",
+      );
       resolvedDeps.exit(1);
     });
 
@@ -198,10 +200,29 @@ export function createChatCommands(
     .option("--config <path>", "Path to config file")
     .option("--as <identity>", "Identity to act as")
     .option("--json", "JSON output")
-    .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
-      resolvedDeps.exit(1);
-    });
+    .action(
+      async (
+        id: string | undefined,
+        opts: { config?: string; as?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {};
+        if (id !== undefined) payload["chatId"] = id;
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("chat.sync", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("join")
@@ -286,7 +307,9 @@ export function createChatCommands(
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.writeStderr(
+        "This command requires XMTP client support that is not yet available.\n",
+      );
       resolvedDeps.exit(1);
     });
 
@@ -298,7 +321,9 @@ export function createChatCommands(
     .option("--force", "Execute without confirmation")
     .option("--json", "JSON output")
     .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.writeStderr(
+        "This command requires XMTP client support that is not yet available.\n",
+      );
       resolvedDeps.exit(1);
     });
 
@@ -367,10 +392,32 @@ export function createChatCommands(
     .option("--config <path>", "Path to config file")
     .option("--as <identity>", "Identity to act as")
     .option("--json", "JSON output")
-    .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
-      resolvedDeps.exit(1);
-    });
+    .action(
+      async (
+        id: string,
+        inbox: string,
+        opts: { config?: string; as?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {
+          chatId: id,
+          inboxId: inbox,
+        };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("chat.remove-member", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   member
     .command("promote")
@@ -380,7 +427,9 @@ export function createChatCommands(
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.writeStderr(
+        "This command requires XMTP client support that is not yet available.\n",
+      );
       resolvedDeps.exit(1);
     });
 
@@ -392,7 +441,9 @@ export function createChatCommands(
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(async () => {
-      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.writeStderr(
+        "This command requires XMTP client support that is not yet available.\n",
+      );
       resolvedDeps.exit(1);
     });
 

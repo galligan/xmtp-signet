@@ -582,5 +582,130 @@ export function createConversationActions(
     },
   };
 
-  return [create, list, info, join, invite, addMember, members];
+  const sync: ActionSpec<
+    {
+      chatId?: string | undefined;
+      identityLabel?: string | undefined;
+    },
+    { synced: true },
+    SignetError
+  > = {
+    id: "chat.sync",
+    description: "Sync conversations with the XMTP network",
+    intent: "write",
+    input: z.object({
+      chatId: z.string().optional(),
+      identityLabel: z.string().optional(),
+    }),
+    handler: async (input) => {
+      const resolved = await resolveIdentity(
+        deps.identityStore,
+        input.identityLabel,
+      );
+      if (Result.isError(resolved)) return resolved;
+
+      const managed = deps.getManagedClient(resolved.value.identityId);
+      if (!managed) {
+        return Result.err(
+          NotFoundError.create(
+            "managed-client",
+            resolved.value.identityId,
+          ) as SignetError,
+        );
+      }
+
+      if (input.chatId) {
+        const groupId = resolveGroupId(deps.idMappings, input.chatId);
+        const result = await managed.client.syncGroup(groupId);
+        if (Result.isError(result)) return result;
+      } else {
+        const result = await managed.client.syncAll();
+        if (Result.isError(result)) return result;
+      }
+      return Result.ok({ synced: true as const });
+    },
+    cli: {
+      command: "chat:sync",
+    },
+    mcp: {
+      toolName: "chat_sync",
+    },
+    http: {
+      auth: "admin",
+    },
+  };
+
+  const removeMember: ActionSpec<
+    {
+      chatId: string;
+      inboxId: string;
+      identityLabel?: string | undefined;
+    },
+    {
+      chatId: string;
+      memberCount: number;
+    },
+    SignetError
+  > = {
+    id: "chat.remove-member",
+    description: "Remove a member from a conversation",
+    intent: "write",
+    input: z.object({
+      chatId: z.string(),
+      inboxId: z.string(),
+      identityLabel: z.string().optional(),
+    }),
+    handler: async (input) => {
+      const resolved = await resolveIdentity(
+        deps.identityStore,
+        input.identityLabel,
+      );
+      if (Result.isError(resolved)) return resolved;
+
+      const managed = deps.getManagedClient(resolved.value.identityId);
+      if (!managed) {
+        return Result.err(
+          NotFoundError.create(
+            "managed-client",
+            resolved.value.identityId,
+          ) as SignetError,
+        );
+      }
+
+      const groupId = resolveGroupId(deps.idMappings, input.chatId);
+      const removeResult = await managed.client.removeMembers(groupId, [
+        input.inboxId,
+      ]);
+      if (Result.isError(removeResult)) return removeResult;
+
+      const groupResult = await deps.getGroupInfo(groupId);
+      if (Result.isError(groupResult)) return groupResult;
+
+      return Result.ok({
+        chatId: input.chatId,
+        memberCount: groupResult.value.memberInboxIds.length,
+      });
+    },
+    cli: {
+      command: "chat:remove-member",
+    },
+    mcp: {
+      toolName: "chat_remove_member",
+    },
+    http: {
+      auth: "admin",
+    },
+  };
+
+  return [
+    create,
+    list,
+    info,
+    join,
+    invite,
+    addMember,
+    removeMember,
+    members,
+    sync,
+  ];
 }

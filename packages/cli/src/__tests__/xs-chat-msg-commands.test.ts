@@ -113,10 +113,12 @@ describe("chat commands", () => {
 
   // -- sync --
 
-  test("sync subcommand accepts optional id argument", async () => {
+  test("sync subcommand accepts optional id argument and --as option", async () => {
     const cmd = await load();
     const sync = findSub(cmd, "sync");
     expect(sync).toBeDefined();
+    const flags = optionFlags(sync!);
+    expect(flags).toContain("--as");
   });
 
   // -- join --
@@ -178,6 +180,16 @@ describe("chat commands", () => {
       expect.arrayContaining(["list", "add", "rm", "promote", "demote"]),
     );
     expect(member!.commands.length).toBe(5);
+  });
+
+  test("member rm subcommand has --as option", async () => {
+    const cmd = await load();
+    const member = findSub(cmd, "member");
+    expect(member).toBeDefined();
+    const rm = findSub(member!, "rm");
+    expect(rm).toBeDefined();
+    const flags = optionFlags(rm!);
+    expect(flags).toContain("--as");
   });
 
   // -- total count --
