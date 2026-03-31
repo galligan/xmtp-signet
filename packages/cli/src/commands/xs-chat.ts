@@ -1,24 +1,62 @@
 /**
  * Chat management commands for the `xs chat` subcommand group.
  *
- * Provides conversation lifecycle operations (create, list, info, update,
- * sync, join, invite, leave, rm) and member management via the daemon
- * admin socket. Each action constructs an RPC-compatible payload and
- * delegates to the daemon client.
+ * Daemon-backed conversation lifecycle operations via the admin socket.
+ * The CLI group name is `chat` but RPC calls use the current `conversation.*`
+ * action IDs registered in the runtime (the rename to `chat.*` is deferred).
+ *
+ * Follows the same contract-first pattern as `xs-credential.ts`.
  *
  * @module
  */
 
 import { Command } from "commander";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
+import {
+  createWithDaemonClient,
+  type WithDaemonClient,
+} from "./daemon-client.js";
 
-/** Stub action output for commands not yet wired to the daemon. */
-function stubOutput(
-  action: string,
-  params: Record<string, unknown>,
+/** Dependencies for v1 chat commands. */
+export interface XsChatCommandDeps {
+  readonly withDaemonClient: WithDaemonClient;
+  readonly writeStdout: (message: string) => void;
+  readonly writeStderr: (message: string) => void;
+  readonly exit: (code: number) => void;
+}
+
+const defaultDeps: XsChatCommandDeps = {
+  withDaemonClient: createWithDaemonClient(),
+  writeStdout(message) {
+    process.stdout.write(message);
+  },
+  writeStderr(message) {
+    process.stderr.write(message);
+  },
+  exit(code) {
+    process.exit(code);
+  },
+};
+
+function writeError(
+  deps: XsChatCommandDeps,
+  error: SignetError,
   json: boolean,
-): string {
-  return formatOutput({ action, ...params }, { json }) + "\n";
+): void {
+  deps.writeStderr(
+    formatOutput(
+      {
+        error: error._tag,
+        category: error.category,
+        message: error.message,
+        ...(error.context !== null ? { context: error.context } : {}),
+      },
+      { json },
+    ) + "\n",
+  );
+  deps.exit(exitCodeFromCategory(error.category));
 }
 
 /**
@@ -26,121 +64,243 @@ function stubOutput(
  *
  * Subcommands: create, list, info, update, sync, join, invite, leave, rm, member.
  */
-export function createChatCommands(): Command {
+export function createChatCommands(
+  deps: Partial<XsChatCommandDeps> = {},
+): Command {
+  const resolvedDeps: XsChatCommandDeps = { ...defaultDeps, ...deps };
   const cmd = new Command("chat").description("Chat management");
 
   cmd
     .command("create")
     .description("Create a conversation")
+    .option("--config <path>", "Path to config file")
     .requiredOption("--name <name>", "Conversation name")
+    .option("--members <inboxIds>", "Member inbox IDs (comma-separated)")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--op <operator>", "Operator ID")
     .option("--json", "JSON output")
-    .action((opts: { name: string; as?: string; op?: string; json?: true }) => {
-      const json = opts.json === true;
-      const params: Record<string, unknown> = { name: opts.name };
-      if (opts.as !== undefined) params["as"] = opts.as;
-      if (opts.op !== undefined) params["operatorId"] = opts.op;
-      process.stdout.write(stubOutput("chat.create", params, json));
-    });
+    .action(
+      async (opts: {
+        config?: string;
+        name: string;
+        members?: string;
+        as?: string;
+        op?: string;
+        json?: true;
+      }) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {
+          name: opts.name,
+          memberInboxIds:
+            opts.members !== undefined
+              ? opts.members
+                  .split(",")
+                  .map((m) => m.trim())
+                  .filter((m) => m.length > 0)
+              : [],
+        };
+        if (opts.as !== undefined) payload["creatorIdentityLabel"] = opts.as;
+        if (opts.op !== undefined) payload["operatorId"] = opts.op;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("conversation.create", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("list")
     .description("List conversations")
+    .option("--config <path>", "Path to config file")
+    .option("--as <inbox>", "Inbox ID to act as")
     .option("--op <operator>", "Filter by operator")
     .option("--watch", "Watch for changes")
     .option("--json", "JSON output")
-    .action((opts: { op?: string; watch?: true; json?: true }) => {
-      const json = opts.json === true;
-      const params: Record<string, unknown> = {};
-      if (opts.op !== undefined) params["operatorId"] = opts.op;
-      if (opts.watch === true) params["watch"] = true;
-      process.stdout.write(stubOutput("chat.list", params, json));
-    });
+    .action(
+      async (opts: {
+        config?: string;
+        as?: string;
+        op?: string;
+        watch?: true;
+        json?: true;
+      }) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {};
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+        if (opts.op !== undefined) payload["operatorId"] = opts.op;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("conversation.list", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("info")
     .description("Show conversation details")
     .argument("<id>", "Conversation ID")
+    .option("--config <path>", "Path to config file")
     .option("--only <field>", "Show only a specific field")
     .option("--json", "JSON output")
-    .action((id: string, opts: { only?: string; json?: true }) => {
-      const json = opts.json === true;
-      const params: Record<string, unknown> = { id };
-      if (opts.only !== undefined) params["only"] = opts.only;
-      process.stdout.write(stubOutput("chat.info", params, json));
-    });
+    .action(
+      async (
+        id: string,
+        opts: { config?: string; only?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("conversation.info", { chatId: id }),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("update")
     .description("Update conversation metadata")
     .argument("<id>", "Conversation ID")
+    .option("--config <path>", "Path to config file")
     .option("--name <name>", "New name")
     .option("--description <desc>", "New description")
     .option("--image <url>", "New image URL")
-    .action(
-      (
-        id: string,
-        opts: { name?: string; description?: string; image?: string },
-      ) => {
-        const params: Record<string, unknown> = { id };
-        if (opts.name !== undefined) params["name"] = opts.name;
-        if (opts.description !== undefined) {
-          params["description"] = opts.description;
-        }
-        if (opts.image !== undefined) params["image"] = opts.image;
-        process.stdout.write(stubOutput("chat.update", params, false));
-      },
-    );
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
+    });
 
   cmd
     .command("sync")
     .description("Sync conversations")
     .argument("[id]", "Optional conversation ID")
-    .action((id?: string) => {
-      const params: Record<string, unknown> = {};
-      if (id !== undefined) params["id"] = id;
-      process.stdout.write(stubOutput("chat.sync", params, false));
+    .option("--config <path>", "Path to config file")
+    .option("--as <identity>", "Identity to act as")
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
     });
 
   cmd
     .command("join")
     .description("Join a conversation via invite link")
     .argument("<url>", "Invite URL")
+    .option("--config <path>", "Path to config file")
     .option("--as <inbox>", "Inbox ID to act as")
-    .action((url: string, opts: { as?: string }) => {
-      const params: Record<string, unknown> = { url };
-      if (opts.as !== undefined) params["as"] = opts.as;
-      process.stdout.write(stubOutput("chat.join", params, false));
-    });
+    .option("--timeout <seconds>", "Timeout in seconds")
+    .option("--json", "JSON output")
+    .action(
+      async (
+        url: string,
+        opts: { config?: string; as?: string; timeout?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = { inviteUrl: url };
+        if (opts.as !== undefined) payload["label"] = opts.as;
+        if (opts.timeout !== undefined) {
+          payload["timeoutSeconds"] = Number.parseInt(opts.timeout, 10);
+        }
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("conversation.join", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("invite")
     .description("Generate an invite link")
     .argument("<id>", "Conversation ID")
+    .option("--config <path>", "Path to config file")
+    .option("--as <inbox>", "Inbox ID to act as")
+    .option("--name <name>", "Invite display name")
+    .option("--description <desc>", "Invite description")
     .option("--json", "JSON output")
-    .action((id: string, opts: { json?: true }) => {
-      const json = opts.json === true;
-      process.stdout.write(stubOutput("chat.invite", { id }, json));
-    });
+    .action(
+      async (
+        id: string,
+        opts: {
+          config?: string;
+          as?: string;
+          name?: string;
+          description?: string;
+          json?: true;
+        },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = { chatId: id };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+        if (opts.name !== undefined) payload["name"] = opts.name;
+        if (opts.description !== undefined) {
+          payload["description"] = opts.description;
+        }
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("conversation.invite", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("leave")
     .description("Leave a conversation")
     .argument("<id>", "Conversation ID")
-    .action((id: string) => {
-      process.stdout.write(stubOutput("chat.leave", { id }, false));
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
     });
 
   cmd
     .command("rm")
     .description("Remove a conversation")
     .argument("<id>", "Conversation ID")
+    .option("--config <path>", "Path to config file")
     .option("--force", "Execute without confirmation")
-    .action((id: string, opts: { force?: true }) => {
-      process.stdout.write(
-        stubOutput("chat.rm", { id, force: opts.force === true }, false),
-      );
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
     });
 
   // --- member subgroup ---
@@ -151,8 +311,21 @@ export function createChatCommands(): Command {
     .command("list")
     .description("List members of a conversation")
     .argument("<id>", "Conversation ID")
-    .action((id: string) => {
-      process.stdout.write(stubOutput("chat.member.list", { id }, false));
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(async (id: string, opts: { config?: string; json?: true }) => {
+      const json = opts.json === true;
+      const result = await resolvedDeps.withDaemonClient(
+        { configPath: opts.config },
+        (client) => client.request("conversation.members", { chatId: id }),
+      );
+
+      if (result.isErr()) {
+        writeError(resolvedDeps, result.error, json);
+        return;
+      }
+
+      resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
   member
@@ -160,17 +333,44 @@ export function createChatCommands(): Command {
     .description("Add a member to a conversation")
     .argument("<id>", "Conversation ID")
     .argument("<inbox>", "Inbox ID to add")
-    .action((id: string, inbox: string) => {
-      process.stdout.write(stubOutput("chat.member.add", { id, inbox }, false));
-    });
+    .option("--config <path>", "Path to config file")
+    .option("--as <identity>", "Identity to act as")
+    .option("--json", "JSON output")
+    .action(
+      async (
+        id: string,
+        inbox: string,
+        opts: { config?: string; as?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = { chatId: id, inboxId: inbox };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("conversation.add-member", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   member
     .command("rm")
     .description("Remove a member from a conversation")
     .argument("<id>", "Conversation ID")
     .argument("<inbox>", "Inbox ID to remove")
-    .action((id: string, inbox: string) => {
-      process.stdout.write(stubOutput("chat.member.rm", { id, inbox }, false));
+    .option("--config <path>", "Path to config file")
+    .option("--as <identity>", "Identity to act as")
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
     });
 
   member
@@ -178,10 +378,11 @@ export function createChatCommands(): Command {
     .description("Promote a member to admin")
     .argument("<id>", "Conversation ID")
     .argument("<inbox>", "Inbox ID to promote")
-    .action((id: string, inbox: string) => {
-      process.stdout.write(
-        stubOutput("chat.member.promote", { id, inbox }, false),
-      );
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
     });
 
   member
@@ -189,10 +390,11 @@ export function createChatCommands(): Command {
     .description("Demote a member from admin")
     .argument("<id>", "Conversation ID")
     .argument("<inbox>", "Inbox ID to demote")
-    .action((id: string, inbox: string) => {
-      process.stdout.write(
-        stubOutput("chat.member.demote", { id, inbox }, false),
-      );
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(async () => {
+      resolvedDeps.writeStderr("This command is not yet implemented.\n");
+      resolvedDeps.exit(1);
     });
 
   cmd.addCommand(member);

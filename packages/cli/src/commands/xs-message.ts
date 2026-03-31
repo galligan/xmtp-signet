@@ -1,23 +1,59 @@
 /**
  * Message commands for the `xs msg` subcommand group.
  *
- * Provides messaging operations (send, reply, react, read, list, info)
- * via the daemon admin socket. Each action constructs an RPC-compatible
- * payload and delegates to the daemon client.
+ * Daemon-backed messaging operations via the admin socket.
+ * Follows the same contract-first pattern as `xs-credential.ts`.
  *
  * @module
  */
 
-import { Command, InvalidArgumentError } from "commander";
+import { Command } from "commander";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
+import {
+  createWithDaemonClient,
+  type WithDaemonClient,
+} from "./daemon-client.js";
 
-/** Stub action output for commands not yet wired to the daemon. */
-function stubOutput(
-  action: string,
-  params: Record<string, unknown>,
+/** Dependencies for v1 message commands. */
+export interface XsMessageCommandDeps {
+  readonly withDaemonClient: WithDaemonClient;
+  readonly writeStdout: (message: string) => void;
+  readonly writeStderr: (message: string) => void;
+  readonly exit: (code: number) => void;
+}
+
+const defaultDeps: XsMessageCommandDeps = {
+  withDaemonClient: createWithDaemonClient(),
+  writeStdout(message) {
+    process.stdout.write(message);
+  },
+  writeStderr(message) {
+    process.stderr.write(message);
+  },
+  exit(code) {
+    process.exit(code);
+  },
+};
+
+function writeError(
+  deps: XsMessageCommandDeps,
+  error: SignetError,
   json: boolean,
-): string {
-  return formatOutput({ action, ...params }, { json }) + "\n";
+): void {
+  deps.writeStderr(
+    formatOutput(
+      {
+        error: error._tag,
+        category: error.category,
+        message: error.message,
+        ...(error.context !== null ? { context: error.context } : {}),
+      },
+      { json },
+    ) + "\n",
+  );
+  deps.exit(exitCodeFromCategory(error.category));
 }
 
 /**
@@ -25,21 +61,26 @@ function stubOutput(
  *
  * Subcommands: send, reply, react, read, list, info.
  */
-export function createMessageCommands(): Command {
+export function createMessageCommands(
+  deps: Partial<XsMessageCommandDeps> = {},
+): Command {
+  const resolvedDeps: XsMessageCommandDeps = { ...defaultDeps, ...deps };
   const cmd = new Command("msg").description("Messaging");
 
   cmd
     .command("send")
     .description("Send a message")
     .argument("<text>", "Message text")
+    .option("--config <path>", "Path to config file")
     .requiredOption("--to <id>", "Conversation ID")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--op <operator>", "Operator ID")
     .option("--json", "JSON output")
     .action(
-      (
+      async (
         text: string,
         opts: {
+          config?: string;
           to: string;
           as?: string;
           op?: string;
@@ -47,13 +88,24 @@ export function createMessageCommands(): Command {
         },
       ) => {
         const json = opts.json === true;
-        const params: Record<string, unknown> = {
+        const payload: Record<string, unknown> = {
           text,
           chatId: opts.to,
         };
-        if (opts.as !== undefined) params["as"] = opts.as;
-        if (opts.op !== undefined) params["operatorId"] = opts.op;
-        process.stdout.write(stubOutput("msg.send", params, json));
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+        if (opts.op !== undefined) payload["operatorId"] = opts.op;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("message.send", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
       },
     );
 
@@ -61,82 +113,149 @@ export function createMessageCommands(): Command {
     .command("reply")
     .description("Reply to a message")
     .argument("<text>", "Reply text")
+    .option("--config <path>", "Path to config file")
+    .requiredOption("--chat <id>", "Conversation ID")
     .requiredOption("--to <msg-id>", "Message ID to reply to")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--json", "JSON output")
-    .action((text: string, opts: { to: string; as?: string; json?: true }) => {
-      const json = opts.json === true;
-      const params: Record<string, unknown> = { text, messageId: opts.to };
-      if (opts.as !== undefined) params["as"] = opts.as;
-      process.stdout.write(stubOutput("msg.reply", params, json));
-    });
+    .action(
+      async (
+        text: string,
+        opts: {
+          config?: string;
+          chat: string;
+          to: string;
+          as?: string;
+          json?: true;
+        },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {
+          chatId: opts.chat,
+          messageId: opts.to,
+          text,
+        };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("message.reply", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("react")
     .description("React to a message")
     .argument("<emoji>", "Reaction emoji")
+    .option("--config <path>", "Path to config file")
+    .requiredOption("--chat <id>", "Conversation ID")
     .requiredOption("--to <msg-id>", "Message ID to react to")
     .option("--as <inbox>", "Inbox ID to act as")
-    .action((emoji: string, opts: { to: string; as?: string }) => {
-      const params: Record<string, unknown> = {
-        emoji,
-        messageId: opts.to,
-      };
-      if (opts.as !== undefined) params["as"] = opts.as;
-      process.stdout.write(stubOutput("msg.react", params, false));
-    });
+    .option("--json", "JSON output")
+    .action(
+      async (
+        emoji: string,
+        opts: {
+          config?: string;
+          chat: string;
+          to: string;
+          as?: string;
+          json?: true;
+        },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {
+          chatId: opts.chat,
+          messageId: opts.to,
+          reaction: emoji,
+        };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("message.react", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("read")
     .description("Mark messages as read")
-    .argument("[ids]", "Message IDs (comma-separated)")
-    .option("--chat <id>", "Conversation ID")
-    .option("--all", "Mark all messages in chat as read")
+    .option("--config <path>", "Path to config file")
+    .requiredOption("--chat <id>", "Conversation ID")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--json", "JSON output")
     .action(
-      (
-        ids: string | undefined,
-        opts: { chat?: string; all?: true; as?: string; json?: true },
-      ) => {
-        if (opts.all === true && ids !== undefined) {
-          throw new InvalidArgumentError(
-            "Provide message IDs or --all, but not both",
-          );
-        }
-        if (opts.all !== true && ids === undefined) {
-          throw new InvalidArgumentError(
-            "Provide message IDs or --all to choose what to mark as read",
-          );
+      async (opts: {
+        config?: string;
+        chat: string;
+        as?: string;
+        json?: true;
+      }) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = { chatId: opts.chat };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("message.read", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
         }
 
-        const params: Record<string, unknown> = {};
-        if (ids !== undefined) {
-          params["messageIds"] = ids.split(",");
-        }
-        if (opts.chat !== undefined) params["chatId"] = opts.chat;
-        if (opts.all === true) params["all"] = true;
-        if (opts.as !== undefined) params["as"] = opts.as;
-        process.stdout.write(
-          stubOutput("msg.read", params, opts.json === true),
-        );
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
       },
     );
 
   cmd
     .command("list")
     .description("List messages")
+    .option("--config <path>", "Path to config file")
     .requiredOption("--from <chat>", "Conversation ID")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--watch", "Watch for new messages")
     .option("--json", "JSON output")
     .action(
-      (opts: { from: string; as?: string; watch?: true; json?: true }) => {
+      async (opts: {
+        config?: string;
+        from: string;
+        as?: string;
+        watch?: true;
+        json?: true;
+      }) => {
         const json = opts.json === true;
-        const params: Record<string, unknown> = { chatId: opts.from };
-        if (opts.as !== undefined) params["as"] = opts.as;
-        if (opts.watch === true) params["watch"] = true;
-        process.stdout.write(stubOutput("msg.list", params, json));
+        const payload: Record<string, unknown> = { chatId: opts.from };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("message.list", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
       },
     );
 
@@ -144,14 +263,35 @@ export function createMessageCommands(): Command {
     .command("info")
     .description("Show message details")
     .argument("<msg-id>", "Message ID")
+    .option("--config <path>", "Path to config file")
+    .requiredOption("--chat <id>", "Conversation ID")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--json", "JSON output")
-    .action((msgId: string, opts: { as?: string; json?: true }) => {
-      const json = opts.json === true;
-      const params: Record<string, unknown> = { messageId: msgId };
-      if (opts.as !== undefined) params["as"] = opts.as;
-      process.stdout.write(stubOutput("msg.info", params, json));
-    });
+    .action(
+      async (
+        msgId: string,
+        opts: { config?: string; chat: string; as?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {
+          chatId: opts.chat,
+          messageId: msgId,
+        };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("message.info", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   return cmd;
 }

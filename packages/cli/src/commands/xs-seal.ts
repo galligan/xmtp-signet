@@ -1,23 +1,21 @@
 /**
  * Seal inspection and verification commands for the `xs seal` subcommand group.
  *
- * Provides read-only operations for inspecting seals and their chain history.
- * Each action constructs an RPC-compatible payload and delegates to
- * the daemon client.
+ * Seal commands do not have action specs yet (seal CRUD is tracked in #241).
+ * The command structure is preserved for help text, but all actions exit with
+ * a clear deferral message.
  *
  * @module
  */
 
 import { Command } from "commander";
-import { formatOutput } from "../output/formatter.js";
 
-/** Stub action output for commands not yet wired to the daemon. */
-function stubOutput(
-  action: string,
-  params: Record<string, unknown>,
-  json: boolean,
-): string {
-  return formatOutput({ action, ...params }, { json }) + "\n";
+/** Standard deferral message for seal commands. */
+function notYetAvailable(): void {
+  process.stderr.write(
+    "Seal commands are not yet available. See #241 for status.\n",
+  );
+  process.exit(1);
 }
 
 /**
@@ -34,9 +32,8 @@ export function createSealCommands(): Command {
     .command("list")
     .description("List seals")
     .option("--json", "JSON output")
-    .action((opts: { json?: true }) => {
-      const json = opts.json === true;
-      process.stdout.write(stubOutput("seal.list", {}, json));
+    .action(() => {
+      notYetAvailable();
     });
 
   cmd
@@ -44,25 +41,24 @@ export function createSealCommands(): Command {
     .description("Show seal details")
     .argument("<id>", "Seal ID")
     .option("--json", "JSON output")
-    .action((id: string, opts: { json?: true }) => {
-      const json = opts.json === true;
-      process.stdout.write(stubOutput("seal.info", { id }, json));
+    .action(() => {
+      notYetAvailable();
     });
 
   cmd
     .command("verify")
     .description("Verify a seal")
     .argument("<id>", "Seal ID")
-    .action((id: string) => {
-      process.stdout.write(stubOutput("seal.verify", { id }, false));
+    .action(() => {
+      notYetAvailable();
     });
 
   cmd
     .command("history")
     .description("Show seal chain history")
     .argument("<cred-id>", "Credential ID")
-    .action((credId: string) => {
-      process.stdout.write(stubOutput("seal.history", { credId }, false));
+    .action(() => {
+      notYetAvailable();
     });
 
   return cmd;

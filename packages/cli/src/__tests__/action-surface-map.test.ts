@@ -3,11 +3,18 @@ import { Result } from "better-result";
 import { createActionRegistry } from "@xmtp/signet-contracts";
 import type { CredentialManager } from "@xmtp/signet-contracts";
 import { InternalError } from "@xmtp/signet-schemas";
-import { createConversationActions } from "@xmtp/signet-core";
+import {
+  createConversationActions,
+  createMessageActions,
+} from "@xmtp/signet-core";
 import {
   createCredentialActions,
   createRevealActions,
   createUpdateActions,
+  createOperatorActions,
+  createPolicyActions,
+  createOperatorManager,
+  createPolicyManager,
 } from "@xmtp/signet-sessions";
 import {
   generateActionSurfaceMap,
@@ -74,12 +81,31 @@ describe("action surface map", () => {
       registry.register(spec);
     }
 
+    for (const spec of createOperatorActions({
+      operatorManager: createOperatorManager(),
+    })) {
+      registry.register(spec);
+    }
+
+    for (const spec of createPolicyActions({
+      policyManager: createPolicyManager(),
+    })) {
+      registry.register(spec);
+    }
+
+    for (const spec of createMessageActions({
+      identityStore: {} as never,
+      getManagedClient: () => undefined,
+    })) {
+      registry.register(spec);
+    }
+
     const surfaceMap = generateActionSurfaceMap(registry.list());
     const hash = hashActionSurfaceMap(surfaceMap);
 
     expect(surfaceMap.entries.length).toBeGreaterThan(0);
     expect(hash).toBe(
-      "66f96a7d7d70e501c45273b855143a064460d29cf9265c22a7319171a8978d30",
+      "31cb38ef9d7484bd3d56db001545f93317b435097ca0b6c4259b0e6030bb6f0b",
     );
   });
 });

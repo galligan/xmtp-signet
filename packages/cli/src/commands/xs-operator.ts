@@ -1,24 +1,59 @@
 /**
  * Operator management commands for the `xs operator` subcommand group.
  *
- * Provides CRUD operations for operators via the daemon admin socket.
- * Each action constructs an RPC-compatible payload and delegates to
- * the daemon client. When the daemon client is not yet wired, commands
- * output the payload as JSON for integration testing.
+ * Daemon-backed CRUD operations for operators via the admin socket.
+ * Follows the same contract-first pattern as `xs-credential.ts`.
  *
  * @module
  */
 
 import { Command } from "commander";
+import type { SignetError } from "@xmtp/signet-schemas";
+import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
+import {
+  createWithDaemonClient,
+  type WithDaemonClient,
+} from "./daemon-client.js";
 
-/** Stub action output for commands not yet wired to the daemon. */
-function stubOutput(
-  action: string,
-  params: Record<string, unknown>,
+/** Dependencies for v1 operator commands. */
+export interface XsOperatorCommandDeps {
+  readonly withDaemonClient: WithDaemonClient;
+  readonly writeStdout: (message: string) => void;
+  readonly writeStderr: (message: string) => void;
+  readonly exit: (code: number) => void;
+}
+
+const defaultDeps: XsOperatorCommandDeps = {
+  withDaemonClient: createWithDaemonClient(),
+  writeStdout(message) {
+    process.stdout.write(message);
+  },
+  writeStderr(message) {
+    process.stderr.write(message);
+  },
+  exit(code) {
+    process.exit(code);
+  },
+};
+
+function writeError(
+  deps: XsOperatorCommandDeps,
+  error: SignetError,
   json: boolean,
-): string {
-  return formatOutput({ action, ...params }, { json }) + "\n";
+): void {
+  deps.writeStderr(
+    formatOutput(
+      {
+        error: error._tag,
+        category: error.category,
+        message: error.message,
+        ...(error.context !== null ? { context: error.context } : {}),
+      },
+      { json },
+    ) + "\n",
+  );
+  deps.exit(exitCodeFromCategory(error.category));
 }
 
 /**
@@ -26,12 +61,16 @@ function stubOutput(
  *
  * Subcommands: create, list, info, rename, rm.
  */
-export function createOperatorCommands(): Command {
+export function createOperatorCommands(
+  deps: Partial<XsOperatorCommandDeps> = {},
+): Command {
+  const resolvedDeps: XsOperatorCommandDeps = { ...defaultDeps, ...deps };
   const cmd = new Command("operator").description("Manage operators");
 
   cmd
     .command("create")
     .description("Create a new operator")
+    .option("--config <path>", "Path to config file")
     .requiredOption("--label <name>", "Human-readable name")
     .option("--role <role>", "Role: operator, admin", "operator")
     .option("--scope <mode>", "Scope mode: per-chat, shared", "per-chat")
@@ -42,7 +81,8 @@ export function createOperatorCommands(): Command {
     )
     .option("--json", "JSON output")
     .action(
-      (opts: {
+      async (opts: {
+        config?: string;
         label: string;
         role: string;
         scope: string;
@@ -50,60 +90,117 @@ export function createOperatorCommands(): Command {
         json?: true;
       }) => {
         const json = opts.json === true;
-        process.stdout.write(
-          stubOutput(
-            "operator.create",
-            {
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) =>
+            client.request("operator.create", {
               label: opts.label,
               role: opts.role,
-              scope: opts.scope,
+              scopeMode: opts.scope,
               provider: opts.provider,
-            },
-            json,
-          ),
+            }),
         );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
       },
     );
 
   cmd
     .command("list")
     .description("List operators")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action((opts: { json?: true }) => {
+    .action(async (opts: { config?: string; json?: true }) => {
       const json = opts.json === true;
-      process.stdout.write(stubOutput("operator.list", {}, json));
+      const result = await resolvedDeps.withDaemonClient(
+        { configPath: opts.config },
+        (client) => client.request("operator.list", {}),
+      );
+
+      if (result.isErr()) {
+        writeError(resolvedDeps, result.error, json);
+        return;
+      }
+
+      resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
   cmd
     .command("info")
     .description("Show operator details")
-    .argument("<id>", "Operator ID")
+    .argument("<id>", "Operator ID or label")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action((id: string, opts: { json?: true }) => {
+    .action(async (id: string, opts: { config?: string; json?: true }) => {
       const json = opts.json === true;
-      process.stdout.write(stubOutput("operator.info", { id }, json));
+      const result = await resolvedDeps.withDaemonClient(
+        { configPath: opts.config },
+        (client) => client.request("operator.info", { operatorId: id }),
+      );
+
+      if (result.isErr()) {
+        writeError(resolvedDeps, result.error, json);
+        return;
+      }
+
+      resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
   cmd
     .command("rename")
     .description("Rename an operator")
-    .argument("<id>", "Operator ID")
+    .argument("<id>", "Operator ID or label")
+    .option("--config <path>", "Path to config file")
     .requiredOption("--label <name>", "New name")
-    .action((id: string, opts: { label: string }) => {
-      process.stdout.write(
-        stubOutput("operator.rename", { id, label: opts.label }, false),
-      );
-    });
+    .option("--json", "JSON output")
+    .action(
+      async (
+        id: string,
+        opts: { config?: string; label: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) =>
+            client.request("operator.update", {
+              operatorId: id,
+              changes: { label: opts.label },
+            }),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("rm")
     .description("Remove an operator")
-    .argument("<id>", "Operator ID")
-    .option("--force", "Execute without confirmation")
-    .action((id: string, opts: { force?: true }) => {
-      process.stdout.write(
-        stubOutput("operator.rm", { id, force: opts.force === true }, false),
+    .argument("<id>", "Operator ID or label")
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(async (id: string, opts: { config?: string; json?: true }) => {
+      const json = opts.json === true;
+      const result = await resolvedDeps.withDaemonClient(
+        { configPath: opts.config },
+        (client) => client.request("operator.remove", { operatorId: id }),
       );
+
+      if (result.isErr()) {
+        writeError(resolvedDeps, result.error, json);
+        return;
+      }
+
+      resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
   return cmd;

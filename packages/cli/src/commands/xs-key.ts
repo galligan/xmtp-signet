@@ -1,23 +1,20 @@
 /**
  * Key management commands for the `xs key` subcommand group.
  *
- * Provides key hierarchy initialization, rotation, and inspection.
- * Each action constructs an RPC-compatible payload and delegates to
- * the daemon client.
+ * Key commands do not have action specs yet. The command structure is
+ * preserved for help text, but all actions exit with a clear deferral message.
  *
  * @module
  */
 
 import { Command } from "commander";
-import { formatOutput } from "../output/formatter.js";
 
-/** Stub action output for commands not yet wired to the daemon. */
-function stubOutput(
-  action: string,
-  params: Record<string, unknown>,
-  json: boolean,
-): string {
-  return formatOutput({ action, ...params }, { json }) + "\n";
+/** Standard deferral message for key commands. */
+function notYetAvailable(): void {
+  process.stderr.write(
+    "Key commands are not yet available. Key action specs are pending.\n",
+  );
+  process.exit(1);
 }
 
 /**
@@ -32,23 +29,22 @@ export function createKeyCommands(): Command {
     .command("init")
     .description("Initialize key hierarchy")
     .action(() => {
-      process.stdout.write(stubOutput("key.init", {}, false));
+      notYetAvailable();
     });
 
   cmd
     .command("rotate")
     .description("Rotate keys")
     .action(() => {
-      process.stdout.write(stubOutput("key.rotate", {}, false));
+      notYetAvailable();
     });
 
   cmd
     .command("list")
     .description("List keys")
     .option("--json", "JSON output")
-    .action((opts: { json?: true }) => {
-      const json = opts.json === true;
-      process.stdout.write(stubOutput("key.list", {}, json));
+    .action(() => {
+      notYetAvailable();
     });
 
   cmd
@@ -56,9 +52,8 @@ export function createKeyCommands(): Command {
     .description("Show key details")
     .argument("<id>", "Key ID")
     .option("--json", "JSON output")
-    .action((id: string, opts: { json?: true }) => {
-      const json = opts.json === true;
-      process.stdout.write(stubOutput("key.info", { id }, json));
+    .action(() => {
+      notYetAvailable();
     });
 
   return cmd;

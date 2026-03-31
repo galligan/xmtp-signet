@@ -91,7 +91,7 @@ describe("operator commands", () => {
     expect(flags).toContain("--label");
   });
 
-  test("rm subcommand accepts an id argument and --force option", async () => {
+  test("rm subcommand accepts an id argument and --json option", async () => {
     const cmd = await load();
     const rm = findSub(cmd, "rm");
     expect(rm).toBeDefined();
@@ -99,7 +99,7 @@ describe("operator commands", () => {
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("id");
     const flags = optionFlags(rm!);
-    expect(flags).toContain("--force");
+    expect(flags).toContain("--json");
   });
 
   test("has exactly 5 subcommands", async () => {

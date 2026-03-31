@@ -165,9 +165,9 @@ export function createCredentialCommands(
     .command("issue")
     .description("Issue a credential")
     .option("--config <path>", "Path to config file")
-    .requiredOption("--op <id>", "Operator ID")
+    .requiredOption("--op <id>", "Operator ID or label")
     .requiredOption("--chat <id>", "Chat ID")
-    .option("--policy <id>", "Policy ID")
+    .option("--policy <id>", "Policy ID or label")
     .option("--allow <scopes>", "Allowed scopes (comma-separated)")
     .option("--deny <scopes>", "Denied scopes (comma-separated)")
     .option(
@@ -188,10 +188,45 @@ export function createCredentialCommands(
         json?: true;
       }) => {
         const json = opts.json === true;
+
+        // Resolve operator label to op_ ID if needed
+        let operatorId = opts.op;
+        if (!operatorId.startsWith("op_")) {
+          const lookupResult = await resolvedDeps.withDaemonClient(
+            { configPath: opts.config },
+            (client) =>
+              client.request<{ id: string }>("operator.info", {
+                operatorId: operatorId,
+              }),
+          );
+          if (lookupResult.isErr()) {
+            writeError(resolvedDeps, lookupResult.error, json);
+            return;
+          }
+          operatorId = lookupResult.value.id;
+        }
+
+        // Resolve policy label to policy_ ID if needed
+        let policyId = opts.policy;
+        if (policyId !== undefined && !policyId.startsWith("policy_")) {
+          const lookupResult = await resolvedDeps.withDaemonClient(
+            { configPath: opts.config },
+            (client) =>
+              client.request<{ id: string }>("policy.info", {
+                policyId: policyId,
+              }),
+          );
+          if (lookupResult.isErr()) {
+            writeError(resolvedDeps, lookupResult.error, json);
+            return;
+          }
+          policyId = lookupResult.value.id;
+        }
+
         const configOrError = buildIssueConfig({
-          operatorId: opts.op,
+          operatorId,
           chatId: opts.chat,
-          policyId: opts.policy,
+          policyId,
           allow: opts.allow,
           deny: opts.deny,
           ttlSeconds: opts.ttl,

@@ -18,23 +18,6 @@ function optionFlags(cmd: Command): string[] {
   return cmd.options.map((o) => o.long ?? o.short ?? "");
 }
 
-async function captureStdout(
-  run: () => Promise<void>,
-): Promise<readonly string[]> {
-  const writes: string[] = [];
-  const originalWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = ((chunk: string | Uint8Array) => {
-    writes.push(String(chunk));
-    return true;
-  }) as typeof process.stdout.write;
-  try {
-    await run();
-    return writes;
-  } finally {
-    process.stdout.write = originalWrite;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Chat commands
 // ---------------------------------------------------------------------------
@@ -249,7 +232,7 @@ describe("message commands", () => {
 
   // -- reply --
 
-  test("reply subcommand accepts a text argument and --to option", async () => {
+  test("reply subcommand accepts a text argument and --chat, --to options", async () => {
     const cmd = await load();
     const reply = findSub(cmd, "reply");
     expect(reply).toBeDefined();
@@ -257,6 +240,7 @@ describe("message commands", () => {
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("text");
     const flags = optionFlags(reply!);
+    expect(flags).toContain("--chat");
     expect(flags).toContain("--to");
     expect(flags).toContain("--as");
     expect(flags).toContain("--json");
@@ -264,7 +248,7 @@ describe("message commands", () => {
 
   // -- react --
 
-  test("react subcommand accepts an emoji argument and --to option", async () => {
+  test("react subcommand accepts an emoji argument and --chat, --to options", async () => {
     const cmd = await load();
     const react = findSub(cmd, "react");
     expect(react).toBeDefined();
@@ -272,23 +256,20 @@ describe("message commands", () => {
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("emoji");
     const flags = optionFlags(react!);
+    expect(flags).toContain("--chat");
     expect(flags).toContain("--to");
     expect(flags).toContain("--as");
   });
 
   // -- read --
 
-  test("read subcommand accepts optional ids argument and --chat, --all options", async () => {
+  test("read subcommand has --chat required option and --as, --json", async () => {
     const cmd = await load();
     const read = findSub(cmd, "read");
     expect(read).toBeDefined();
-    const args = read!.registeredArguments;
-    expect(args.length).toBeGreaterThanOrEqual(1);
-    expect(args[0]?.name()).toBe("ids");
-    expect(args[0]?.required).toBe(false);
+    expect(read!.registeredArguments.length).toBe(0);
     const flags = optionFlags(read!);
     expect(flags).toContain("--chat");
-    expect(flags).toContain("--all");
     expect(flags).toContain("--as");
     expect(flags).toContain("--json");
   });
@@ -308,7 +289,7 @@ describe("message commands", () => {
 
   // -- info --
 
-  test("info subcommand accepts a msg-id argument and --json option", async () => {
+  test("info subcommand accepts a msg-id argument and --chat, --as, --json options", async () => {
     const cmd = await load();
     const info = findSub(cmd, "info");
     expect(info).toBeDefined();
@@ -316,39 +297,9 @@ describe("message commands", () => {
     expect(args.length).toBeGreaterThanOrEqual(1);
     expect(args[0]?.name()).toBe("msg-id");
     const flags = optionFlags(info!);
+    expect(flags).toContain("--chat");
     expect(flags).toContain("--as");
     expect(flags).toContain("--json");
-  });
-
-  test("read supports --all without positional ids", async () => {
-    const cmd = await load();
-    const writes = await captureStdout(async () => {
-      await cmd.parseAsync([
-        "node",
-        "msg",
-        "read",
-        "--chat",
-        "conv_aabbccddeeff0011",
-        "--all",
-        "--json",
-      ]);
-    });
-    const output = writes.join("");
-    expect(output).toContain('"action": "msg.read"');
-    expect(output).toContain('"all": true');
-    expect(output).not.toContain('"messageIds"');
-  });
-
-  test("read rejects ambiguous ids plus --all", async () => {
-    const cmd = await load();
-    cmd.configureOutput({
-      writeErr() {},
-      writeOut() {},
-    });
-    cmd.exitOverride();
-    await expect(
-      cmd.parseAsync(["node", "msg", "read", "msg_aabbccddeeff0011", "--all"]),
-    ).rejects.toBeDefined();
   });
 
   // -- total count --
