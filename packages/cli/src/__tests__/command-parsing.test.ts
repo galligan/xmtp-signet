@@ -68,18 +68,21 @@ describe("lifecycle commands", () => {
 describe("identity commands", () => {
   const cmd = createIdentityCommands();
 
-  test("registers all subcommands", () => {
+  test("registers direct-mode subcommands only", () => {
     const names = getSubcommandNames(cmd);
     expect(names).toContain("init");
-    expect(names).toContain("info");
-    expect(names).toContain("rotate-keys");
-    expect(names).toContain("export-public");
+    expect(names).toContain("list");
+    // Stubs removed — see xs inbox info, xs key rotate, xs key export-public
+    expect(names).not.toContain("info");
+    expect(names).not.toContain("rotate-keys");
+    expect(names).not.toContain("export-public");
   });
 
-  test("info has --json option", () => {
-    const info = findSubcommand(cmd, "info");
-    expect(info).toBeDefined();
-    expect(hasOption(info!, "--json")).toBe(true);
+  test("list has --config and --json options", () => {
+    const list = findSubcommand(cmd, "list");
+    expect(list).toBeDefined();
+    expect(hasOption(list!, "--config")).toBe(true);
+    expect(hasOption(list!, "--json")).toBe(true);
   });
 });
 
