@@ -477,8 +477,10 @@ describe("utility commands", () => {
     expect(args[0]?.name()).toBe("query");
     const flags = optionFlags(search!);
     expect(flags).toContain("--chat");
-    expect(flags).toContain("--op");
+    expect(flags).toContain("--type");
     expect(flags).toContain("--limit");
+    expect(flags).toContain("--as");
+    expect(flags).toContain("--config");
     expect(flags).toContain("--json");
   });
 

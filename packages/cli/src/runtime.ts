@@ -105,6 +105,9 @@ export interface SignetRuntimeDeps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createConsentActions?: () => ActionSpec<any, any, SignetError>[];
 
+  /** Optional factory for search action specs, wired in production by start.ts. */
+  createSearchActions?: () => ActionSpec<unknown, unknown, SignetError>[];
+
   /** Optional factory for seal action specs, wired in production by start.ts. */
   createSealActions?: () => ActionSpec<unknown, unknown, SignetError>[];
 
@@ -407,6 +410,12 @@ export async function createSignetRuntime(
 
   if (deps.createConsentActions) {
     for (const spec of deps.createConsentActions()) {
+      registry.register(spec);
+    }
+  }
+
+  if (deps.createSearchActions) {
+    for (const spec of deps.createSearchActions()) {
       registry.register(spec);
     }
   }

@@ -30,6 +30,7 @@ import {
   createConversationActions,
   createInboxActions as createInboxActionSpecs,
   createMessageActions,
+  createSearchActions,
   createSqliteIdMappingStore,
   type InboxActionDeps,
   type SignetState,
@@ -857,6 +858,34 @@ export function createProductionDeps(): SignetRuntimeDeps {
         getManagedClientForGroup: (groupId) =>
           coreImplRef!.getManagedClientForGroup(groupId),
       });
+    },
+
+    createSearchActions() {
+      if (coreImplRef === null) {
+        throw new Error("SignetCoreImpl not initialized before search actions");
+      }
+
+      // Lazily create the ID mapping store on the same dataDir
+      if (!idMappingStoreRef) {
+        const dbPath =
+          coreImplRef.config.dataDir === ":memory:"
+            ? ":memory:"
+            : `${coreImplRef.config.dataDir}/id-mappings.db`;
+        idMappingStoreRef = createSqliteIdMappingStore(new Database(dbPath));
+      }
+
+      const searchDeps: import("@xmtp/signet-core").SearchActionDeps = {
+        identityStore: coreImplRef.identityStore,
+        getManagedClient: (id) => coreImplRef!.getManagedClient(id),
+        idMappings: idMappingStoreRef,
+        ...(operatorManagerRef ? { operatorManager: operatorManagerRef } : {}),
+        ...(policyManagerRef ? { policyManager: policyManagerRef } : {}),
+        ...(credentialManagerRef
+          ? { credentialManager: credentialManagerRef }
+          : {}),
+      };
+
+      return createSearchActions(searchDeps);
     },
 
     async listIdentities() {

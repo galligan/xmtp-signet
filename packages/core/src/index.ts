@@ -93,6 +93,10 @@ export type { ConversationActionDeps } from "./conversation-actions.js";
 export { createMessageActions } from "./message-actions.js";
 export type { MessageActionDeps } from "./message-actions.js";
 
+// Search actions
+export { createSearchActions } from "./search-actions.js";
+export type { SearchActionDeps } from "./search-actions.js";
+
 // Convos invite parsing and join protocol
 export {
   parseConvosInviteUrl,

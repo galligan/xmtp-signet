@@ -134,24 +134,135 @@ export function createUtilityCommands(
   // --- search ---
 
   const search = new Command("search")
-    .description("Search conversations and messages")
+    .description("Search messages and resources")
     .argument("<query>", "Search query")
     .option("--chat <id>", "Filter by conversation")
-    .option("--op <id>", "Filter by operator")
+    .option(
+      "--type <type>",
+      "Search type: messages, resources, operator, policy, credential, conversation",
+    )
     .option("--limit <n>", "Limit results")
+    .option("--as <label>", "Identity label to act as")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(
-      (
+      async (
         query: string,
-        opts: { chat?: string; op?: string; limit?: string; json?: true },
+        opts: {
+          chat?: string;
+          type?: string;
+          limit?: string;
+          as?: string;
+          config?: string;
+          json?: true;
+        },
       ) => {
-        const params: Record<string, unknown> = { query };
-        if (opts.chat !== undefined) params["chatId"] = opts.chat;
-        if (opts.op !== undefined) params["operatorId"] = opts.op;
-        if (opts.limit !== undefined) {
-          params["limit"] = Number.parseInt(opts.limit, 10);
+        const json = opts.json === true;
+
+        // Determine which action to dispatch based on --type
+        const resourceTypes = [
+          "resources",
+          "operator",
+          "policy",
+          "credential",
+          "conversation",
+        ];
+        const isResourceSearch =
+          opts.type !== undefined && resourceTypes.includes(opts.type);
+
+        if (isResourceSearch) {
+          // search.resources
+          const input: Record<string, unknown> = { query };
+          if (opts.type !== "resources") input["type"] = opts.type;
+          if (opts.limit !== undefined) {
+            input["limit"] = Number.parseInt(opts.limit, 10);
+          }
+
+          const result = await withDaemonClient(
+            { configPath: opts.config },
+            async (client) =>
+              client.request<{
+                query: string;
+                matches: readonly {
+                  type: string;
+                  id: string;
+                  label: string;
+                }[];
+                total: number;
+              }>("search.resources", input),
+          );
+
+          if (Result.isError(result)) {
+            process.stderr.write(
+              formatOutput({ error: result.error.message }, { json }) + "\n",
+            );
+            process.exit(exitCodeFromCategory(result.error.category));
+          }
+
+          if (json) {
+            process.stdout.write(formatOutput(result.value, { json }) + "\n");
+          } else {
+            if (result.value.matches.length === 0) {
+              process.stdout.write("No resources found.\n");
+            } else {
+              for (const hit of result.value.matches) {
+                process.stdout.write(`[${hit.type}] ${hit.id}  ${hit.label}\n`);
+              }
+              process.stdout.write(`\n${result.value.total} result(s)\n`);
+            }
+          }
+        } else {
+          // search.messages (default)
+          const input: Record<string, unknown> = { query };
+          if (opts.chat !== undefined) input["chatId"] = opts.chat;
+          if (opts.limit !== undefined) {
+            input["limit"] = Number.parseInt(opts.limit, 10);
+          }
+          if (opts.as !== undefined) input["identityLabel"] = opts.as;
+
+          const result = await withDaemonClient(
+            { configPath: opts.config },
+            async (client) =>
+              client.request<{
+                query: string;
+                matches: readonly {
+                  chatId: string;
+                  messageId: string;
+                  senderInboxId: string;
+                  content: string;
+                  sentAt: string;
+                }[];
+                total: number;
+              }>("search.messages", input),
+          );
+
+          if (Result.isError(result)) {
+            process.stderr.write(
+              formatOutput({ error: result.error.message }, { json }) + "\n",
+            );
+            process.exit(exitCodeFromCategory(result.error.category));
+          }
+
+          if (json) {
+            process.stdout.write(formatOutput(result.value, { json }) + "\n");
+          } else {
+            if (result.value.matches.length === 0) {
+              process.stdout.write("No messages found.\n");
+            } else {
+              for (const hit of result.value.matches) {
+                const ts = hit.sentAt;
+                const preview =
+                  hit.content.length > 80
+                    ? hit.content.slice(0, 80) + "..."
+                    : hit.content;
+                process.stdout.write(
+                  `${ts} [${hit.chatId}] ${hit.senderInboxId}: ${preview}\n`,
+                );
+              }
+              process.stdout.write(`\n${result.value.total} result(s)\n`);
+            }
+          }
         }
-        process.stdout.write(stubOutput("search", params, opts.json === true));
       },
     );
   commands.push(search);
