@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { z } from "zod";
 import type { ActionSpec } from "@xmtp/signet-contracts";
 import type { SignetError } from "@xmtp/signet-schemas";
+import type { AuditLog, AuditEntry } from "../audit/log.js";
 import type { DaemonStatus } from "../daemon/status.js";
 
 /** Verification report for a single key entry. */
@@ -47,6 +48,7 @@ export interface SignetActionDeps {
   readonly exportState?: () => Promise<
     Result<RuntimeStateSnapshot, SignetError>
   >;
+  readonly auditLog?: AuditLog;
 }
 
 function widenActionSpec<TInput, TOutput>(
@@ -151,6 +153,54 @@ export function createSignetActions(
       },
     };
     specs.push(widenActionSpec(exportStateSpec));
+  }
+
+  if (deps.auditLog) {
+    const log = deps.auditLog;
+
+    const logsSpec: ActionSpec<
+      { limit?: number | undefined; since?: string | undefined },
+      readonly AuditEntry[],
+      SignetError
+    > = {
+      id: "admin.logs",
+      description: "Read recent audit log entries",
+      intent: "read",
+      idempotent: true,
+      input: z.object({
+        limit: z.number().int().positive().optional(),
+        since: z.string().optional(),
+      }),
+      handler: async (input) => {
+        if (input.since !== undefined) {
+          const all = await log.readAll(input.since);
+          const limit = input.limit ?? all.length;
+          return Result.ok(all.slice(-limit));
+        }
+        return Result.ok(await log.tail(input.limit ?? 50));
+      },
+      cli: {
+        command: "admin:logs",
+      },
+    };
+    specs.push(widenActionSpec(logsSpec));
+
+    const logsExportSpec: ActionSpec<
+      Record<string, never>,
+      readonly AuditEntry[],
+      SignetError
+    > = {
+      id: "admin.logs-export",
+      description: "Export the full audit log as NDJSON",
+      intent: "read",
+      idempotent: true,
+      input: z.object({}),
+      handler: async () => Result.ok(await log.readAll()),
+      cli: {
+        command: "admin:logs-export",
+      },
+    };
+    specs.push(widenActionSpec(logsExportSpec));
   }
 
   return specs;

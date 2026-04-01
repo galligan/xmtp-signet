@@ -437,14 +437,14 @@ describe("utility commands", () => {
     expect(commands.length).toBeGreaterThan(0);
   });
 
-  test("includes a logs command with --watch, --since, --limit, and --json options", async () => {
+  test("includes a logs command with --since, --limit, --config, and --json options", async () => {
     const commands = await loadProgram();
     const logs = commands.find((c) => c.name() === "logs");
     expect(logs).toBeDefined();
     const flags = optionFlags(logs!);
-    expect(flags).toContain("--watch");
     expect(flags).toContain("--since");
     expect(flags).toContain("--limit");
+    expect(flags).toContain("--config");
     expect(flags).toContain("--json");
   });
 

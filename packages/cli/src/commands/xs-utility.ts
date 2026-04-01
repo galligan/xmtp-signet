@@ -9,7 +9,14 @@
  */
 
 import { Command } from "commander";
+import { Result } from "better-result";
+import type { AuditEntry } from "../audit/log.js";
 import { formatOutput } from "../output/formatter.js";
+import { exitCodeFromCategory } from "../output/exit-codes.js";
+import {
+  createWithDaemonClient,
+  type WithDaemonClient,
+} from "./daemon-client.js";
 
 /** Stub action output for commands not yet wired to the daemon. */
 function stubOutput(
@@ -20,43 +27,97 @@ function stubOutput(
   return formatOutput({ action, ...params }, { json }) + "\n";
 }
 
+/** Dependencies for utility commands. */
+export interface XsUtilityCommandDeps {
+  readonly withDaemonClient: WithDaemonClient;
+}
+
+const defaultUtilityDeps: XsUtilityCommandDeps = {
+  withDaemonClient: createWithDaemonClient(),
+};
+
 /**
  * Create utility commands for the top-level program.
  *
  * Returns an array of Command instances to be added individually
  * to the program (not as a group).
  */
-export function createUtilityCommands(): Command[] {
+export function createUtilityCommands(
+  deps: Partial<XsUtilityCommandDeps> = {},
+): Command[] {
+  const { withDaemonClient } = { ...defaultUtilityDeps, ...deps };
   const commands: Command[] = [];
 
   // --- logs ---
 
   const logs = new Command("logs")
     .description("View audit logs")
-    .option("--watch", "Watch for new entries")
-    .option("--since <time>", "Show logs since time")
+    .option("--since <time>", "Show logs since timestamp (ISO 8601)")
     .option("--limit <n>", "Limit number of entries")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(
-      (opts: { watch?: true; since?: string; limit?: string; json?: true }) => {
-        const params: Record<string, unknown> = {};
-        if (opts.watch === true) params["watch"] = true;
-        if (opts.since !== undefined) params["since"] = opts.since;
+      async (opts: {
+        since?: string;
+        limit?: string;
+        config?: string;
+        json?: true;
+      }) => {
+        const json = opts.json === true;
+        const input: Record<string, unknown> = {};
+        if (opts.since !== undefined) input["since"] = opts.since;
         if (opts.limit !== undefined) {
-          params["limit"] = Number.parseInt(opts.limit, 10);
+          input["limit"] = Number.parseInt(opts.limit, 10);
         }
-        process.stdout.write(stubOutput("logs", params, opts.json === true));
+
+        const result = await withDaemonClient(
+          { configPath: opts.config },
+          async (client) =>
+            client.request<readonly AuditEntry[]>("admin.logs", input),
+        );
+
+        if (Result.isError(result)) {
+          process.stderr.write(
+            formatOutput({ error: result.error.message }, { json }) + "\n",
+          );
+          process.exit(exitCodeFromCategory(result.error.category));
+        }
+
+        if (json) {
+          process.stdout.write(formatOutput(result.value, { json }) + "\n");
+        } else {
+          for (const entry of result.value) {
+            const line = `${entry.timestamp} [${entry.actor}] ${entry.action}${entry.success ? "" : " FAILED"}${entry.target !== undefined ? ` target=${entry.target}` : ""}`;
+            process.stdout.write(line + "\n");
+          }
+        }
       },
     );
   logs
     .command("export")
-    .description("Export a full runtime state dump")
+    .description("Export the full audit log as NDJSON")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action((opts: { json?: true }) => {
-      const params: Record<string, unknown> = {};
-      process.stdout.write(
-        stubOutput("logs.export", params, opts.json === true),
+    .action(async (opts: { config?: string; json?: true }) => {
+      const json = opts.json === true;
+
+      const result = await withDaemonClient(
+        { configPath: opts.config },
+        async (client) =>
+          client.request<readonly AuditEntry[]>("admin.logs-export", {}),
       );
+
+      if (Result.isError(result)) {
+        process.stderr.write(
+          formatOutput({ error: result.error.message }, { json }) + "\n",
+        );
+        process.exit(exitCodeFromCategory(result.error.category));
+      }
+
+      // NDJSON: one JSON object per line
+      for (const entry of result.value) {
+        process.stdout.write(JSON.stringify(entry) + "\n");
+      }
     });
   commands.push(logs);
 

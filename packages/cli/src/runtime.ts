@@ -358,6 +358,7 @@ export async function createSignetRuntime(
 
       return Result.ok(snapshot);
     },
+    auditLog,
   })) {
     registry.register(spec);
   }

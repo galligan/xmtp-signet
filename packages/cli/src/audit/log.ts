@@ -25,6 +25,9 @@ export interface AuditLog {
   /** Read the last N entries. */
   tail(count: number): Promise<readonly AuditEntry[]>;
 
+  /** Read all entries, optionally filtered by a minimum timestamp. */
+  readAll(since?: string): Promise<readonly AuditEntry[]>;
+
   /** The file path of the audit log. */
   readonly path: string;
 }
@@ -52,6 +55,33 @@ export function createAuditLog(filePath: string): AuditLog {
       await ensureDir();
       const line = JSON.stringify(entry) + "\n";
       await appendFile(filePath, line, "utf-8");
+    },
+
+    async readAll(since?: string): Promise<readonly AuditEntry[]> {
+      let content: string;
+      try {
+        content = await readFile(filePath, "utf-8");
+      } catch (error: unknown) {
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          return [];
+        }
+        throw error;
+      }
+
+      const entries = content
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as AuditEntry);
+
+      if (since !== undefined) {
+        return entries.filter((entry) => entry.timestamp >= since);
+      }
+      return entries;
     },
 
     async tail(count: number): Promise<readonly AuditEntry[]> {

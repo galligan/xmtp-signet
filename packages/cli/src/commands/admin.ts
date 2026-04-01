@@ -7,6 +7,7 @@ import { resolvePaths } from "../config/paths.js";
 import { formatOutput } from "../output/formatter.js";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { withDaemonClient } from "./admin-rpc.js";
+import type { AuditEntry } from "../audit/log.js";
 import type { KeyVerificationReport } from "../actions/signet-actions.js";
 import type { RuntimeStateSnapshot } from "../actions/signet-actions.js";
 
@@ -142,11 +143,42 @@ export function createAdminCommands(): Command {
     .command("audit-log")
     .description("Display audit trail")
     .option("--limit <n>", "Maximum number of entries", "50")
-    .option("--since <timestamp>", "Filter entries after timestamp")
+    .option("--since <timestamp>", "Filter entries after timestamp (ISO 8601)")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(async (_options) => {
-      // Routed via AdminClient
-    });
+    .action(
+      async (options: {
+        limit?: string;
+        since?: string;
+        config?: string;
+        json?: boolean;
+      }) => {
+        const json = Boolean(options.json);
+        const print = (data: unknown) =>
+          process.stdout.write(formatOutput(data, { json }) + "\n");
+        const printErr = (data: unknown) =>
+          process.stderr.write(formatOutput(data, { json }) + "\n");
+
+        const input: Record<string, unknown> = {};
+        if (options.limit !== undefined) {
+          input["limit"] = parseInt(options.limit, 10);
+        }
+        if (options.since !== undefined) {
+          input["since"] = options.since;
+        }
+
+        const result = await withDaemonClient(options, {}, async (client) =>
+          client.request<readonly AuditEntry[]>("admin.logs", input),
+        );
+
+        if (Result.isError(result)) {
+          printErr({ error: result.error.message });
+          process.exit(1);
+        }
+
+        print(result.value);
+      },
+    );
 
   return cmd;
 }

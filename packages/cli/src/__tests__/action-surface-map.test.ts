@@ -24,6 +24,7 @@ import {
 } from "../../../contracts/src/action-surface-map.js";
 import { createSignetActions } from "../actions/signet-actions.js";
 import { createSealActions } from "../actions/seal-actions.js";
+import type { AuditLog } from "../audit/log.js";
 
 function makeCredentialManagerStub(): CredentialManager {
   const notImplemented = async () =>
@@ -59,10 +60,18 @@ describe("action surface map", () => {
     const credentialManager = makeCredentialManagerStub();
     const sealManager = makeSealManagerStub();
 
+    const auditLogStub: AuditLog = {
+      path: "/dev/null",
+      append: async () => {},
+      tail: async () => [],
+      readAll: async () => [],
+    };
+
     for (const spec of createSignetActions({
       status: async () => ({ state: "running" }) as never,
       shutdown: async () => Result.ok(undefined),
       rotateKeys: async () => Result.ok({ rotated: 0 }),
+      auditLog: auditLogStub,
     })) {
       registry.register(spec);
     }
@@ -216,7 +225,7 @@ describe("action surface map", () => {
 
     expect(surfaceMap.entries.length).toBeGreaterThan(0);
     expect(hash).toBe(
-      "7d32b6861f48076942332ee3f3636f67a6a0d7f38d08d18e90695e8091c70974",
+      "883409b554b71a6384d46b02a0c02756cb2c269dff906ed09431e4cc88f0b9a9",
     );
   });
 });
