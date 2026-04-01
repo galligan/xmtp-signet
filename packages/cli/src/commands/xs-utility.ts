@@ -8,7 +8,7 @@
  * @module
  */
 
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { Result } from "better-result";
 import type { AuditEntry } from "../audit/log.js";
 import { formatOutput } from "../output/formatter.js";
@@ -133,16 +133,22 @@ export function createUtilityCommands(
 
   // --- search ---
 
+  const searchTypeOption = new Option("--type <type>", "Search type").choices([
+    "messages",
+    "resources",
+    "operator",
+    "policy",
+    "credential",
+    "conversation",
+  ]);
+
   const search = new Command("search")
     .description("Search messages and resources")
     .argument("<query>", "Search query")
     .option("--chat <id>", "Filter by conversation")
-    .option(
-      "--type <type>",
-      "Search type: messages, resources, operator, policy, credential, conversation",
-    )
+    .addOption(searchTypeOption)
     .option("--limit <n>", "Limit results")
-    .option("--as <label>", "Identity label to act as")
+    .option("--as <label>", "Identity label for message search")
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(

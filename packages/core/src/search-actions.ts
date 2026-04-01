@@ -307,28 +307,35 @@ export function createSearchActions(
       // Search conversations
       if (shouldSearch("conversation")) {
         const resolved = await resolveIdentity(deps.identityStore, undefined);
-        if (Result.isOk(resolved)) {
-          const managed = deps.getManagedClient(resolved.value.identityId);
-          if (managed) {
-            const groupsResult = await managed.client.listGroups();
-            if (Result.isOk(groupsResult)) {
-              for (const group of groupsResult.value) {
-                if (matches.length >= maxResults) break;
-                const chatId =
-                  deps.idMappings?.getLocal(group.groupId) ?? group.groupId;
-                if (
-                  chatId.toLowerCase().includes(queryLower) ||
-                  group.groupId.toLowerCase().includes(queryLower) ||
-                  group.name.toLowerCase().includes(queryLower)
-                ) {
-                  matches.push({
-                    type: "conversation",
-                    id: chatId,
-                    label: group.name || chatId,
-                  });
-                }
-              }
-            }
+        if (Result.isError(resolved)) return resolved;
+
+        const managed = deps.getManagedClient(resolved.value.identityId);
+        if (!managed) {
+          return Result.err(
+            NotFoundError.create(
+              "managed-client",
+              resolved.value.identityId,
+            ) as SignetError,
+          );
+        }
+
+        const groupsResult = await managed.client.listGroups();
+        if (Result.isError(groupsResult)) return groupsResult;
+
+        for (const group of groupsResult.value) {
+          if (matches.length >= maxResults) break;
+          const chatId =
+            deps.idMappings?.getLocal(group.groupId) ?? group.groupId;
+          if (
+            chatId.toLowerCase().includes(queryLower) ||
+            group.groupId.toLowerCase().includes(queryLower) ||
+            group.name.toLowerCase().includes(queryLower)
+          ) {
+            matches.push({
+              type: "conversation",
+              id: chatId,
+              label: group.name || chatId,
+            });
           }
         }
       }
