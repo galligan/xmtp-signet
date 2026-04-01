@@ -108,7 +108,7 @@ export function createAdminCommands(): Command {
 
       if (Result.isError(result)) {
         printErr({ error: result.error.message });
-        process.exit(1);
+        process.exit(exitCodeFromCategory(result.error.category));
       }
 
       print(result.value);
@@ -132,7 +132,7 @@ export function createAdminCommands(): Command {
 
       if (Result.isError(result)) {
         printErr({ error: result.error.message });
-        process.exit(1);
+        process.exit(exitCodeFromCategory(result.error.category));
       }
 
       print(result.value);

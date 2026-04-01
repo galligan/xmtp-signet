@@ -314,10 +314,10 @@ export async function createSignetRuntime(
       });
     },
     exportState: async () => {
-      const statusSnapshot =
-        runtimeRef === undefined
-          ? ({ state: "stopped" } as never)
-          : await runtimeRef.status();
+      if (runtimeRef === undefined) {
+        return Result.err(InternalError.create("Runtime not ready"));
+      }
+      const statusSnapshot = await runtimeRef.status();
 
       const operatorsResult = operatorManager
         ? await operatorManager.list()
@@ -330,7 +330,19 @@ export async function createSignetRuntime(
         ? await deps.listIdentities()
         : [];
 
-      return Result.ok({
+      const errors: string[] = [];
+      if (Result.isError(operatorsResult)) errors.push("operators");
+      if (Result.isError(policiesResult)) errors.push("policies");
+      if (Result.isError(credentialsResult)) errors.push("credentials");
+
+      const snapshot: {
+        status: typeof statusSnapshot;
+        operators: readonly unknown[];
+        policies: readonly unknown[];
+        credentials: readonly unknown[];
+        identities: typeof identitySnapshot;
+        errors?: readonly string[];
+      } = {
         status: statusSnapshot,
         operators: Result.isOk(operatorsResult) ? operatorsResult.value : [],
         policies: Result.isOk(policiesResult) ? policiesResult.value : [],
@@ -338,7 +350,13 @@ export async function createSignetRuntime(
           ? credentialsResult.value
           : [],
         identities: identitySnapshot,
-      });
+      };
+
+      if (errors.length > 0) {
+        snapshot.errors = errors;
+      }
+
+      return Result.ok(snapshot);
     },
   })) {
     registry.register(spec);

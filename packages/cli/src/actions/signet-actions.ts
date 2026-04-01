@@ -33,6 +33,7 @@ export interface RuntimeStateSnapshot {
   readonly policies: readonly unknown[];
   readonly credentials: readonly unknown[];
   readonly identities: readonly { inboxId: string | null }[];
+  readonly errors?: readonly string[];
 }
 
 /** Dependencies for the daemon-level `signet:*` CLI actions. */
