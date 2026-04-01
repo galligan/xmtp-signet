@@ -285,6 +285,61 @@ export async function createSignetRuntime(
       }
       return Result.ok({ rotated, failed: errors.length, errors });
     },
+    verifyKeys: async () => {
+      const adminResult = await keyManager.admin.get();
+      const adminEntry = Result.isOk(adminResult)
+        ? {
+            status: "ok" as const,
+            publicKey: adminResult.value.publicKey,
+            fingerprint: adminResult.value.fingerprint,
+          }
+        : { status: "missing" as const, error: adminResult.error.message };
+
+      const operationalKeys = keyManager.listOperationalKeys().map((key) => ({
+        keyId: key.keyId,
+        identityId: key.identityId,
+        status: "ok" as const,
+        fingerprint: key.fingerprint,
+      }));
+
+      return Result.ok({
+        platform: keyManager.platform,
+        trustTier: keyManager.trustTier,
+        rootKey:
+          adminEntry.status === "ok"
+            ? { status: "ok" as const, publicKey: adminEntry.publicKey }
+            : { status: "missing" as const },
+        adminKey: adminEntry,
+        operationalKeys,
+      });
+    },
+    exportState: async () => {
+      const statusSnapshot =
+        runtimeRef === undefined
+          ? ({ state: "stopped" } as never)
+          : await runtimeRef.status();
+
+      const operatorsResult = operatorManager
+        ? await operatorManager.list()
+        : Result.ok([] as readonly unknown[]);
+      const policiesResult = policyManager
+        ? await policyManager.list()
+        : Result.ok([] as readonly unknown[]);
+      const credentialsResult = await credentialManager.list();
+      const identitySnapshot = deps.listIdentities
+        ? await deps.listIdentities()
+        : [];
+
+      return Result.ok({
+        status: statusSnapshot,
+        operators: Result.isOk(operatorsResult) ? operatorsResult.value : [],
+        policies: Result.isOk(policiesResult) ? policiesResult.value : [],
+        credentials: Result.isOk(credentialsResult)
+          ? credentialsResult.value
+          : [],
+        identities: identitySnapshot,
+      });
+    },
   })) {
     registry.register(spec);
   }
