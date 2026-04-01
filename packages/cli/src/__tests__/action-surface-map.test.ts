@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { createActionRegistry } from "@xmtp/signet-contracts";
 import type { CredentialManager, SealManager } from "@xmtp/signet-contracts";
 import { InternalError } from "@xmtp/signet-schemas";
+import { createWalletActions } from "@xmtp/signet-keys";
 import {
   createConversationActions,
   createMessageActions,
@@ -124,12 +125,27 @@ describe("action surface map", () => {
       registry.register(spec);
     }
 
+    for (const spec of createWalletActions({
+      keyManager: {
+        createWallet: async () =>
+          Result.err(InternalError.create("not implemented")),
+        listWallets: async () =>
+          Result.err(InternalError.create("not implemented")),
+        getWallet: async () =>
+          Result.err(InternalError.create("not implemented")),
+        listWalletAccounts: async () =>
+          Result.err(InternalError.create("not implemented")),
+      } as never,
+    })) {
+      registry.register(spec);
+    }
+
     const surfaceMap = generateActionSurfaceMap(registry.list());
     const hash = hashActionSurfaceMap(surfaceMap);
 
     expect(surfaceMap.entries.length).toBeGreaterThan(0);
     expect(hash).toBe(
-      "0f3bc5f32f6ab6fc1dd5047de0c68dea564125f192773afed6c412f933dfe6a5",
+      "3379439d5eb88ca487828bf457ae5e6e755289bfcc04d2d8566e889de56d2655",
     );
   });
 });

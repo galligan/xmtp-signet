@@ -8,7 +8,7 @@ import type {
   SealManager,
 } from "@xmtp/signet-contracts";
 import { createActionRegistry } from "@xmtp/signet-contracts";
-import type { KeyManager } from "@xmtp/signet-keys";
+import { createWalletActions, type KeyManager } from "@xmtp/signet-keys";
 import type { WsServer } from "@xmtp/signet-ws";
 import {
   createCredentialActions,
@@ -279,6 +279,10 @@ export async function createSignetRuntime(
       return Result.ok({ rotated, failed: errors.length, errors });
     },
   })) {
+    registry.register(spec);
+  }
+
+  for (const spec of createWalletActions({ keyManager })) {
     registry.register(spec);
   }
 
