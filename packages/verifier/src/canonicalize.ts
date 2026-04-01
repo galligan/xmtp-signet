@@ -20,6 +20,15 @@ export function canonicalize(value: unknown): Uint8Array {
   return new TextEncoder().encode(json);
 }
 
+/** Compare two Uint8Array values for byte-level equality. */
+export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function sortKeys(value: unknown): unknown {
   if (value === null || typeof value !== "object") {
     return value;

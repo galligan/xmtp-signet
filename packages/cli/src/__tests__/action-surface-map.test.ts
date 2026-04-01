@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { createActionRegistry } from "@xmtp/signet-contracts";
-import type { CredentialManager } from "@xmtp/signet-contracts";
+import type { CredentialManager, SealManager } from "@xmtp/signet-contracts";
 import { InternalError } from "@xmtp/signet-schemas";
 import {
   createConversationActions,
@@ -21,6 +21,7 @@ import {
   hashActionSurfaceMap,
 } from "../../../contracts/src/action-surface-map.js";
 import { createSignetActions } from "../actions/signet-actions.js";
+import { createSealActions } from "../actions/seal-actions.js";
 
 function makeCredentialManagerStub(): CredentialManager {
   const notImplemented = async () =>
@@ -35,10 +36,26 @@ function makeCredentialManagerStub(): CredentialManager {
   } as unknown as CredentialManager;
 }
 
+function makeSealManagerStub(): SealManager {
+  const notImplemented = async () =>
+    Result.err(InternalError.create("not implemented"));
+
+  return {
+    issue: notImplemented,
+    refresh: notImplemented,
+    revoke: notImplemented,
+    current: notImplemented,
+    list: notImplemented,
+    lookup: notImplemented,
+    history: notImplemented,
+  } as unknown as SealManager;
+}
+
 describe("action surface map", () => {
   test("produces a stable hash for the assembled public action surface", () => {
     const registry = createActionRegistry();
     const credentialManager = makeCredentialManagerStub();
+    const sealManager = makeSealManagerStub();
 
     for (const spec of createSignetActions({
       status: async () => ({ state: "running" }) as never,
@@ -100,12 +117,19 @@ describe("action surface map", () => {
       registry.register(spec);
     }
 
+    for (const spec of createSealActions({
+      sealManager,
+      resolveSealPublicKey: async () => Result.ok(null),
+    })) {
+      registry.register(spec);
+    }
+
     const surfaceMap = generateActionSurfaceMap(registry.list());
     const hash = hashActionSurfaceMap(surfaceMap);
 
     expect(surfaceMap.entries.length).toBeGreaterThan(0);
     expect(hash).toBe(
-      "b9155d416ef3fc4d58b20b0a35ab4a834b68374bb89125be5c680dccec003ea4",
+      "0f3bc5f32f6ab6fc1dd5047de0c68dea564125f192773afed6c412f933dfe6a5",
     );
   });
 });

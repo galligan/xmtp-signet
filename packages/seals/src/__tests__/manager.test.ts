@@ -225,6 +225,113 @@ describe("SealManager", () => {
     });
   });
 
+  describe("inspection", () => {
+    test("lists active current seals and supports filtering", async () => {
+      const overrides = new Map<string, SealInput>();
+      overrides.set(
+        "cred_abcd1234feedbabe:conv_abcd1234feedbabe",
+        validInput(),
+      );
+      overrides.set(
+        "cred_dcba4321feedbabe:conv_feedfacefeedbabe",
+        validInput({
+          operatorId: "op_dcba4321feedbabe",
+        }),
+      );
+
+      const { manager } = createTestManager(overrides);
+      await manager.issue("cred_abcd1234feedbabe", "conv_abcd1234feedbabe");
+      await manager.issue("cred_dcba4321feedbabe", "conv_feedfacefeedbabe");
+
+      const all = await manager.list();
+      expect(Result.isOk(all)).toBe(true);
+      if (Result.isError(all)) return;
+      expect(all.value).toHaveLength(2);
+
+      const byCredential = await manager.list({
+        credentialId: "cred_abcd1234feedbabe",
+      });
+      expect(Result.isOk(byCredential)).toBe(true);
+      if (Result.isError(byCredential)) return;
+      expect(byCredential.value).toHaveLength(1);
+      expect(byCredential.value[0]?.chain.current.chatId).toBe(
+        "conv_abcd1234feedbabe",
+      );
+
+      const byChat = await manager.list({ chatId: "conv_feedfacefeedbabe" });
+      expect(Result.isOk(byChat)).toBe(true);
+      if (Result.isError(byChat)) return;
+      expect(byChat.value).toHaveLength(1);
+      expect(byChat.value[0]?.chain.current.credentialId).toBe(
+        "cred_dcba4321feedbabe",
+      );
+    });
+
+    test("looks up a seal by ID", async () => {
+      const { manager } = createTestManager();
+      const issued = await manager.issue(
+        "cred_abcd1234feedbabe",
+        "conv_abcd1234feedbabe",
+      );
+      expect(Result.isOk(issued)).toBe(true);
+      if (Result.isError(issued)) return;
+
+      const lookedUp = await manager.lookup(issued.value.chain.current.sealId);
+      expect(Result.isOk(lookedUp)).toBe(true);
+      if (Result.isError(lookedUp)) return;
+      expect(lookedUp.value.chain.current.sealId).toBe(
+        issued.value.chain.current.sealId,
+      );
+    });
+
+    test("returns chain history newest-first", async () => {
+      const overrides = new Map<string, SealInput>();
+      overrides.set(
+        "cred_abcd1234feedbabe:conv_abcd1234feedbabe",
+        validInput(),
+      );
+
+      const { manager } = createTestManager(overrides);
+      const first = await manager.issue(
+        "cred_abcd1234feedbabe",
+        "conv_abcd1234feedbabe",
+      );
+      expect(Result.isOk(first)).toBe(true);
+      if (Result.isError(first)) return;
+
+      overrides.set(
+        "cred_abcd1234feedbabe:conv_abcd1234feedbabe",
+        validInput({
+          permissions: {
+            allow: ["send", "reply", "react"],
+            deny: [],
+          },
+        }),
+      );
+
+      const second = await manager.issue(
+        "cred_abcd1234feedbabe",
+        "conv_abcd1234feedbabe",
+      );
+      expect(Result.isOk(second)).toBe(true);
+      if (Result.isError(second)) return;
+
+      const history = await manager.history(
+        "cred_abcd1234feedbabe",
+        "conv_abcd1234feedbabe",
+      );
+      expect(Result.isOk(history)).toBe(true);
+      if (Result.isError(history)) return;
+      expect(history.value).toHaveLength(2);
+      expect(history.value[0]?.chain.current.sealId).toBe(
+        second.value.chain.current.sealId,
+      );
+      expect(history.value[1]?.chain.current.sealId).toBe(
+        first.value.chain.current.sealId,
+      );
+    });
+  });
+
   describe("materiality", () => {
     test("returns existing seal when input has no material changes", async () => {
       const { manager, publisher } = createTestManager();

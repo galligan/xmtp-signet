@@ -57,6 +57,7 @@ import {
 } from "./http/server.js";
 import type { AdminServerConfig } from "./config/schema.js";
 import type { SignetRuntimeDeps } from "./runtime.js";
+import { createSealActions as createSealActionSpecs } from "./actions/seal-actions.js";
 import { createWsRequestHandler } from "./ws/request-handler.js";
 import { createLazyCoreUpgrade } from "./ws/core-upgrade.js";
 import { createEventProjector } from "./ws/event-projector.js";
@@ -701,6 +702,44 @@ export function createProductionDeps(): SignetRuntimeDeps {
       }
 
       return actions;
+    },
+
+    createSealActions() {
+      if (globalSealManagerRef === null) {
+        throw new Error("SealManager not initialized before seal actions");
+      }
+
+      return createSealActionSpecs({
+        sealManager: globalSealManagerRef,
+        async resolveSealPublicKey(envelope) {
+          if (keyManagerRef === null || coreImplRef === null) {
+            return Result.ok(null);
+          }
+
+          const identity = await coreImplRef.identityStore.getByGroupId(
+            envelope.chain.current.chatId,
+          );
+          if (!identity) {
+            return Result.ok(null);
+          }
+
+          const operationalKey = keyManagerRef.getOperationalKey(identity.id);
+          if (Result.isError(operationalKey)) {
+            return Result.ok(null);
+          }
+
+          const keyRefCandidates = new Set([
+            operationalKey.value.publicKey,
+            operationalKey.value.fingerprint,
+          ]);
+
+          return Result.ok(
+            keyRefCandidates.has(envelope.keyId)
+              ? operationalKey.value.publicKey
+              : null,
+          );
+        },
+      });
     },
 
     createMessageActions() {

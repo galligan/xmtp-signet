@@ -94,6 +94,9 @@ export interface SignetRuntimeDeps {
   /** Optional factory for message action specs, wired in production by start.ts. */
   createMessageActions?: () => ActionSpec<unknown, unknown, SignetError>[];
 
+  /** Optional factory for seal action specs, wired in production by start.ts. */
+  createSealActions?: () => ActionSpec<unknown, unknown, SignetError>[];
+
   /** Optional factory to expose the internal credential manager for update actions. */
   getInternalCredentialManager?: () => InternalCredentialManager;
 
@@ -299,6 +302,12 @@ export async function createSignetRuntime(
 
   if (deps.createMessageActions) {
     for (const spec of deps.createMessageActions()) {
+      registry.register(spec);
+    }
+  }
+
+  if (deps.createSealActions) {
+    for (const spec of deps.createSealActions()) {
       registry.register(spec);
     }
   }

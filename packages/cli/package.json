@@ -27,6 +27,7 @@
     "@xmtp/signet-schemas": "workspace:*",
     "@xmtp/signet-seals": "workspace:*",
     "@xmtp/signet-sessions": "workspace:*",
+    "@xmtp/signet-verifier": "workspace:*",
     "@xmtp/signet-ws": "workspace:*",
     "better-result": "catalog:",
     "commander": "14.0.3",
