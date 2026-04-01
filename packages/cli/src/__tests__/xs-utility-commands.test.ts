@@ -285,16 +285,22 @@ describe("key commands", () => {
     expect(cmd.description()).toBeTruthy();
   });
 
-  test("init subcommand exists", async () => {
+  test("init subcommand requires --operator and supports --wallet", async () => {
     const cmd = await load();
     const init = findSub(cmd, "init");
     expect(init).toBeDefined();
+    const flags = optionFlags(init!);
+    expect(flags).toContain("--operator");
+    expect(flags).toContain("--wallet");
+    expect(flags).toContain("--json");
   });
 
-  test("rotate subcommand exists", async () => {
+  test("rotate subcommand has --json option", async () => {
     const cmd = await load();
     const rotate = findSub(cmd, "rotate");
     expect(rotate).toBeDefined();
+    const flags = optionFlags(rotate!);
+    expect(flags).toContain("--json");
   });
 
   test("list subcommand has --json option", async () => {

@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { createActionRegistry } from "@xmtp/signet-contracts";
 import type { CredentialManager, SealManager } from "@xmtp/signet-contracts";
 import { InternalError } from "@xmtp/signet-schemas";
-import { createWalletActions } from "@xmtp/signet-keys";
+import { createKeyActions, createWalletActions } from "@xmtp/signet-keys";
 import {
   createConversationActions,
   createMessageActions,
@@ -140,12 +140,73 @@ describe("action surface map", () => {
       registry.register(spec);
     }
 
+    for (const spec of createKeyActions({
+      operatorManager: createOperatorManager(),
+      keyManager: {
+        createWallet: async () =>
+          Result.err(InternalError.create("not implemented")),
+        listWallets: async () =>
+          Result.err(InternalError.create("not implemented")),
+        getWallet: async () =>
+          Result.err(InternalError.create("not implemented")),
+        listWalletAccounts: async () =>
+          Result.err(InternalError.create("not implemented")),
+        createOperationalKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        getOperationalKey: () =>
+          Result.err(InternalError.create("not implemented")),
+        getOperationalKeyByGroupId: () =>
+          Result.err(InternalError.create("not implemented")),
+        rotateOperationalKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        listOperationalKeys: () => [],
+        issueCredentialKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        revokeCredentialKey: () =>
+          Result.err(InternalError.create("not implemented")),
+        signWithOperationalKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        signWithCredentialKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        getOrCreateDbKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        getOrCreateXmtpIdentityKey: async () =>
+          Result.err(InternalError.create("not implemented")),
+        vaultSet: async () =>
+          Result.err(InternalError.create("not implemented")),
+        vaultGet: async () =>
+          Result.err(InternalError.create("not implemented")),
+        vaultDelete: async () =>
+          Result.err(InternalError.create("not implemented")),
+        vaultList: () => [],
+        startAutoRotation: () => {},
+        stopAutoRotation: () => {},
+        close: () => {},
+        admin: {
+          exists: () => false,
+          create: async () =>
+            Result.err(InternalError.create("not implemented")),
+          get: async () => Result.err(InternalError.create("not implemented")),
+          signJwt: async () =>
+            Result.err(InternalError.create("not implemented")),
+          verifyJwt: async () =>
+            Result.err(InternalError.create("not implemented")),
+        },
+        platform: "software-vault",
+        trustTier: "unverified",
+        initialize: async () =>
+          Result.err(InternalError.create("not implemented")),
+      } as never,
+    })) {
+      registry.register(spec);
+    }
+
     const surfaceMap = generateActionSurfaceMap(registry.list());
     const hash = hashActionSurfaceMap(surfaceMap);
 
     expect(surfaceMap.entries.length).toBeGreaterThan(0);
     expect(hash).toBe(
-      "3379439d5eb88ca487828bf457ae5e6e755289bfcc04d2d8566e889de56d2655",
+      "cf4b6058bc5b752880b54613b599cd825591f7142f79e466b1c8f6423fcd1fca",
     );
   });
 });

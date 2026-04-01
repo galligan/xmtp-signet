@@ -1,8 +1,7 @@
 /**
  * Key management commands for the `xs key` subcommand group.
  *
- * `key rotate` is backed by the `keys.rotate` action spec. Other key
- * commands are deferred pending additional action specs.
+ * Daemon-backed key lifecycle operations via the admin socket.
  *
  * @module
  */
@@ -56,11 +55,7 @@ function writeError(
   deps.exit(exitCodeFromCategory(error.category));
 }
 
-/**
- * Create the `key` subcommand group.
- *
- * Subcommands: init, rotate, list, info.
- */
+/** Create the `key` subcommand group. */
 export function createKeyCommands(
   deps: Partial<XsKeyCommandDeps> = {},
 ): Command {
@@ -69,13 +64,39 @@ export function createKeyCommands(
 
   cmd
     .command("init")
-    .description("Initialize key hierarchy")
-    .action(() => {
-      resolvedDeps.writeStderr(
-        "This command requires additional key action specs.\n",
-      );
-      resolvedDeps.exit(1);
-    });
+    .description("Initialize operator key hierarchy")
+    .option("--config <path>", "Path to config file")
+    .requiredOption("--operator <id>", "Operator ID or label")
+    .option("--wallet <id>", "Existing wallet ID to bind")
+    .option("--json", "JSON output")
+    .action(
+      async (opts: {
+        config?: string;
+        operator: string;
+        wallet?: string;
+        json?: true;
+      }) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = {
+          operatorId: opts.operator,
+        };
+        if (opts.wallet !== undefined) {
+          payload["walletId"] = opts.wallet;
+        }
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("keys.init", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
 
   cmd
     .command("rotate")
@@ -99,25 +120,43 @@ export function createKeyCommands(
 
   cmd
     .command("list")
-    .description("List keys")
+    .description("List operational keys")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(() => {
-      resolvedDeps.writeStderr(
-        "This command requires additional key action specs.\n",
+    .action(async (opts: { config?: string; json?: true }) => {
+      const json = opts.json === true;
+      const result = await resolvedDeps.withDaemonClient(
+        { configPath: opts.config },
+        (client) => client.request("keys.list", {}),
       );
-      resolvedDeps.exit(1);
+
+      if (result.isErr()) {
+        writeError(resolvedDeps, result.error, json);
+        return;
+      }
+
+      resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
   cmd
     .command("info")
     .description("Show key details")
-    .argument("<id>", "Key ID")
+    .argument("<id>", "Key ID or identity ID")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(() => {
-      resolvedDeps.writeStderr(
-        "This command requires additional key action specs.\n",
+    .action(async (id: string, opts: { config?: string; json?: true }) => {
+      const json = opts.json === true;
+      const result = await resolvedDeps.withDaemonClient(
+        { configPath: opts.config },
+        (client) => client.request("keys.info", { keyId: id }),
       );
-      resolvedDeps.exit(1);
+
+      if (result.isErr()) {
+        writeError(resolvedDeps, result.error, json);
+        return;
+      }
+
+      resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
   return cmd;

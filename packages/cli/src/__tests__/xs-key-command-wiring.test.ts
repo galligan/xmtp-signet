@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { InternalError, type SignetError } from "@xmtp/signet-schemas";
 import type { AdminClient } from "../admin/client.js";
-import { createOperatorCommands } from "../commands/xs-operator.js";
+import { createKeyCommands } from "../commands/xs-key.js";
 
 interface RequestCall {
   readonly method: string;
@@ -84,73 +84,107 @@ function createErrorHarness(error: SignetError) {
   };
 }
 
-describe("xs operator create", () => {
-  test("routes disclosure flags through the daemon client", async () => {
-    const harness = createHarness({ id: "op_abc" });
-    const command = createOperatorCommands(harness.deps);
+describe("xs key commands", () => {
+  test("routes init through the daemon client", async () => {
+    const harness = createHarness({
+      operatorId: "op_abc12345feedbabe",
+      walletId: "wallet-1",
+    });
+    const command = createKeyCommands(harness.deps);
 
     await command.parseAsync([
       "node",
-      "operator",
-      "create",
-      "--label",
+      "key",
+      "init",
+      "--operator",
       "alpha",
-      "--role",
-      "operator",
-      "--scope",
-      "shared",
-      "--provider",
-      "internal",
       "--wallet",
       "wallet-1",
-      "--inference-mode",
-      "hybrid",
-      "--inference-providers",
-      "openai,anthropic",
-      "--content-egress-scope",
-      "provider-only",
-      "--retention-at-provider",
-      "30 days",
-      "--hosting-mode",
-      "cloud",
       "--config",
       "/tmp/test.toml",
     ]);
 
     expect(harness.requestCalls).toEqual([
       {
-        method: "operator.create",
-        params: {
-          label: "alpha",
-          role: "operator",
-          scopeMode: "shared",
-          provider: "internal",
-          walletId: "wallet-1",
-          operatorDisclosures: {
-            inferenceMode: "hybrid",
-            inferenceProviders: ["openai", "anthropic"],
-            contentEgressScope: "provider-only",
-            retentionAtProvider: "30 days",
-            hostingMode: "cloud",
-          },
-        },
+        method: "keys.init",
+        params: { operatorId: "alpha", walletId: "wallet-1" },
       },
     ]);
-    expect(harness.stderr).toEqual([]);
   });
-});
 
-describe("xs operator create errors", () => {
-  test("writes daemon errors to stderr", async () => {
-    const harness = createErrorHarness(InternalError.create("boom"));
-    const command = createOperatorCommands(harness.deps);
+  test("routes rotate through the daemon client", async () => {
+    const harness = createHarness({ rotated: 1, failed: 0, errors: [] });
+    const command = createKeyCommands(harness.deps);
 
     await command.parseAsync([
       "node",
-      "operator",
-      "create",
-      "--label",
-      "alpha",
+      "key",
+      "rotate",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "keys.rotate",
+        params: {},
+      },
+    ]);
+  });
+
+  test("routes list through the daemon client", async () => {
+    const harness = createHarness([]);
+    const command = createKeyCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "key",
+      "list",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "keys.list",
+        params: {},
+      },
+    ]);
+  });
+
+  test("routes info through the daemon client", async () => {
+    const harness = createHarness({
+      keyId: "key_abc12345feedbabe",
+    });
+    const command = createKeyCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "key",
+      "info",
+      "key_abc12345feedbabe",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "keys.info",
+        params: { keyId: "key_abc12345feedbabe" },
+      },
+    ]);
+  });
+});
+
+describe("xs key command errors", () => {
+  test("writes daemon errors to stderr", async () => {
+    const harness = createErrorHarness(InternalError.create("boom"));
+    const command = createKeyCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "key",
+      "list",
       "--config",
       "/tmp/test.toml",
     ]);

@@ -79,6 +79,7 @@ export function createOperatorCommands(
       "Wallet provider: internal, ows",
       "internal",
     )
+    .option("--wallet <id>", "Bind an existing wallet ID")
     .option("--inference-mode <mode>", "Inference mode: local, cloud, hybrid")
     .option(
       "--inference-providers <providers>",
@@ -101,6 +102,7 @@ export function createOperatorCommands(
         role: string;
         scope: string;
         provider: string;
+        wallet?: string;
         inferenceMode?: string;
         inferenceProviders?: string;
         contentEgressScope?: string;
@@ -136,6 +138,7 @@ export function createOperatorCommands(
               role: opts.role,
               scopeMode: opts.scope,
               provider: opts.provider,
+              ...(opts.wallet !== undefined ? { walletId: opts.wallet } : {}),
               ...(Object.keys(operatorDisclosures).length > 0
                 ? { operatorDisclosures }
                 : {}),

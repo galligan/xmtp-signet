@@ -29,6 +29,8 @@ export type {
 
 // Key backend implementation (v1)
 export { createInternalKeyBackend } from "./key-manager.js";
+export { createKeyActions } from "./key-actions.js";
+export type { KeyActionDeps } from "./key-actions.js";
 export { createWalletActions } from "./wallet-actions.js";
 export type { WalletActionDeps } from "./wallet-actions.js";
 
