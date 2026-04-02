@@ -6,6 +6,9 @@ import { loadConfig } from "../config/loader.js";
 import { resolvePaths } from "../config/paths.js";
 import { formatOutput } from "../output/formatter.js";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
+import { withDaemonClient } from "./admin-rpc.js";
+import type { KeyVerificationReport } from "../actions/signet-actions.js";
+import type { RuntimeStateSnapshot } from "../actions/signet-actions.js";
 
 /**
  * Administrative operation commands.
@@ -90,17 +93,49 @@ export function createAdminCommands(): Command {
   cmd
     .command("verify-keys")
     .description("Verify key hierarchy integrity")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(async (_options) => {
-      // Routed via AdminClient
+    .action(async (options: { config?: string; json?: boolean }) => {
+      const json = Boolean(options.json);
+      const print = (data: unknown) =>
+        process.stdout.write(formatOutput(data, { json }) + "\n");
+      const printErr = (data: unknown) =>
+        process.stderr.write(formatOutput(data, { json }) + "\n");
+
+      const result = await withDaemonClient(options, {}, async (client) =>
+        client.request<KeyVerificationReport>("admin.verify-keys", {}),
+      );
+
+      if (Result.isError(result)) {
+        printErr({ error: result.error.message });
+        process.exit(exitCodeFromCategory(result.error.category));
+      }
+
+      print(result.value);
     });
 
   cmd
     .command("export-state")
     .description("Export runtime state snapshot")
+    .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
-    .action(async (_options) => {
-      // Routed via AdminClient
+    .action(async (options: { config?: string; json?: boolean }) => {
+      const json = Boolean(options.json);
+      const print = (data: unknown) =>
+        process.stdout.write(formatOutput(data, { json }) + "\n");
+      const printErr = (data: unknown) =>
+        process.stderr.write(formatOutput(data, { json }) + "\n");
+
+      const result = await withDaemonClient(options, {}, async (client) =>
+        client.request<RuntimeStateSnapshot>("admin.export-state", {}),
+      );
+
+      if (Result.isError(result)) {
+        printErr({ error: result.error.message });
+        process.exit(exitCodeFromCategory(result.error.category));
+      }
+
+      print(result.value);
     });
 
   cmd

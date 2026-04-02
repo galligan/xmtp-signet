@@ -285,6 +285,79 @@ export async function createSignetRuntime(
       }
       return Result.ok({ rotated, failed: errors.length, errors });
     },
+    verifyKeys: async () => {
+      const adminResult = await keyManager.admin.get();
+      const adminEntry = Result.isOk(adminResult)
+        ? {
+            status: "ok" as const,
+            publicKey: adminResult.value.publicKey,
+            fingerprint: adminResult.value.fingerprint,
+          }
+        : { status: "missing" as const, error: adminResult.error.message };
+
+      const operationalKeys = keyManager.listOperationalKeys().map((key) => ({
+        keyId: key.keyId,
+        identityId: key.identityId,
+        status: "ok" as const,
+        fingerprint: key.fingerprint,
+      }));
+
+      return Result.ok({
+        platform: keyManager.platform,
+        trustTier: keyManager.trustTier,
+        rootKey:
+          adminEntry.status === "ok"
+            ? { status: "ok" as const, publicKey: adminEntry.publicKey }
+            : { status: "missing" as const },
+        adminKey: adminEntry,
+        operationalKeys,
+      });
+    },
+    exportState: async () => {
+      if (runtimeRef === undefined) {
+        return Result.err(InternalError.create("Runtime not ready"));
+      }
+      const statusSnapshot = await runtimeRef.status();
+
+      const operatorsResult = operatorManager
+        ? await operatorManager.list()
+        : Result.ok([] as readonly unknown[]);
+      const policiesResult = policyManager
+        ? await policyManager.list()
+        : Result.ok([] as readonly unknown[]);
+      const credentialsResult = await credentialManager.list();
+      const identitySnapshot = deps.listIdentities
+        ? await deps.listIdentities()
+        : [];
+
+      const errors: string[] = [];
+      if (Result.isError(operatorsResult)) errors.push("operators");
+      if (Result.isError(policiesResult)) errors.push("policies");
+      if (Result.isError(credentialsResult)) errors.push("credentials");
+
+      const snapshot: {
+        status: typeof statusSnapshot;
+        operators: readonly unknown[];
+        policies: readonly unknown[];
+        credentials: readonly unknown[];
+        identities: typeof identitySnapshot;
+        errors?: readonly string[];
+      } = {
+        status: statusSnapshot,
+        operators: Result.isOk(operatorsResult) ? operatorsResult.value : [],
+        policies: Result.isOk(policiesResult) ? policiesResult.value : [],
+        credentials: Result.isOk(credentialsResult)
+          ? credentialsResult.value
+          : [],
+        identities: identitySnapshot,
+      };
+
+      if (errors.length > 0) {
+        snapshot.errors = errors;
+      }
+
+      return Result.ok(snapshot);
+    },
   })) {
     registry.register(spec);
   }
