@@ -355,5 +355,65 @@ export function createKeyActions(
     },
   };
 
-  return [widenActionSpec(init), widenActionSpec(list), widenActionSpec(info)];
+  const exportPublic: ActionSpec<
+    { keyId: string },
+    {
+      keyId: string;
+      identityId: string;
+      publicKey: string;
+      fingerprint: string;
+      trustTier: TrustTierType;
+    },
+    SignetError
+  > = {
+    id: "keys.export-public",
+    description: "Export public key material for an operational key",
+    intent: "read",
+    idempotent: true,
+    input: z.object({
+      keyId: z.string().min(1),
+    }),
+    output: z.object({
+      keyId: z.string().min(1),
+      identityId: z.string().min(1),
+      publicKey: z.string().min(1),
+      fingerprint: z.string().min(1),
+      trustTier: TrustTier,
+    }),
+    handler: async (input) => {
+      const key =
+        deps.keyManager
+          .listOperationalKeys()
+          .find(
+            (candidate) =>
+              candidate.keyId === input.keyId ||
+              candidate.identityId === input.keyId,
+          ) ?? null;
+
+      if (key === null) {
+        return Result.err(NotFoundError.create("key", input.keyId));
+      }
+
+      return Result.ok({
+        keyId: key.keyId,
+        identityId: key.identityId,
+        publicKey: key.publicKey,
+        fingerprint: key.fingerprint,
+        trustTier: deps.keyManager.trustTier,
+      });
+    },
+    cli: {
+      command: "keys:export-public",
+    },
+    http: {
+      auth: "admin",
+    },
+  };
+
+  return [
+    widenActionSpec(init),
+    widenActionSpec(list),
+    widenActionSpec(info),
+    widenActionSpec(exportPublic),
+  ];
 }

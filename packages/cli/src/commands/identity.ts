@@ -9,24 +9,25 @@ import { formatOutput } from "../output/formatter.js";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
 
 /**
- * Identity (inbox/client) management commands.
+ * Identity bootstrap and listing commands (direct mode, no daemon required).
  *
- * - init: Create XMTP identity and key hierarchy (direct mode)
- * - list: List registered identities (direct mode)
- * - info: Display identity details (daemon mode)
- * - rotate-keys: Rotate operational keys (daemon mode, admin auth)
- * - export-public: Export public key material (daemon mode)
+ * - init: Create XMTP identity and key hierarchy
+ * - list: List registered identities from the local store
+ *
+ * For daemon-backed equivalents see `xs inbox` and `xs key`.
  */
 export function createIdentityCommands(): Command {
   const cmd = new Command("identity").description(
-    "XMTP identity and key management",
+    "Direct-mode identity bootstrap and listing (see also: inbox, key)",
   );
 
   cmd.addCommand(createIdentityInitCommand());
 
   cmd
     .command("list")
-    .description("List registered identities")
+    .description(
+      "List registered identities (daemon equivalent: xs inbox list)",
+    )
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(async (options) => {
@@ -57,30 +58,6 @@ export function createIdentityCommands(): Command {
       store.close();
 
       print(identities);
-    });
-
-  cmd
-    .command("info")
-    .description("Display identity details")
-    .option("--json", "JSON output")
-    .action(async (_options) => {
-      // Routed via AdminClient
-    });
-
-  cmd
-    .command("rotate-keys")
-    .description("Rotate operational keys")
-    .option("--json", "JSON output")
-    .action(async (_options) => {
-      // Routed via AdminClient (admin auth required)
-    });
-
-  cmd
-    .command("export-public")
-    .description("Export public key material")
-    .option("--json", "JSON output")
-    .action(async (_options) => {
-      // Routed via AdminClient
     });
 
   return cmd;

@@ -159,5 +159,74 @@ export function createKeyCommands(
       resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
     });
 
+  cmd
+    .command("export-public")
+    .description("Export public key material for an identity")
+    .argument("[identityId]", "Identity ID (defaults to first)")
+    .option("--config <path>", "Path to config file")
+    .option("--json", "JSON output")
+    .action(
+      async (
+        identityId: string | undefined,
+        opts: { config?: string; json?: true },
+      ) => {
+        const json = opts.json === true;
+
+        // If no identityId given, list keys and pick the first
+        const keyIdToLookup = identityId ?? "";
+        if (keyIdToLookup === "") {
+          // List keys first to find the default
+          const listResult = await resolvedDeps.withDaemonClient(
+            { configPath: opts.config },
+            (client) => client.request("keys.list", {}),
+          );
+
+          if (listResult.isErr()) {
+            writeError(resolvedDeps, listResult.error, json);
+            return;
+          }
+
+          const keys = listResult.value as readonly { identityId: string }[];
+          if (keys.length === 0) {
+            resolvedDeps.writeStderr(
+              formatOutput({ error: "No operational keys found" }, { json }) +
+                "\n",
+            );
+            resolvedDeps.exit(1);
+            return;
+          }
+
+          const result = await resolvedDeps.withDaemonClient(
+            { configPath: opts.config },
+            (client) =>
+              client.request("keys.export-public", {
+                keyId: keys[0]!.identityId,
+              }),
+          );
+
+          if (result.isErr()) {
+            writeError(resolvedDeps, result.error, json);
+            return;
+          }
+
+          resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+          return;
+        }
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) =>
+            client.request("keys.export-public", { keyId: keyIdToLookup }),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        resolvedDeps.writeStdout(formatOutput(result.value, { json }) + "\n");
+      },
+    );
+
   return cmd;
 }

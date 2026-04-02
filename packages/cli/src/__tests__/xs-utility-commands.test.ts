@@ -400,12 +400,18 @@ describe("key commands", () => {
     expect(flags).toContain("--json");
   });
 
-  test("has exactly 4 subcommands", async () => {
+  test("has exactly 5 subcommands", async () => {
     const cmd = await load();
-    expect(cmd.commands.length).toBe(4);
+    expect(cmd.commands.length).toBe(5);
     const names = cmd.commands.map((c) => c.name());
     expect(names).toEqual(
-      expect.arrayContaining(["init", "rotate", "list", "info"]),
+      expect.arrayContaining([
+        "init",
+        "rotate",
+        "list",
+        "info",
+        "export-public",
+      ]),
     );
   });
 });

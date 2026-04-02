@@ -174,6 +174,33 @@ describe("xs key commands", () => {
       },
     ]);
   });
+
+  test("routes export-public with explicit identityId", async () => {
+    const harness = createHarness({
+      keyId: "key_abc12345feedbabe",
+      identityId: "op_abc12345feedbabe",
+      publicKey: "04abcdef...",
+      fingerprint: "sha256:abc123",
+      trustTier: "software-vault",
+    });
+    const command = createKeyCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "key",
+      "export-public",
+      "op_abc12345feedbabe",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "keys.export-public",
+        params: { keyId: "op_abc12345feedbabe" },
+      },
+    ]);
+  });
 });
 
 describe("xs key command errors", () => {
