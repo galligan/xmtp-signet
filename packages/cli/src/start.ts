@@ -854,6 +854,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
       return createConsentActions({
         identityStore: coreImplRef.identityStore,
         getManagedClient: (id) => coreImplRef!.getManagedClient(id),
+        getManagedClientForGroup: (groupId) =>
+          coreImplRef!.getManagedClientForGroup(groupId),
       });
     },
 
