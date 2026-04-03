@@ -250,6 +250,14 @@ export function createMessageActions(
         );
       }
 
+      // Validate the message belongs to the requested chat
+      const expectedGroupId = resolveGroupId(deps.idMappings, input.chatId);
+      if (lookupResult.value.groupId !== expectedGroupId) {
+        return Result.err(
+          NotFoundError.create("message", input.messageId) as SignetError,
+        );
+      }
+
       return Result.ok(lookupResult.value);
     },
     cli: {
@@ -300,9 +308,10 @@ export function createMessageActions(
       }
 
       const groupId = resolveGroupId(deps.idMappings, input.chatId);
+      const resolvedMsgId = resolveMessageId(deps.idMappings, input.messageId);
       const sendResult = await managed.client.sendMessage(
         groupId,
-        { text: input.text, reference: input.messageId },
+        { text: input.text, reference: resolvedMsgId },
         "reply",
       );
       if (Result.isError(sendResult)) return sendResult;
@@ -361,10 +370,11 @@ export function createMessageActions(
       }
 
       const groupId = resolveGroupId(deps.idMappings, input.chatId);
+      const resolvedMsgId = resolveMessageId(deps.idMappings, input.messageId);
       const sendResult = await managed.client.sendMessage(
         groupId,
         {
-          reference: input.messageId,
+          reference: resolvedMsgId,
           action: "added",
           content: input.reaction,
           schema: "unicode",

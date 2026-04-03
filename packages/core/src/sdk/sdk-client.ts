@@ -421,11 +421,11 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
         return Result.ok(message ? toDecodedMessage(message) : undefined);
       } catch (thrown) {
         // Mirror wrapSdkCall error classification for consistency
-        const message =
+        const errorMessage =
           thrown instanceof Error ? thrown.message : String(thrown);
         return Result.err(
-          InternalError.create(`SDK error (getMessageById): ${message}`, {
-            cause: message,
+          InternalError.create(`SDK error (getMessageById): ${errorMessage}`, {
+            cause: errorMessage,
           }) as SignetError,
         );
       }
