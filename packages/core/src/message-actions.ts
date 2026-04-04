@@ -290,6 +290,37 @@ export function createMessageActions(
           NotFoundError.create("message", input.messageId) as SignetError,
         );
 
+      // Credential scope enforcement: verify scope BEFORE any data
+      // access to prevent timing side-channels that leak message
+      // existence. Always return not_found to maintain information
+      // opacity. Fail closed when credentialLookup is unwired.
+      if (ctx.credentialId) {
+        if (!deps.credentialLookup) {
+          return notFound();
+        }
+        const credResult = await deps.credentialLookup(ctx.credentialId);
+        if (Result.isError(credResult)) {
+          return notFound();
+        }
+
+        const credential = credResult.value;
+
+        // Resolve credential's conv_ chatIds to XMTP groupIds
+        const scopedGroupIds = credential.config.chatIds.map((chatId) =>
+          resolveGroupId(deps.idMappings, chatId),
+        );
+
+        const expectedGroupId = resolveGroupId(deps.idMappings, input.chatId);
+        if (!scopedGroupIds.includes(expectedGroupId)) {
+          return notFound();
+        }
+
+        const effectiveScopes = resolveEffectiveScopes(credential.config);
+        if (!effectiveScopes.has("read-messages")) {
+          return notFound();
+        }
+      }
+
       const resolved = await resolveIdentity(
         deps.identityStore,
         input.identityLabel,
@@ -319,37 +350,6 @@ export function createMessageActions(
       const expectedGroupId = resolveGroupId(deps.idMappings, input.chatId);
       if (lookupResult.value.groupId !== expectedGroupId) {
         return notFound();
-      }
-
-      // Credential scope enforcement: when a credentialId is present,
-      // verify the credential has scope for this conversation and the
-      // read-messages permission. Always return not_found (never
-      // permission_denied) to prevent information leakage.
-      // Fail closed: missing credentialLookup with a credentialId denies.
-      if (ctx.credentialId && !deps.credentialLookup) {
-        return notFound();
-      }
-      if (ctx.credentialId && deps.credentialLookup) {
-        const credResult = await deps.credentialLookup(ctx.credentialId);
-        if (Result.isError(credResult)) {
-          return notFound();
-        }
-
-        const credential = credResult.value;
-
-        // Resolve credential's conv_ chatIds to XMTP groupIds
-        const scopedGroupIds = credential.config.chatIds.map((chatId) =>
-          resolveGroupId(deps.idMappings, chatId),
-        );
-
-        if (!scopedGroupIds.includes(lookupResult.value.groupId)) {
-          return notFound();
-        }
-
-        const effectiveScopes = resolveEffectiveScopes(credential.config);
-        if (!effectiveScopes.has("read-messages")) {
-          return notFound();
-        }
       }
 
       return Result.ok(lookupResult.value);
