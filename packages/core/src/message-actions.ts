@@ -190,7 +190,14 @@ export function createMessageActions(
     handler: async (input, ctx) => {
       // Credential scope enforcement: verify the caller can read
       // messages in this conversation before hitting the SDK.
-      if (ctx.credentialId && deps.credentialLookup) {
+      // Fail closed: if credentialId is present but credentialLookup
+      // is not wired, deny access rather than silently bypassing.
+      if (ctx.credentialId) {
+        if (!deps.credentialLookup) {
+          return Result.err(
+            NotFoundError.create("conversation", input.chatId) as SignetError,
+          );
+        }
         const credResult = await deps.credentialLookup(ctx.credentialId);
         if (Result.isError(credResult)) {
           return Result.err(
@@ -318,6 +325,10 @@ export function createMessageActions(
       // verify the credential has scope for this conversation and the
       // read-messages permission. Always return not_found (never
       // permission_denied) to prevent information leakage.
+      // Fail closed: missing credentialLookup with a credentialId denies.
+      if (ctx.credentialId && !deps.credentialLookup) {
+        return notFound();
+      }
       if (ctx.credentialId && deps.credentialLookup) {
         const credResult = await deps.credentialLookup(ctx.credentialId);
         if (Result.isError(credResult)) {

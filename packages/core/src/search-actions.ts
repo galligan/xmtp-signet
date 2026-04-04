@@ -137,7 +137,12 @@ export function createSearchActions(
     handler: async (input, ctx) => {
       // Resolve credential scope when present — used to filter
       // which conversations the caller can search.
+      // Fail closed: missing credentialManager with a credentialId
+      // returns empty results rather than silently bypassing.
       let scopedGroupIds: string[] | null = null;
+      if (ctx.credentialId && !deps.credentialManager) {
+        return Result.ok({ query: input.query, matches: [], total: 0 });
+      }
       if (ctx.credentialId && deps.credentialManager) {
         const credResult = await deps.credentialManager.lookup(
           ctx.credentialId,
