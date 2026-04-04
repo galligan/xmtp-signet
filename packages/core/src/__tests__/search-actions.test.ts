@@ -322,6 +322,107 @@ describe("createSearchActions", () => {
         .value;
       expect(value.matches).toHaveLength(1);
     });
+
+    test("returns empty when credential lacks read-messages scope", async () => {
+      await seedIdentity();
+
+      const msgs: Record<string, XmtpDecodedMessage[]> = {
+        "group-1": [makeMessage("group-1", "secret message")],
+      };
+      const groups = [makeGroup("group-1", "G1")];
+      const client = createMockClient({ messages: msgs, groups });
+
+      const mockCredentialManager = {
+        lookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["group-1"],
+              allow: ["send"], // no read-messages
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          }),
+      } as never;
+
+      const deps = buildDeps(client, {
+        credentialManager: mockCredentialManager,
+      });
+      const actions = createSearchActions(deps);
+      const spec = actions.find((a) => a.id === "search.messages");
+
+      const result = await spec!.handler!(
+        { query: "secret", chatId: "group-1" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
+      );
+      expect(Result.isOk(result)).toBe(true);
+      const value = (result as { value: { matches: unknown[]; total: number } })
+        .value;
+      expect(value.matches).toHaveLength(0);
+    });
+
+    test("filters search to only scoped conversations", async () => {
+      await seedIdentity();
+
+      const msgs: Record<string, XmtpDecodedMessage[]> = {
+        "group-1": [makeMessage("group-1", "visible message")],
+        "group-2": [makeMessage("group-2", "hidden message")],
+      };
+      const groups = [
+        makeGroup("group-1", "Scoped"),
+        makeGroup("group-2", "Unscoped"),
+      ];
+      const client = createMockClient({ messages: msgs, groups });
+
+      const mockCredentialManager = {
+        lookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["group-1"], // only group-1 in scope
+              allow: ["read-messages"],
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          }),
+      } as never;
+
+      const deps = buildDeps(client, {
+        credentialManager: mockCredentialManager,
+      });
+      const actions = createSearchActions(deps);
+      const spec = actions.find((a) => a.id === "search.messages");
+
+      // Search across all conversations — should only see group-1
+      const result = await spec!.handler!(
+        { query: "message" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
+      );
+      expect(Result.isOk(result)).toBe(true);
+      const value = (
+        result as {
+          value: { matches: Array<{ chatId: string }>; total: number };
+        }
+      ).value;
+      expect(value.matches).toHaveLength(1);
+      expect(value.matches[0]!.chatId).toBe("group-1");
+    });
   });
 
   // -----------------------------------------------------------------------

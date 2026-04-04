@@ -251,6 +251,90 @@ describe("message actions", () => {
         expect(val.messages[0]!.messageId).toBe("msg-aaa");
       }
     });
+
+    test("returns not_found when credential lacks chat scope", async () => {
+      await seedIdentity("unscoped-lister", { messages: sampleMessages });
+      idMappings.set("g1", "conv_0123456789abcdef", "conversation");
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        idMappings,
+        credentialLookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["conv_ffff456789abcdef"], // different chat
+              allow: ["read-messages"],
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          } as never),
+      };
+
+      const actions = createMessageActions(deps);
+      const listAction = actions.find((a) => a.id === "message.list")!;
+
+      const result = await listAction.handler(
+        { chatId: "conv_0123456789abcdef", identityLabel: "unscoped-lister" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("not_found");
+      }
+    });
+
+    test("returns not_found when credential lacks read-messages scope", async () => {
+      await seedIdentity("no-read-lister", { messages: sampleMessages });
+      idMappings.set("g1", "conv_0123456789abcdef", "conversation");
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        idMappings,
+        credentialLookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["conv_0123456789abcdef"],
+              allow: ["send"], // no read-messages
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          } as never),
+      };
+
+      const actions = createMessageActions(deps);
+      const listAction = actions.find((a) => a.id === "message.list")!;
+
+      const result = await listAction.handler(
+        { chatId: "conv_0123456789abcdef", identityLabel: "no-read-lister" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("not_found");
+      }
+    });
   });
 
   describe("message.info", () => {
@@ -335,6 +419,146 @@ describe("message actions", () => {
           identityLabel: "viewer",
         },
         stubCtx(),
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("not_found");
+      }
+    });
+
+    test("returns message when credential has chat in scope with read-messages", async () => {
+      await seedIdentity("scoped-viewer", { messages: sampleMessages });
+      idMappings.set("g1", "conv_0123456789abcdef", "conversation");
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        idMappings,
+        credentialLookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["conv_0123456789abcdef"],
+              allow: ["read-messages"],
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          } as never),
+      };
+
+      const actions = createMessageActions(deps);
+      const infoAction = actions.find((a) => a.id === "message.info")!;
+
+      const result = await infoAction.handler(
+        {
+          chatId: "conv_0123456789abcdef",
+          messageId: "msg-aaa",
+          identityLabel: "scoped-viewer",
+        },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        const val = result.value as XmtpDecodedMessage;
+        expect(val.messageId).toBe("msg-aaa");
+      }
+    });
+
+    test("returns not_found when credential lacks chat scope (no info leakage)", async () => {
+      await seedIdentity("unscoped-viewer", { messages: sampleMessages });
+      idMappings.set("g1", "conv_0123456789abcdef", "conversation");
+      idMappings.set("g2", "conv_ffff456789abcdef", "conversation");
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        idMappings,
+        credentialLookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["conv_ffff456789abcdef"], // different chat
+              allow: ["read-messages"],
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          } as never),
+      };
+
+      const actions = createMessageActions(deps);
+      const infoAction = actions.find((a) => a.id === "message.info")!;
+
+      const result = await infoAction.handler(
+        {
+          chatId: "conv_0123456789abcdef",
+          messageId: "msg-aaa",
+          identityLabel: "unscoped-viewer",
+        },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("not_found");
+      }
+    });
+
+    test("returns not_found when credential lacks read-messages scope", async () => {
+      await seedIdentity("no-read-viewer", { messages: sampleMessages });
+      idMappings.set("g1", "conv_0123456789abcdef", "conversation");
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        idMappings,
+        credentialLookup: async () =>
+          Result.ok({
+            id: "cred_1234567890abcdef",
+            config: {
+              operatorId: "op_1234567890abcdef",
+              chatIds: ["conv_0123456789abcdef"],
+              allow: ["send", "reply"], // no read-messages
+            },
+            inboxIds: [],
+            status: "active",
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+            issuedBy: "owner",
+          } as never),
+      };
+
+      const actions = createMessageActions(deps);
+      const infoAction = actions.find((a) => a.id === "message.info")!;
+
+      const result = await infoAction.handler(
+        {
+          chatId: "conv_0123456789abcdef",
+          messageId: "msg-aaa",
+          identityLabel: "no-read-viewer",
+        },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          credentialId: "cred_1234567890abcdef",
+        },
       );
 
       expect(Result.isError(result)).toBe(true);

@@ -230,6 +230,57 @@ layer, not just access control.
 read access. The Secure Enclave biometric gate is the only path to message
 content outside your own credentials.
 
+## Message access control
+
+Message content is the most sensitive data in the signet. The access controls
+enforce two properties: **scope isolation** (you only see messages in
+conversations your credential covers) and **information opacity** (you cannot
+even learn whether a message exists outside your scope).
+
+### Scope enforcement
+
+When a credential-authenticated caller requests a message (e.g., `message.info`),
+the handler enforces a three-part check:
+
+1. **chatId ↔ groupId coupling.** The caller's `chatId` must resolve (via the
+   ID mapping store) to the message's actual XMTP `groupId`. This prevents
+   cross-conversation fishing — passing a valid message ID with a different chat
+   returns not-found.
+
+2. **Credential chat scope.** The message's `groupId` must be in the
+   credential's `chatIds` (resolved from `conv_*` local IDs to XMTP group IDs).
+   A credential scoped to `conv_A` cannot read messages from `conv_B`, even if
+   the underlying identity is a member of both groups.
+
+3. **read-messages permission.** The credential's effective scopes (allow minus
+   deny, deny wins) must include `read-messages`. A credential with only `send`
+   and `reply` scopes cannot read message content.
+
+### Information opacity
+
+All scope failures return `not_found` — never `permission_denied` or any other
+error that would confirm the message exists. This prevents probing: an attacker
+cannot distinguish "message does not exist" from "message exists but you cannot
+see it." The error response is identical in both cases.
+
+This is a deliberate design choice. Leaking message existence is a form of
+metadata exposure. An attacker who can confirm message IDs exist in a
+conversation gains information about activity patterns, even without reading
+content.
+
+### Admin path
+
+Admin-authenticated callers (no `credentialId` in context) still undergo
+chatId ↔ groupId validation. They cannot fish for messages across conversations
+by passing mismatched IDs. However, admins are not currently subject to
+credential scope checks — they can read any message in a conversation they
+specify.
+
+This is an interim state. The full admin message access model requires
+owner-approved elevation via the biometric gate (see Privilege elevation below).
+Until that is implemented, the admin socket is local-only and admin auth tokens
+are short-lived.
+
 ## Privilege elevation
 
 An admin can request elevated access (e.g., read access to an operator's

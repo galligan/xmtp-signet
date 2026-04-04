@@ -84,6 +84,23 @@ function resolveGroupId(
   return networkId ?? chatId;
 }
 
+/**
+ * Compute effective scopes from credential config allow/deny.
+ * Deny always wins.
+ */
+function resolveEffectiveScopes(config: {
+  allow?: readonly string[] | undefined;
+  deny?: readonly string[] | undefined;
+}): ReadonlySet<string> {
+  const allowed = new Set(config.allow ?? []);
+  if (config.deny) {
+    for (const scope of config.deny) {
+      allowed.delete(scope);
+    }
+  }
+  return allowed;
+}
+
 function widenActionSpec<TInput, TOutput>(
   spec: ActionSpec<TInput, TOutput, SignetError>,
 ): ActionSpec<unknown, unknown, SignetError> {
@@ -117,7 +134,32 @@ export function createSearchActions(
       limit: z.number().int().positive().optional(),
       identityLabel: z.string().optional(),
     }),
-    handler: async (input) => {
+    handler: async (input, ctx) => {
+      // Resolve credential scope when present — used to filter
+      // which conversations the caller can search.
+      // Fail closed: missing credentialManager with a credentialId
+      // returns empty results rather than silently bypassing.
+      let scopedGroupIds: string[] | null = null;
+      if (ctx.credentialId && !deps.credentialManager) {
+        return Result.ok({ query: input.query, matches: [], total: 0 });
+      }
+      if (ctx.credentialId && deps.credentialManager) {
+        const credResult = await deps.credentialManager.lookup(
+          ctx.credentialId,
+        );
+        if (Result.isError(credResult)) {
+          return Result.ok({ query: input.query, matches: [], total: 0 });
+        }
+        const credential = credResult.value;
+        const effectiveScopes = resolveEffectiveScopes(credential.config);
+        if (!effectiveScopes.has("read-messages")) {
+          return Result.ok({ query: input.query, matches: [], total: 0 });
+        }
+        scopedGroupIds = credential.config.chatIds.map((chatId) =>
+          resolveGroupId(deps.idMappings, chatId),
+        );
+      }
+
       const resolved = await resolveIdentity(
         deps.identityStore,
         input.identityLabel,
@@ -141,6 +183,12 @@ export function createSearchActions(
       if (input.chatId) {
         // Search a single conversation
         const groupId = resolveGroupId(deps.idMappings, input.chatId);
+
+        // If credential-scoped, verify this chat is in scope
+        if (scopedGroupIds && !scopedGroupIds.includes(groupId)) {
+          return Result.ok({ query: input.query, matches: [], total: 0 });
+        }
+
         const listResult = await managed.client.listMessages(groupId, {
           limit: MESSAGES_PER_CONVERSATION,
         });
@@ -168,6 +216,11 @@ export function createSearchActions(
 
         for (const group of groupsResult.value) {
           if (matches.length >= maxResults) break;
+
+          // If credential-scoped, skip conversations outside scope
+          if (scopedGroupIds && !scopedGroupIds.includes(group.groupId)) {
+            continue;
+          }
 
           const listResult = await managed.client.listMessages(group.groupId, {
             limit: MESSAGES_PER_CONVERSATION,

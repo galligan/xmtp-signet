@@ -842,6 +842,9 @@ export function createProductionDeps(): SignetRuntimeDeps {
         identityStore: coreImplRef.identityStore,
         getManagedClient: (id) => coreImplRef!.getManagedClient(id),
         idMappings: idMappingStoreRef,
+        credentialLookup: credentialManagerRef
+          ? (credentialId) => credentialManagerRef!.lookup(credentialId)
+          : undefined,
       });
     },
 
