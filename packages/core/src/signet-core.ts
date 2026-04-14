@@ -1,5 +1,9 @@
 import { Result } from "better-result";
-import { InternalError, ValidationError } from "@xmtp/signet-schemas";
+import {
+  InternalError,
+  NotFoundError,
+  ValidationError,
+} from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { SignetCoreConfig } from "./config.js";
 import { CoreEventEmitter } from "./event-emitter.js";
@@ -176,6 +180,45 @@ export class SignetCoreImpl {
       env: this.#config.env,
       label: input.label,
     });
+  }
+
+  /**
+   * Hydrate an already persisted identity into the live runtime.
+   *
+   * This is used for flows like Convos invite joins, where the identity is
+   * created and persisted by a separate orchestrator but still needs to
+   * become immediately usable in the running daemon without a restart.
+   */
+  async attachPersistedIdentity(
+    identityId: string,
+  ): Promise<Result<void, SignetError>> {
+    if (this.#state !== "running" && this.#state !== "local") {
+      return Result.err(
+        ValidationError.create(
+          "state",
+          `Cannot attach inbox from '${this.#state}' state (expected 'running' or 'local')`,
+        ),
+      );
+    }
+
+    if (this.#registry.get(identityId)) {
+      return Result.ok(undefined);
+    }
+
+    const identity = await this.#identityStore.getById(identityId);
+    if (identity === null) {
+      return Result.err(NotFoundError.create("identity", identityId));
+    }
+
+    const hydrated = await this.#hydrateIdentity(identity, {
+      registerNetworkIdentity: false,
+    });
+    if (Result.isError(hydrated)) {
+      await this.detachManagedIdentity(identityId);
+      return hydrated;
+    }
+
+    return Result.ok(undefined);
   }
 
   /**

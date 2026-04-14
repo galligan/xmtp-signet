@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import {
   tryProcessJoinRequest,
   type CoreRawEvent,
+  type ListMessagesOptions,
   type RawMessageEvent,
   type JoinRequestResult,
+  type XmtpDecodedMessage,
 } from "@xmtp/signet-core";
 import type { SignetError } from "@xmtp/signet-schemas";
 
@@ -12,6 +14,10 @@ interface ManagedInviteHostClient {
     groupId: string,
     inboxIds: readonly string[],
   ) => Promise<Result<void, SignetError>>;
+  readonly listMessages: (
+    groupId: string,
+    options?: ListMessagesOptions,
+  ) => Promise<Result<readonly XmtpDecodedMessage[], SignetError>>;
 }
 
 interface ManagedInviteHostIdentity {
@@ -39,6 +45,11 @@ export interface ManagedInviteHostListenerDeps {
   ) => Promise<Result<string | undefined, SignetError>>;
 }
 
+const RECENT_JOIN_SCAN_OPTIONS = {
+  limit: 10,
+  direction: "descending",
+} satisfies ListMessagesOptions;
+
 function isInviteCandidate(event: CoreRawEvent): event is RawMessageEvent {
   if (event.type !== "raw.message") return false;
   if (event.isHistorical) return false;
@@ -50,6 +61,20 @@ function isInviteCandidate(event: CoreRawEvent): event is RawMessageEvent {
 
 function normalizePrivateKeyHex(value: string): string {
   return value.startsWith("0x") ? value.slice(2) : value;
+}
+
+function toRawMessageEvent(message: XmtpDecodedMessage): RawMessageEvent {
+  return {
+    type: "raw.message",
+    messageId: message.messageId,
+    groupId: message.groupId,
+    senderInboxId: message.senderInboxId,
+    contentType: message.contentType,
+    content: message.content,
+    sentAt: message.sentAt,
+    threadId: message.threadId,
+    isHistorical: false,
+  };
 }
 
 /**
@@ -93,6 +118,57 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
   return lastError ? Result.err(lastError) : null;
 }
 
+async function listRecentInviteCandidatesAcrossManagedIdentities(
+  deps: ManagedInviteHostListenerDeps,
+  groupId: string,
+): Promise<readonly RawMessageEvent[]> {
+  const identities = await deps.listIdentities();
+  const messages = new Map<string, RawMessageEvent>();
+
+  for (const identity of identities) {
+    const managed = deps.getManagedClient(identity.id);
+    if (!managed) continue;
+
+    const listResult = await managed.listMessages(
+      groupId,
+      RECENT_JOIN_SCAN_OPTIONS,
+    );
+    if (Result.isError(listResult)) continue;
+
+    for (const message of [...listResult.value].reverse()) {
+      const event = toRawMessageEvent(message);
+      if (!isInviteCandidate(event)) continue;
+      messages.set(event.messageId, event);
+    }
+  }
+
+  return [...messages.values()];
+}
+
+async function processInviteCandidate(
+  deps: ManagedInviteHostListenerDeps,
+  event: RawMessageEvent,
+  processedMessageIds: Set<string>,
+  inflightMessageIds: Set<string>,
+): Promise<void> {
+  if (processedMessageIds.has(event.messageId)) return;
+  if (inflightMessageIds.has(event.messageId)) return;
+
+  inflightMessageIds.add(event.messageId);
+
+  try {
+    const result = await dispatchInviteJoinRequestAcrossManagedIdentities(
+      deps,
+      event,
+    );
+    if (result !== null) {
+      processedMessageIds.add(event.messageId);
+    }
+  } finally {
+    inflightMessageIds.delete(event.messageId);
+  }
+}
+
 /**
  * Subscribe to raw core events and process invite join requests by trying
  * each managed identity with a registered inbox ID until one validates.
@@ -100,11 +176,38 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
 export function startManagedInviteHostListener(
   deps: ManagedInviteHostListenerDeps,
 ): () => void {
+  const processedMessageIds = new Set<string>();
+  const inflightMessageIds = new Set<string>();
+
   return deps.subscribe((event) => {
-    void dispatchInviteJoinRequestAcrossManagedIdentities(deps, event).catch(
-      () => {
-        // Ignore invite-processing failures so the raw event stream stays hot.
-      },
-    );
+    void (async () => {
+      if (event.type === "raw.message") {
+        if (!isInviteCandidate(event)) return;
+        await processInviteCandidate(
+          deps,
+          event,
+          processedMessageIds,
+          inflightMessageIds,
+        );
+        return;
+      }
+
+      if (event.type !== "raw.group.joined") return;
+
+      const messages = await listRecentInviteCandidatesAcrossManagedIdentities(
+        deps,
+        event.groupId,
+      );
+      for (const message of messages) {
+        await processInviteCandidate(
+          deps,
+          message,
+          processedMessageIds,
+          inflightMessageIds,
+        );
+      }
+    })().catch(() => {
+      // Ignore invite-processing failures so the raw event stream stays hot.
+    });
   });
 }

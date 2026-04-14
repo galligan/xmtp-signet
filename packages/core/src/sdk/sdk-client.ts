@@ -468,14 +468,18 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
     async streamAllMessages(): Promise<Result<MessageStream, SignetError>> {
       return wrapSdkCall(async () => {
-        const stream = await client.conversations.streamAllGroupMessages();
+        // Convos join requests arrive via DM, so the raw stream must include
+        // both group and DM traffic.
+        const stream = await client.conversations.streamAllMessages();
         return wrapMessageStream(stream);
       }, "streamAllMessages");
     },
 
     async streamGroups(): Promise<Result<GroupStream, SignetError>> {
       return wrapSdkCall(async () => {
-        const stream = await client.conversations.streamGroups();
+        // Invite join requests arrive in newly created DMs, so the core needs
+        // to discover both group and DM conversations as they appear.
+        const stream = await client.conversations.stream();
         return wrapGroupStream(stream);
       }, "streamGroups");
     },

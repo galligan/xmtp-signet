@@ -54,6 +54,10 @@ export interface ConversationActionDeps {
   readonly clientFactory?: XmtpClientFactory;
   /** Optional signer provider factory for identity-bound actions. */
   readonly signerProviderFactory?: SignerProviderFactory;
+  /** Optional runtime hook to attach a persisted identity without restart. */
+  readonly attachManagedIdentity?: (
+    identityId: string,
+  ) => Promise<Result<void, SignetError>>;
   /** Optional core config snapshot used by invite/join helpers. */
   readonly config?: Pick<SignetCoreConfig, "dataDir" | "env" | "appVersion">;
   /** Optional ID mapping store for conv_ boundary enforcement. */
@@ -431,6 +435,15 @@ export function createConversationActions(
         joinOptions,
       );
       if (Result.isError(joinResult)) return joinResult;
+
+      if (deps.attachManagedIdentity) {
+        const attachResult = await deps.attachManagedIdentity(
+          joinResult.value.identityId,
+        );
+        if (Result.isError(attachResult)) {
+          return attachResult;
+        }
+      }
 
       const chatId = ensureLocalId(deps.idMappings, joinResult.value.groupId);
       return Result.ok({ ...joinResult.value, chatId });

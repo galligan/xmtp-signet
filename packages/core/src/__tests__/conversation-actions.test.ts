@@ -7,11 +7,17 @@ import type { HandlerContext } from "@xmtp/signet-contracts";
 import { SqliteIdentityStore } from "../identity-store.js";
 import { createSqliteIdMappingStore } from "../id-mapping-store.js";
 import type { ManagedClient } from "../client-registry.js";
-import type { XmtpClient, XmtpGroupInfo } from "../xmtp-client-factory.js";
+import type {
+  SignerProviderLike,
+  XmtpClient,
+  XmtpClientFactory,
+  XmtpGroupInfo,
+} from "../xmtp-client-factory.js";
 import {
   createConversationActions,
   type ConversationActionDeps,
 } from "../conversation-actions.js";
+import { generateConvosInviteUrl } from "../convos/invite-generator.js";
 
 /** Minimal handler context for tests. */
 function stubCtx(): HandlerContext {
@@ -99,6 +105,85 @@ function emptyAsyncIterable<T>(): AsyncIterable<T> {
         },
       };
     },
+  };
+}
+
+const JOIN_TEST_PRIVATE_KEY_HEX =
+  "0000000000000000000000000000000000000000000000000000000000000001";
+const JOIN_TEST_CREATOR_INBOX_ID =
+  "aabbccddee1122334455667788990011aabbccddee1122334455667788990011";
+
+async function buildJoinInviteUrl(): Promise<string> {
+  const inviteUrl = await generateConvosInviteUrl({
+    conversationId: "joined-group-1",
+    creatorInboxId: JOIN_TEST_CREATOR_INBOX_ID,
+    walletPrivateKeyHex: JOIN_TEST_PRIVATE_KEY_HEX,
+    inviteTag: "join-action-tag",
+    name: "Joined Group",
+    env: "dev",
+  });
+  if (!inviteUrl.isOk()) {
+    throw new Error("Failed to generate join test invite URL");
+  }
+  return inviteUrl.value;
+}
+
+function createJoinMockSignerProvider(): SignerProviderLike {
+  const dbKey = new Uint8Array(32).fill(0xab);
+  const signerKey =
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
+
+  return {
+    sign: () => Promise.resolve(Result.ok(new Uint8Array(64))),
+    getPublicKey: () => Promise.resolve(Result.ok(new Uint8Array(32))),
+    getFingerprint: () => Promise.resolve(Result.ok("join-test-fingerprint")),
+    getDbEncryptionKey: () => Promise.resolve(Result.ok(dbKey)),
+    getXmtpIdentityKey: () => Promise.resolve(Result.ok(signerKey)),
+  };
+}
+
+function createJoinMockClient(): XmtpClient {
+  let syncCount = 0;
+  const joinedGroup: XmtpGroupInfo = {
+    groupId: "joined-group-1",
+    name: "Joined Group",
+    description: "",
+    memberInboxIds: ["joiner-inbox-123", JOIN_TEST_CREATOR_INBOX_ID],
+    createdAt: new Date().toISOString(),
+  };
+  const notImplemented = () => {
+    throw new Error("Not implemented in join test stub");
+  };
+
+  return {
+    inboxId: "joiner-inbox-123",
+    sendMessage: notImplemented,
+    createDm: async (peerInboxId) => Result.ok({ dmId: "dm-1", peerInboxId }),
+    sendDmMessage: async () => Result.ok("dm-msg-1"),
+    syncAll: async () => {
+      syncCount += 1;
+      return Result.ok();
+    },
+    syncGroup: notImplemented,
+    getGroupInfo: notImplemented,
+    listGroups: async () => Result.ok(syncCount > 0 ? [joinedGroup] : []),
+    addMembers: notImplemented,
+    removeMembers: notImplemented,
+    updateGroupMetadata: notImplemented,
+    leaveGroup: notImplemented,
+    addAdmin: notImplemented,
+    removeAdmin: notImplemented,
+    addSuperAdmin: notImplemented,
+    removeSuperAdmin: notImplemented,
+    createGroup: notImplemented,
+    getMessageById: notImplemented,
+    listMessages: notImplemented,
+    streamAllMessages: async () =>
+      Result.ok({ messages: emptyAsyncIterable(), abort: () => {} }),
+    streamGroups: async () =>
+      Result.ok({ groups: emptyAsyncIterable(), abort: () => {} }),
+    getConsentState: async () => Result.ok("unknown" as const),
+    setConsentState: async () => Result.ok(undefined),
   };
 }
 
@@ -310,6 +395,60 @@ describe("conversation actions", () => {
       if (Result.isError(result)) {
         expect(result.error.category).toBe("not_found");
       }
+    });
+  });
+
+  describe("chat.join", () => {
+    test("attaches the joined identity to the live runtime after a successful join", async () => {
+      const attachedIdentityIds: string[] = [];
+      const inviteUrl = await buildJoinInviteUrl();
+      const joinClient = createJoinMockClient();
+      const joinClientFactory: XmtpClientFactory = {
+        create: async () => Result.ok(joinClient),
+      };
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        getManagedClientForGroup: (groupId) =>
+          [...managedClients.values()].find((managed) =>
+            managed.groupIds.has(groupId),
+          ),
+        getGroupInfo: async (groupId) =>
+          Result.err(NotFoundError.create("group", groupId) as SignetError),
+        idMappings,
+        clientFactory: joinClientFactory,
+        signerProviderFactory: () => createJoinMockSignerProvider(),
+        attachManagedIdentity: async (identityId) => {
+          attachedIdentityIds.push(identityId);
+          return Result.ok(undefined);
+        },
+        config: {
+          dataDir: ":memory:",
+          env: "dev",
+          appVersion: "xmtp-signet/test",
+        },
+      };
+
+      const actions = createConversationActions(deps);
+      const joinAction = actions.find((a) => a.id === "chat.join");
+      expect(joinAction).toBeDefined();
+      if (!joinAction) return;
+
+      const result = await joinAction.handler(
+        {
+          inviteUrl,
+          label: "joiner",
+          timeoutSeconds: 2,
+        },
+        stubCtx(),
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value.groupId).toBe("joined-group-1");
+      expect(attachedIdentityIds).toEqual([result.value.identityId]);
     });
   });
 

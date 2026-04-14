@@ -31,6 +31,14 @@ function makeRawMessageEvent(content: unknown): CoreRawEvent {
   };
 }
 
+function makeRawGroupJoinedEvent(groupId: string): CoreRawEvent {
+  return {
+    type: "raw.group.joined",
+    groupId,
+    groupName: "",
+  };
+}
+
 async function buildValidSlug(): Promise<string> {
   const result = await generateConvosInviteSlug({
     conversationId: TEST_CONVERSATION_ID,
@@ -158,5 +166,117 @@ describe("startManagedInviteHostListener", () => {
 
     expect(addedGroupId).toBe(TEST_CONVERSATION_ID);
     expect(addedInboxIds).toEqual([TEST_REQUESTER_INBOX_ID]);
+  });
+
+  test("scans a newly discovered conversation for invite requests", async () => {
+    const slug = await buildValidSlug();
+
+    const addedByIdentity: string[] = [];
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [
+          { id: "wrong", inboxId: WRONG_CREATOR_INBOX_ID },
+          { id: "right", inboxId: RIGHT_CREATOR_INBOX_ID },
+        ];
+      },
+      async getWalletPrivateKeyHex(identityId) {
+        return Result.ok(
+          identityId === "right"
+            ? RIGHT_PRIVATE_KEY_HEX
+            : WRONG_PRIVATE_KEY_HEX,
+        );
+      },
+      getManagedClient(identityId) {
+        return {
+          addMembers: async (groupId, inboxIds) => {
+            addedByIdentity.push(
+              `${identityId}:${groupId}:${inboxIds.join(",")}`,
+            );
+            return Result.ok(undefined);
+          },
+          listMessages: async (groupId) =>
+            Result.ok([
+              {
+                messageId: "dm-msg-1",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]),
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.(makeRawGroupJoinedEvent("dm-join-1"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addedByIdentity).toEqual([
+      `right:${TEST_CONVERSATION_ID}:${TEST_REQUESTER_INBOX_ID}`,
+    ]);
+  });
+
+  test("does not process the same invite twice when the message stream catches up", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            return Result.ok(undefined);
+          },
+          listMessages: async (groupId) =>
+            Result.ok([
+              {
+                messageId: "dm-msg-2",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]),
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.(makeRawGroupJoinedEvent("dm-join-2"));
+    capturedHandler?.({
+      ...makeRawMessageEvent(slug),
+      messageId: "dm-msg-2",
+      groupId: "dm-join-2",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addMemberCalls).toBe(1);
   });
 });

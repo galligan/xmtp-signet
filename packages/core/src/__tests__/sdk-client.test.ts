@@ -332,14 +332,17 @@ describe("createSdkClient", () => {
   });
 
   describe("streamAllMessages", () => {
-    test("returns a message stream", async () => {
+    test("returns a message stream from the all-messages XMTP stream", async () => {
       const msgs = [
         createMockDecodedMessage({ id: "m1" }),
         createMockDecodedMessage({ id: "m2" }),
       ];
       const native = createMockSdkNativeClient();
-      native.conversations.streamAllGroupMessages = async () =>
+      native.conversations.streamAllMessages = async () =>
         createMockAsyncStreamProxy(msgs);
+      native.conversations.streamAllGroupMessages = async () => {
+        throw new Error("streamAllGroupMessages should not be used here");
+      };
       const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
 
       const result = await client.streamAllMessages();
@@ -355,11 +358,14 @@ describe("createSdkClient", () => {
   });
 
   describe("streamGroups", () => {
-    test("returns a group stream", async () => {
+    test("returns a conversation stream from the all-conversations XMTP stream", async () => {
       const groups = [createMockGroup({ id: "g1", name: "New Group" })];
       const native = createMockSdkNativeClient();
-      native.conversations.streamGroups = async () =>
+      native.conversations.stream = async () =>
         createMockAsyncStreamProxy(groups);
+      native.conversations.streamGroups = async () => {
+        throw new Error("streamGroups should not be used here");
+      };
       const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
 
       const result = await client.streamGroups();
