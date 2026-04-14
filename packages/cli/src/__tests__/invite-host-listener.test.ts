@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { generateConvosInviteSlug, type CoreRawEvent } from "@xmtp/signet-core";
-import type { SignetError } from "@xmtp/signet-schemas";
+import { InternalError, type SignetError } from "@xmtp/signet-schemas";
 import { startManagedInviteHostListener } from "../invite-host-listener.js";
 
 const WRONG_PRIVATE_KEY_HEX =
@@ -342,5 +342,53 @@ describe("startManagedInviteHostListener", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(addMemberCalls).toBe(1);
+  });
+
+  test("retries an invite after a transient join-processing failure", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            if (addMemberCalls === 1) {
+              return Result.err(
+                InternalError.create("temporary addMembers failure"),
+              );
+            }
+            return Result.ok(undefined);
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    const retryEvent = {
+      ...makeRawMessageEvent(slug),
+      messageId: "retry-msg-1",
+    };
+
+    capturedHandler?.(retryEvent);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    capturedHandler?.(retryEvent);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addMemberCalls).toBe(2);
   });
 });

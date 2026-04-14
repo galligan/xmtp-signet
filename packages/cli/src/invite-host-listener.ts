@@ -177,7 +177,7 @@ async function processInviteCandidate(
       deps,
       event,
     );
-    if (result !== null) {
+    if (result !== null && Result.isOk(result)) {
       processedMessageIds.add(event.messageId);
     }
   } finally {
