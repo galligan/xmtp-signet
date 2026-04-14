@@ -124,6 +124,76 @@ describe("xs utility command wiring", () => {
     ]);
     expect(harness.stdout[0]).toContain("Query: support");
   });
+
+  test("routes message search through the daemon with admin read elevation flag", async () => {
+    const harness = createHarness({
+      query: "secret",
+      matches: [],
+      total: 0,
+    });
+    const commands = createUtilityCommands(harness.deps);
+    const search = commands.find((command) => command.name() === "search");
+    expect(search).toBeDefined();
+
+    await search!.parseAsync([
+      "node",
+      "search",
+      "secret",
+      "--chat",
+      "conv_secret",
+      "--as",
+      "tester",
+      "--dangerously-allow-message-read",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "search.messages",
+        params: {
+          query: "secret",
+          chatId: "conv_secret",
+          identityLabel: "tester",
+          dangerouslyAllowMessageRead: true,
+        },
+      },
+    ]);
+    expect(harness.stdout).toEqual(["No messages found.\n"]);
+  });
+
+  test("does not pass admin read elevation flag to resource search", async () => {
+    const harness = createHarness({
+      query: "policy",
+      matches: [],
+      total: 0,
+    });
+    const commands = createUtilityCommands(harness.deps);
+    const search = commands.find((command) => command.name() === "search");
+    expect(search).toBeDefined();
+
+    await search!.parseAsync([
+      "node",
+      "search",
+      "policy",
+      "--type",
+      "policy",
+      "--dangerously-allow-message-read",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "search.resources",
+        params: {
+          query: "policy",
+          type: "policy",
+        },
+      },
+    ]);
+    expect(harness.stdout).toEqual(["No resources found.\n"]);
+  });
 });
 
 describe("xs utility command errors", () => {

@@ -482,6 +482,7 @@ describe("utility commands", () => {
     expect(flags).toContain("--type");
     expect(flags).toContain("--limit");
     expect(flags).toContain("--as");
+    expect(flags).toContain("--dangerously-allow-message-read");
     expect(flags).toContain("--config");
     expect(flags).toContain("--json");
   });

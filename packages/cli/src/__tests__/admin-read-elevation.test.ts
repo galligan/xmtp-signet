@@ -52,6 +52,35 @@ describe("createAdminReadElevationManager", () => {
     expect(authorizeCalls).toBe(1);
   });
 
+  test("treats search.messages as an elevated message-read operation", async () => {
+    let authorizeCalls = 0;
+    const manager = createAdminReadElevationManager({
+      approver: {
+        async authorize() {
+          authorizeCalls += 1;
+          return Result.ok(undefined);
+        },
+        async getApprovalFingerprint() {
+          return Result.ok("approval-fingerprint");
+        },
+      },
+    });
+
+    const result = await manager.resolveForRequest({
+      method: "search.messages",
+      params: {
+        chatId: "conv_search",
+        query: "secret",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(authorizeCalls).toBe(1);
+  });
+
   test("re-prompts after the cached elevation expires", async () => {
     let authorizeCalls = 0;
     let currentTime = new Date("2026-04-14T15:00:00.000Z");
@@ -295,5 +324,131 @@ describe("createAdminReadElevationManager", () => {
 
     expect(result.isOk()).toBe(true);
     expect(unrefCalls).toBe(1);
+  });
+
+  test("rolls back disclosure and cache state when approval audit fails", async () => {
+    let authorizeCalls = 0;
+    let failApprovalAudit = true;
+    const disclosureStore = createAdminReadDisclosureStore();
+    const manager = createAdminReadElevationManager({
+      approver: {
+        async authorize() {
+          authorizeCalls += 1;
+          return Result.ok(undefined);
+        },
+        async getApprovalFingerprint() {
+          return Result.ok("approval-fingerprint");
+        },
+      },
+      disclosureStore,
+      auditLog: {
+        path: ":memory:",
+        async append(entry) {
+          if (
+            failApprovalAudit &&
+            entry.action === "admin.read-elevation.approved"
+          ) {
+            throw new Error("disk full");
+          }
+        },
+        async tail() {
+          return [];
+        },
+        async readAll() {
+          return [];
+        },
+      },
+    });
+
+    const first = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "conv_audit_fail",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(first.isErr()).toBe(true);
+    expect(disclosureStore.get("conv_audit_fail")).toBeUndefined();
+
+    failApprovalAudit = false;
+    const second = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "conv_audit_fail",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(second.isOk()).toBe(true);
+    expect(authorizeCalls).toBe(2);
+  });
+
+  test("clears disclosure state even when expiry audit fails", async () => {
+    let currentTime = new Date("2026-04-14T15:00:00.000Z");
+    const disclosureStore = createAdminReadDisclosureStore({
+      now: () => currentTime,
+    });
+    const manager = createAdminReadElevationManager({
+      approver: {
+        async authorize() {
+          return Result.ok(undefined);
+        },
+        async getApprovalFingerprint() {
+          return Result.ok("approval-fingerprint");
+        },
+      },
+      disclosureStore,
+      auditLog: {
+        path: ":memory:",
+        async append(entry) {
+          if (entry.action === "admin.read-elevation.expired") {
+            throw new Error("audit unavailable");
+          }
+        },
+        async tail() {
+          return [];
+        },
+        async readAll() {
+          return [];
+        },
+      },
+      now: () => currentTime,
+      ttlMs: 1_000,
+    });
+
+    const first = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "conv_expiry_cleanup",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(first.isOk()).toBe(true);
+    expect(disclosureStore.get("conv_expiry_cleanup")).toEqual({
+      operatorId: "owner",
+      expiresAt: "2026-04-14T15:00:01.000Z",
+    });
+
+    currentTime = new Date("2026-04-14T15:00:02.000Z");
+    const second = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "conv_expiry_cleanup",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(second.isErr()).toBe(true);
+    expect(disclosureStore.get("conv_expiry_cleanup")).toBeUndefined();
   });
 });

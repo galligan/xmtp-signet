@@ -61,7 +61,11 @@ interface CachedElevation {
 }
 
 function isMessageReadMethod(method: string): boolean {
-  return method === "message.list" || method === "message.info";
+  return (
+    method === "message.list" ||
+    method === "message.info" ||
+    method === "search.messages"
+  );
 }
 
 function wantsDangerousMessageRead(params: Record<string, unknown>): boolean {
@@ -232,6 +236,7 @@ export function createAdminReadElevationManager(
     cache.delete(cacheKey);
     clearExpirationTimer(cacheKey);
 
+    const disclosureResult = await syncDisclosureExpiry(cached);
     const expiredAudit = await appendExpiredAudit(
       input ?? {
         method: "message.list",
@@ -242,11 +247,7 @@ export function createAdminReadElevationManager(
       cached.elevation,
       cached.chatId,
     );
-    if (Result.isError(expiredAudit)) {
-      return expiredAudit;
-    }
 
-    const disclosureResult = await syncDisclosureExpiry(cached);
     if (Result.isError(disclosureResult)) {
       const auditResult = await appendAudit({
         action: "admin.read-elevation.disclosure-refresh-failed",
@@ -264,6 +265,10 @@ export function createAdminReadElevationManager(
         return auditResult;
       }
       return disclosureResult;
+    }
+
+    if (Result.isError(expiredAudit)) {
+      return expiredAudit;
     }
 
     return Result.ok(undefined);
@@ -400,9 +405,6 @@ export function createAdminReadElevationManager(
         return disclosureResult;
       }
 
-      cache.set(cacheKey, nextCached);
-      scheduleExpiration(nextCached);
-
       const auditResult = await appendAudit({
         action: "admin.read-elevation.approved",
         success: true,
@@ -417,8 +419,15 @@ export function createAdminReadElevationManager(
         },
       });
       if (Result.isError(auditResult)) {
+        const rollbackResult = await syncDisclosureExpiry(nextCached);
+        if (Result.isError(rollbackResult)) {
+          return rollbackResult;
+        }
         return auditResult;
       }
+
+      cache.set(cacheKey, nextCached);
+      scheduleExpiration(nextCached);
 
       return Result.ok(elevation);
     },

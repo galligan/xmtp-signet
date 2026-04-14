@@ -280,6 +280,103 @@ describe("createSearchActions", () => {
       expect(value.matches).toHaveLength(0);
     });
 
+    test("requires admin read elevation for message search", async () => {
+      await seedIdentity();
+
+      const msgs: Record<string, XmtpDecodedMessage[]> = {
+        "group-1": [makeMessage("group-1", "secret message")],
+      };
+      const groups = [makeGroup("group-1", "G1")];
+      const client = createMockClient({ messages: msgs, groups });
+      const deps = buildDeps(client);
+      const actions = createSearchActions(deps);
+
+      const spec = actions.find((a) => a.id === "search.messages");
+      const result = await spec!.handler!(
+        { query: "secret", chatId: "group-1" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          adminAuth: { adminKeyFingerprint: "admin-fingerprint" },
+        },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("permission");
+        expect(result.error.message).toContain("owner-approved elevation");
+      }
+    });
+
+    test("requires a specific chat for admin message search", async () => {
+      await seedIdentity();
+
+      const msgs: Record<string, XmtpDecodedMessage[]> = {
+        "group-1": [makeMessage("group-1", "secret message")],
+      };
+      const groups = [makeGroup("group-1", "G1")];
+      const client = createMockClient({ messages: msgs, groups });
+      const deps = buildDeps(client);
+      const actions = createSearchActions(deps);
+
+      const spec = actions.find((a) => a.id === "search.messages");
+      const result = await spec!.handler!(
+        { query: "secret" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          adminAuth: { adminKeyFingerprint: "admin-fingerprint" },
+          adminReadElevation: {
+            approvalId: "approval_123",
+            scope: { chatIds: ["group-1"] },
+            approvedAt: "2026-04-14T15:00:00.000Z",
+            expiresAt: "2999-01-01T00:00:00.000Z",
+            approvalKeyFingerprint: "approval-fingerprint",
+          },
+        },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.category).toBe("permission");
+        expect(result.error.message).toContain("specific conversation");
+      }
+    });
+
+    test("allows admin message search when elevation covers the chat", async () => {
+      await seedIdentity();
+
+      const msgs: Record<string, XmtpDecodedMessage[]> = {
+        "group-1": [makeMessage("group-1", "secret message")],
+      };
+      const groups = [makeGroup("group-1", "G1")];
+      const client = createMockClient({ messages: msgs, groups });
+      const deps = buildDeps(client);
+      const actions = createSearchActions(deps);
+
+      const spec = actions.find((a) => a.id === "search.messages");
+      const result = await spec!.handler!(
+        { query: "secret", chatId: "group-1" },
+        {
+          requestId: "test",
+          signal: AbortSignal.timeout(5000),
+          adminAuth: { adminKeyFingerprint: "admin-fingerprint" },
+          adminReadElevation: {
+            approvalId: "approval_123",
+            scope: { chatIds: ["group-1"] },
+            approvedAt: "2026-04-14T15:00:00.000Z",
+            expiresAt: "2999-01-01T00:00:00.000Z",
+            approvalKeyFingerprint: "approval-fingerprint",
+          },
+        },
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        expect(result.value.matches).toHaveLength(1);
+      }
+    });
+
     test("errors when no identity exists", async () => {
       const client = createMockClient();
       const deps = buildDeps(client);

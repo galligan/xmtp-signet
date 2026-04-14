@@ -270,6 +270,10 @@ export function createUtilityCommands(
     .addOption(searchTypeOption)
     .option("--limit <n>", "Limit results")
     .option("--as <label>", "Identity label for message search")
+    .option(
+      "--dangerously-allow-message-read",
+      "Request a locally approved admin read elevation for message search",
+    )
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .action(
@@ -280,6 +284,7 @@ export function createUtilityCommands(
           type?: string;
           limit?: string;
           as?: string;
+          dangerouslyAllowMessageRead?: true;
           config?: string;
           json?: true;
         },
@@ -348,6 +353,9 @@ export function createUtilityCommands(
             input["limit"] = Number.parseInt(opts.limit, 10);
           }
           if (opts.as !== undefined) input["identityLabel"] = opts.as;
+          if (opts.dangerouslyAllowMessageRead === true) {
+            input["dangerouslyAllowMessageRead"] = true;
+          }
 
           const result = await withDaemonClient(
             { configPath: opts.config },
