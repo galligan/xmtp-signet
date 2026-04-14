@@ -207,7 +207,24 @@ export function createAdminReadElevationManager(
 
     const notifyResult = await notifyDisclosureChanged(changedChats);
     if (Result.isError(notifyResult)) {
-      deps.disclosureStore.delete([cached.chatId], cached.sessionKey);
+      const rollbackChats = deps.disclosureStore.delete(
+        [cached.chatId],
+        cached.sessionKey,
+      );
+      const rollbackResult = await notifyDisclosureChanged(rollbackChats);
+      if (Result.isError(rollbackResult)) {
+        return Result.err(
+          InternalError.create(
+            "Failed to roll back admin read disclosure refresh",
+            {
+              reason: notifyResult.error.message,
+              category: notifyResult.error.category,
+              rollbackReason: rollbackResult.error.message,
+              rollbackCategory: rollbackResult.error.category,
+            },
+          ),
+        );
+      }
       return notifyResult;
     }
 

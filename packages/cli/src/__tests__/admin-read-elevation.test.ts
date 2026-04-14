@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { PermissionError } from "@xmtp/signet-schemas";
+import { InternalError, PermissionError } from "@xmtp/signet-schemas";
 import { createAdminReadElevationManager } from "../admin/read-elevation.js";
 import { createAdminReadDisclosureStore } from "../admin/read-disclosure-store.js";
 
@@ -386,6 +386,53 @@ describe("createAdminReadElevationManager", () => {
 
     expect(second.isOk()).toBe(true);
     expect(authorizeCalls).toBe(2);
+  });
+
+  test("replays disclosure refresh to roll back partial approval updates", async () => {
+    const disclosureStore = createAdminReadDisclosureStore();
+    const changedChatBatches: string[][] = [];
+    let disclosureRefreshCalls = 0;
+
+    const manager = createAdminReadElevationManager({
+      approver: {
+        async authorize() {
+          return Result.ok(undefined);
+        },
+        async getApprovalFingerprint() {
+          return Result.ok("approval-fingerprint");
+        },
+      },
+      disclosureStore,
+      onDisclosureChanged: async (chatIds) => {
+        changedChatBatches.push([...chatIds]);
+        disclosureRefreshCalls += 1;
+        if (disclosureRefreshCalls === 1) {
+          return Result.err(
+            InternalError.create("seal refresh failed", {
+              stage: "approval",
+            }),
+          );
+        }
+        return Result.ok(undefined);
+      },
+    });
+
+    const result = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "conv_partial_refresh",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(changedChatBatches).toEqual([
+      ["conv_partial_refresh"],
+      ["conv_partial_refresh"],
+    ]);
+    expect(disclosureStore.get("conv_partial_refresh")).toBeUndefined();
   });
 
   test("clears disclosure state even when expiry audit fails", async () => {
