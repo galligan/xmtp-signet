@@ -48,6 +48,8 @@ export interface AdminReadElevationManagerDeps {
   readonly disclosureStore?: AdminReadDisclosureStore;
   readonly onDisclosureChanged?: AdminReadElevationDisclosureChangeHandler;
   readonly disclosureActorId?: AdminReadDisclosure["operatorId"];
+  readonly normalizeChatId?: (chatId: string) => string;
+  readonly setTimeoutFn?: typeof setTimeout;
   readonly ttlMs?: number;
   readonly now?: () => Date;
 }
@@ -90,6 +92,8 @@ export function createAdminReadElevationManager(
 ): AdminReadElevationManager {
   const ttlMs = deps.ttlMs ?? DEFAULT_READ_ELEVATION_TTL_MS;
   const now = deps.now ?? (() => new Date());
+  const normalizeChatId = deps.normalizeChatId ?? ((chatId: string) => chatId);
+  const setTimeoutFn = deps.setTimeoutFn ?? setTimeout;
   const cache = new Map<string, CachedElevation>();
   const expirationTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const disclosureActorId = deps.disclosureActorId ?? "owner";
@@ -273,9 +277,15 @@ export function createAdminReadElevationManager(
       0,
       Date.parse(cached.elevation.expiresAt) - now().getTime(),
     );
-    const timer = setTimeout(() => {
+    const timer = setTimeoutFn(() => {
       void expireCachedElevation(cached);
     }, delayMs);
+    if (typeof timer === "object" && timer !== null && "unref" in timer) {
+      const unref = timer.unref;
+      if (typeof unref === "function") {
+        unref.call(timer);
+      }
+    }
     expirationTimers.set(cacheKey, timer);
   }
 
@@ -294,8 +304,9 @@ export function createAdminReadElevationManager(
       if (chatId === null) {
         return Result.ok(undefined);
       }
+      const canonicalChatId = normalizeChatId(chatId);
 
-      const cacheKey = buildCacheKey(input.sessionKey, chatId);
+      const cacheKey = buildCacheKey(input.sessionKey, canonicalChatId);
       const cached = cache.get(cacheKey);
       const nowMs = now().getTime();
 
@@ -305,7 +316,7 @@ export function createAdminReadElevationManager(
           const reuseAudit = await appendReuseAudit(
             input,
             cached.elevation,
-            chatId,
+            canonicalChatId,
           );
           if (Result.isError(reuseAudit)) {
             return reuseAudit;
@@ -333,7 +344,7 @@ export function createAdminReadElevationManager(
         const auditResult = await appendAudit({
           action: "admin.read-elevation.denied",
           success: false,
-          target: chatId,
+          target: canonicalChatId,
           detail: {
             method: input.method,
             adminKeyFingerprint: input.adminFingerprint,
@@ -356,14 +367,14 @@ export function createAdminReadElevationManager(
       const approvedAt = now();
       const elevation: AdminReadElevationType = {
         approvalId: `approval_${crypto.randomUUID().replaceAll("-", "")}`,
-        scope: { chatIds: [chatId] },
+        scope: { chatIds: [canonicalChatId] },
         approvedAt: approvedAt.toISOString(),
         expiresAt: new Date(approvedAt.getTime() + ttlMs).toISOString(),
         approvalKeyFingerprint: fingerprintResult.value,
       };
       const nextCached: CachedElevation = {
         elevation,
-        chatId,
+        chatId: canonicalChatId,
         sessionKey: input.sessionKey,
       };
 
@@ -372,7 +383,7 @@ export function createAdminReadElevationManager(
         const auditResult = await appendAudit({
           action: "admin.read-elevation.disclosure-refresh-failed",
           success: false,
-          target: chatId,
+          target: canonicalChatId,
           detail: {
             method: input.method,
             adminKeyFingerprint: input.adminFingerprint,
@@ -395,7 +406,7 @@ export function createAdminReadElevationManager(
       const auditResult = await appendAudit({
         action: "admin.read-elevation.approved",
         success: true,
-        target: chatId,
+        target: canonicalChatId,
         detail: {
           method: input.method,
           adminKeyFingerprint: input.adminFingerprint,

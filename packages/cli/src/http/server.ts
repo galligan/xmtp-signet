@@ -308,30 +308,6 @@ export function createHttpServer(
       );
     }
 
-    const paramsResult = await parseActionParams(req, route.inputSource);
-    if (!paramsResult.isOk()) {
-      return errorResponse(
-        paramsResult.error.category,
-        paramsResult.error.message,
-        paramsResult.error.context ?? null,
-      );
-    }
-
-    const parseResult = route.spec.input.safeParse(paramsResult.value);
-    if (!parseResult.success) {
-      const firstIssue = parseResult.error.issues[0];
-      const field = firstIssue?.path.join(".") ?? "params";
-      const reason = firstIssue?.message ?? "Validation failed";
-      const error = ValidationError.create(field, reason, {
-        issues: parseResult.error.issues,
-      });
-      return errorResponse(
-        error.category,
-        error.message,
-        error.context ?? null,
-      );
-    }
-
     if (route.auth === "admin") {
       const verifyResult = await deps.verifyAdminJwt(token);
       if (Result.isError(verifyResult)) {
@@ -339,6 +315,30 @@ export function createHttpServer(
           "auth",
           verifyResult.error.message,
           verifyResult.error.context ?? null,
+        );
+      }
+
+      const paramsResult = await parseActionParams(req, route.inputSource);
+      if (!paramsResult.isOk()) {
+        return errorResponse(
+          paramsResult.error.category,
+          paramsResult.error.message,
+          paramsResult.error.context ?? null,
+        );
+      }
+
+      const parseResult = route.spec.input.safeParse(paramsResult.value);
+      if (!parseResult.success) {
+        const firstIssue = parseResult.error.issues[0];
+        const field = firstIssue?.path.join(".") ?? "params";
+        const reason = firstIssue?.message ?? "Validation failed";
+        const error = ValidationError.create(field, reason, {
+          issues: parseResult.error.issues,
+        });
+        return errorResponse(
+          error.category,
+          error.message,
+          error.context ?? null,
         );
       }
 
@@ -387,6 +387,30 @@ export function createHttpServer(
     const credentialResult = await deps.credentialManager.lookupByToken(token);
     if (!credentialResult.isOk()) {
       return errorResponse("auth", "Invalid credential token", null);
+    }
+
+    const paramsResult = await parseActionParams(req, route.inputSource);
+    if (!paramsResult.isOk()) {
+      return errorResponse(
+        paramsResult.error.category,
+        paramsResult.error.message,
+        paramsResult.error.context ?? null,
+      );
+    }
+
+    const parseResult = route.spec.input.safeParse(paramsResult.value);
+    if (!parseResult.success) {
+      const firstIssue = parseResult.error.issues[0];
+      const field = firstIssue?.path.join(".") ?? "params";
+      const reason = firstIssue?.message ?? "Validation failed";
+      const error = ValidationError.create(field, reason, {
+        issues: parseResult.error.issues,
+      });
+      return errorResponse(
+        error.category,
+        error.message,
+        error.context ?? null,
+      );
     }
 
     const ctx = makeHandlerContext({

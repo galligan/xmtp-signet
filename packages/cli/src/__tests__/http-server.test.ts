@@ -309,6 +309,43 @@ describe("HttpServer", () => {
     expect(approver.authorizeCalls).toBe(1);
   });
 
+  test("derived admin action route authenticates before validating params", async () => {
+    const registry = createActionRegistry();
+    registry.register(
+      makeHttpActionSpec("message.info", {
+        description: "Read a message",
+        intent: "read",
+        input: z.object({
+          chatId: z.string(),
+          messageId: z.string(),
+        }),
+        http: {
+          auth: "admin",
+        },
+      }),
+    );
+
+    const deps = makeDeps({
+      registry,
+      verifyAdminJwt: async () => Result.err(AuthError.create("Invalid JWT")),
+    });
+    const port = await startTestServer(deps);
+
+    const res = await fetch(
+      `http://127.0.0.1:${port}/v1/actions/message/info`,
+      {
+        headers: {
+          Authorization: "Bearer bad-jwt",
+        },
+      },
+    );
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.category).toBe("auth");
+  });
+
   test("derived credential action route executes directly from the registry", async () => {
     const registry = createActionRegistry();
     registry.register(
@@ -377,6 +414,42 @@ describe("HttpServer", () => {
       authenticatedCredentialId: "cred_123",
       requestedCredentialId: "cred_123",
     });
+  });
+
+  test("derived credential action route authenticates before validating params", async () => {
+    const registry = createActionRegistry();
+    registry.register(
+      makeHttpActionSpec("reveal.list", {
+        description: "List active reveals",
+        intent: "read",
+        input: z.object({
+          credentialId: z.string(),
+        }),
+        http: {
+          auth: "credential",
+        },
+      }),
+    );
+
+    const deps = makeDeps({
+      registry,
+      credentialManager: {
+        lookupByToken: async () =>
+          Result.err(AuthError.create("Invalid credential token")),
+      } as HttpServerDeps["credentialManager"],
+    });
+    const port = await startTestServer(deps);
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/actions/reveal/list`, {
+      headers: {
+        Authorization: "Bearer bad-credential-token",
+      },
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.category).toBe("auth");
   });
 
   test("unauthenticated request to /v1/admin returns 401", async () => {

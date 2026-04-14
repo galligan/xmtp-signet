@@ -203,4 +203,97 @@ describe("createAdminReadElevationManager", () => {
       expiresAt: "2026-04-14T15:00:03.000Z",
     });
   });
+
+  test("normalizes chat IDs before caching elevation and disclosure state", async () => {
+    let authorizeCalls = 0;
+    const currentTime = new Date("2026-04-14T15:00:00.000Z");
+    const disclosureStore = createAdminReadDisclosureStore({
+      now: () => currentTime,
+    });
+    const manager = createAdminReadElevationManager({
+      approver: {
+        async authorize() {
+          authorizeCalls += 1;
+          return Result.ok(undefined);
+        },
+        async getApprovalFingerprint() {
+          return Result.ok("approval-fingerprint");
+        },
+      },
+      disclosureStore,
+      normalizeChatId: (chatId) =>
+        chatId === "group_raw" ? "conv_normalized" : chatId,
+      ttlMs: 60_000,
+      now: () => currentTime,
+    });
+
+    const first = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "group_raw",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+    const second = await manager.resolveForRequest({
+      method: "message.info",
+      params: {
+        chatId: "conv_normalized",
+        messageId: "msg_1",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(first.isOk()).toBe(true);
+    expect(second.isOk()).toBe(true);
+    if (first.isOk() && second.isOk()) {
+      expect(first.value?.approvalId).toBe(second.value?.approvalId);
+      expect(first.value?.scope.chatIds).toEqual(["conv_normalized"]);
+      expect(second.value?.scope.chatIds).toEqual(["conv_normalized"]);
+    }
+    expect(authorizeCalls).toBe(1);
+    expect(disclosureStore.get("conv_normalized")).toEqual({
+      operatorId: "owner",
+      expiresAt: "2026-04-14T15:01:00.000Z",
+    });
+  });
+
+  test("unrefs expiry timers so elevation caching does not block shutdown", async () => {
+    let unrefCalls = 0;
+    const manager = createAdminReadElevationManager({
+      approver: {
+        async authorize() {
+          return Result.ok(undefined);
+        },
+        async getApprovalFingerprint() {
+          return Result.ok("approval-fingerprint");
+        },
+      },
+      setTimeoutFn: ((handler, delay) => {
+        void handler;
+        void delay;
+        return {
+          unref() {
+            unrefCalls += 1;
+          },
+        } as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout,
+    });
+
+    const result = await manager.resolveForRequest({
+      method: "message.list",
+      params: {
+        chatId: "conv_unref",
+        dangerouslyAllowMessageRead: true,
+      },
+      adminFingerprint: "admin-fingerprint",
+      sessionKey: "admin-fingerprint:test-jti",
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(unrefCalls).toBe(1);
+  });
 });

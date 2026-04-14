@@ -418,6 +418,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
           auditLog: d.auditLog,
           disclosureStore: readDisclosureStore,
           disclosureActorId: "owner",
+          normalizeChatId: (chatId) =>
+            idMappingStoreRef?.resolve(chatId)?.localId ?? chatId,
           onDisclosureChanged: async (chatIds) => {
             const refreshedSealIds = new Set<string>();
 
