@@ -91,6 +91,8 @@ function createMockClient(options?: {
       Result.ok({ messages: emptyAsyncIterable(), abort: () => {} }),
     streamGroups: async () =>
       Result.ok({ groups: emptyAsyncIterable(), abort: () => {} }),
+    streamDms: async () =>
+      Result.ok({ dms: emptyAsyncIterable(), abort: () => {} }),
     getConsentState: async () => Result.ok("unknown" as const),
     setConsentState: async () => Result.ok(undefined),
   };
@@ -182,6 +184,8 @@ function createJoinMockClient(): XmtpClient {
       Result.ok({ messages: emptyAsyncIterable(), abort: () => {} }),
     streamGroups: async () =>
       Result.ok({ groups: emptyAsyncIterable(), abort: () => {} }),
+    streamDms: async () =>
+      Result.ok({ dms: emptyAsyncIterable(), abort: () => {} }),
     getConsentState: async () => Result.ok("unknown" as const),
     setConsentState: async () => Result.ok(undefined),
   };
@@ -449,6 +453,54 @@ describe("conversation actions", () => {
 
       expect(result.value.groupId).toBe("joined-group-1");
       expect(attachedIdentityIds).toEqual([result.value.identityId]);
+    });
+
+    test("returns success even when live attach fails after the durable join completes", async () => {
+      const inviteUrl = await buildJoinInviteUrl();
+      const joinClient = createJoinMockClient();
+      const joinClientFactory: XmtpClientFactory = {
+        create: async () => Result.ok(joinClient),
+      };
+
+      deps = {
+        identityStore,
+        getManagedClient: (id) => managedClients.get(id),
+        getManagedClientForGroup: (groupId) =>
+          [...managedClients.values()].find((managed) =>
+            managed.groupIds.has(groupId),
+          ),
+        getGroupInfo: async (groupId) =>
+          Result.err(NotFoundError.create("group", groupId) as SignetError),
+        idMappings,
+        clientFactory: joinClientFactory,
+        signerProviderFactory: () => createJoinMockSignerProvider(),
+        attachManagedIdentity: async () =>
+          Result.err(NotFoundError.create("identity", "attach-failed")),
+        config: {
+          dataDir: ":memory:",
+          env: "dev",
+          appVersion: "xmtp-signet/test",
+        },
+      };
+
+      const actions = createConversationActions(deps);
+      const joinAction = actions.find((a) => a.id === "chat.join");
+      expect(joinAction).toBeDefined();
+      if (!joinAction) return;
+
+      const result = await joinAction.handler(
+        {
+          inviteUrl,
+          label: "joiner",
+          timeoutSeconds: 2,
+        },
+        stubCtx(),
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value.groupId).toBe("joined-group-1");
     });
   });
 

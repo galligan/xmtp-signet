@@ -17,6 +17,7 @@ import type {
   SignerProviderLike,
   XmtpClientFactory,
   XmtpDecodedMessage,
+  XmtpDmEvent,
   XmtpGroupEvent,
 } from "./xmtp-client-factory.js";
 import type {
@@ -426,6 +427,26 @@ export class SignetCoreImpl {
     })();
   }
 
+  /**
+   * Consume DM discovery events and emit raw DM join events.
+   * DM conversations are intentionally not registered as group memberships.
+   */
+  #consumeDmStream(dms: AsyncIterable<XmtpDmEvent>): void {
+    void (async () => {
+      try {
+        for await (const dm of dms) {
+          this.#emitter.emit({
+            type: "raw.dm.joined",
+            dmId: dm.dmId,
+            peerInboxId: dm.peerInboxId,
+          });
+        }
+      } catch {
+        // Stream aborted or errored — expected during shutdown.
+      }
+    })();
+  }
+
   async #hydrateIdentity(
     identity: AgentIdentity,
     options: { registerNetworkIdentity: boolean },
@@ -485,9 +506,15 @@ export class SignetCoreImpl {
       groupIds: new Set(identity.groupId ? [identity.groupId] : []),
     };
 
-    if (this.#state === "running" || this.#state === "starting") {
+    if (
+      this.#state === "running" ||
+      this.#state === "starting" ||
+      this.#state === "local"
+    ) {
       this.#registry.register(managedClient);
+    }
 
+    if (this.#state === "running" || this.#state === "starting") {
       const syncResult = await client.syncAll();
       if (syncResult.isErr()) {
         return syncResult;
@@ -522,6 +549,17 @@ export class SignetCoreImpl {
         abort: groupStream.abort,
       });
       this.#consumeGroupStream(identity.id, groupStream.groups);
+
+      const dmStreamResult = await client.streamDms();
+      if (dmStreamResult.isErr()) {
+        return dmStreamResult;
+      }
+      const dmStream = dmStreamResult.value;
+      this.#streams.push({
+        identityId: identity.id,
+        abort: dmStream.abort,
+      });
+      this.#consumeDmStream(dmStream.dms);
     }
 
     return Result.ok(managedClient);

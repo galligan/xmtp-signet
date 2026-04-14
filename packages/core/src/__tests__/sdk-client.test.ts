@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createSdkClient } from "../sdk/sdk-client.js";
 import {
   createMockSdkNativeClient,
+  createMockDm,
   createMockGroup,
   createMockDecodedMessage,
   createMockAsyncStreamProxy,
@@ -358,13 +359,13 @@ describe("createSdkClient", () => {
   });
 
   describe("streamGroups", () => {
-    test("returns a conversation stream from the all-conversations XMTP stream", async () => {
+    test("returns a group stream from the group XMTP stream", async () => {
       const groups = [createMockGroup({ id: "g1", name: "New Group" })];
       const native = createMockSdkNativeClient();
-      native.conversations.stream = async () =>
+      native.conversations.streamGroups = async () =>
         createMockAsyncStreamProxy(groups);
-      native.conversations.streamGroups = async () => {
-        throw new Error("streamGroups should not be used here");
+      native.conversations.stream = async () => {
+        throw new Error("generic stream should not be used here");
       };
       const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
 
@@ -377,6 +378,29 @@ describe("createSdkClient", () => {
         }
         expect(collected).toHaveLength(1);
         expect(collected[0]!.groupId).toBe("g1");
+      }
+    });
+  });
+
+  describe("streamDms", () => {
+    test("returns a DM stream from the DM XMTP stream", async () => {
+      const dms = [createMockDm({ id: "dm-1", peerInboxId: "peer-1" })];
+      const native = createMockSdkNativeClient();
+      native.conversations.streamDms = async () =>
+        createMockAsyncStreamProxy(dms);
+      native.conversations.stream = async () => {
+        throw new Error("generic stream should not be used here");
+      };
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.streamDms();
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        const collected = [];
+        for await (const event of result.value.dms) {
+          collected.push(event);
+        }
+        expect(collected).toEqual([{ dmId: "dm-1", peerInboxId: "peer-1" }]);
       }
     });
   });

@@ -88,6 +88,15 @@ export interface SdkGroupShape {
   }>;
 }
 
+/** Mirrors the shape of a DM from @xmtp/node-sdk. */
+export interface SdkDmShape extends Omit<SdkGroupShape, "metadata"> {
+  readonly peerInboxId: string;
+  metadata(): Promise<{
+    creatorInboxId: string;
+    conversationType: "dm";
+  }>;
+}
+
 /** Mirrors the Conversations object from @xmtp/node-sdk */
 export interface SdkConversationsShape {
   getConversationById(id: string): Promise<SdkGroupShape | undefined>;
@@ -105,6 +114,7 @@ export interface SdkConversationsShape {
   streamGroups(
     options?: unknown,
   ): Promise<SdkAsyncStreamProxyShape<SdkGroupShape>>;
+  streamDms(options?: unknown): Promise<SdkAsyncStreamProxyShape<SdkDmShape>>;
   streamAllMessages(
     options?: unknown,
   ): Promise<SdkAsyncStreamProxyShape<SdkDecodedMessageShape>>;

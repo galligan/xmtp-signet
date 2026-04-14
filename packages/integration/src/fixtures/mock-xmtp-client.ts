@@ -271,6 +271,15 @@ export function createMockXmtpClient(options?: MockXmtpClientOptions): {
       return Result.ok(stream);
     },
 
+    async streamDms() {
+      return Result.ok({
+        dms: {
+          async *[Symbol.asyncIterator]() {},
+        },
+        abort: () => {},
+      });
+    },
+
     async getConsentState() {
       return Result.ok("unknown" as const);
     },

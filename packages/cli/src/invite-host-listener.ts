@@ -120,7 +120,8 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
 
 async function listRecentInviteCandidatesAcrossManagedIdentities(
   deps: ManagedInviteHostListenerDeps,
-  groupId: string,
+  conversationId: string,
+  processedMessageIds: ReadonlySet<string>,
 ): Promise<readonly RawMessageEvent[]> {
   const identities = await deps.listIdentities();
   const messages = new Map<string, RawMessageEvent>();
@@ -129,16 +130,31 @@ async function listRecentInviteCandidatesAcrossManagedIdentities(
     const managed = deps.getManagedClient(identity.id);
     if (!managed) continue;
 
-    const listResult = await managed.listMessages(
-      groupId,
-      RECENT_JOIN_SCAN_OPTIONS,
-    );
-    if (Result.isError(listResult)) continue;
+    let before: string | undefined;
 
-    for (const message of [...listResult.value].reverse()) {
-      const event = toRawMessageEvent(message);
-      if (!isInviteCandidate(event)) continue;
-      messages.set(event.messageId, event);
+    while (true) {
+      const listOptions = before
+        ? { ...RECENT_JOIN_SCAN_OPTIONS, before }
+        : RECENT_JOIN_SCAN_OPTIONS;
+      const listResult = await managed.listMessages(
+        conversationId,
+        listOptions,
+      );
+      if (Result.isError(listResult)) break;
+      if (listResult.value.length === 0) break;
+
+      for (const message of [...listResult.value].reverse()) {
+        const event = toRawMessageEvent(message);
+        if (!isInviteCandidate(event)) continue;
+        if (processedMessageIds.has(event.messageId)) continue;
+        messages.set(event.messageId, event);
+      }
+
+      if (listResult.value.length < RECENT_JOIN_SCAN_OPTIONS.limit) break;
+
+      const oldestMessage = listResult.value[listResult.value.length - 1];
+      before = oldestMessage?.sentAt;
+      if (!before) break;
     }
   }
 
@@ -192,11 +208,12 @@ export function startManagedInviteHostListener(
         return;
       }
 
-      if (event.type !== "raw.group.joined") return;
+      if (event.type !== "raw.dm.joined") return;
 
       const messages = await listRecentInviteCandidatesAcrossManagedIdentities(
         deps,
-        event.groupId,
+        event.dmId,
+        processedMessageIds,
       );
       for (const message of messages) {
         await processInviteCandidate(

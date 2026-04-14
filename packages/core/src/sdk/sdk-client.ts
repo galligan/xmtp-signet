@@ -13,13 +13,18 @@ import type {
   XmtpGroupInfo,
   ListMessagesOptions,
   MessageStream,
+  DmStream,
   GroupStream,
   ConsentEntityType,
   ConsentState,
 } from "../xmtp-client-factory.js";
 import { wrapSdkCall } from "./error-mapping.js";
 import { toGroupInfo, toDecodedMessage } from "./type-mapping.js";
-import { wrapMessageStream, wrapGroupStream } from "./stream-wrappers.js";
+import {
+  wrapMessageStream,
+  wrapDmStream,
+  wrapGroupStream,
+} from "./stream-wrappers.js";
 import type {
   SdkClientShape,
   SdkGroupShape,
@@ -477,11 +482,16 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
     async streamGroups(): Promise<Result<GroupStream, SignetError>> {
       return wrapSdkCall(async () => {
-        // Invite join requests arrive in newly created DMs, so the core needs
-        // to discover both group and DM conversations as they appear.
-        const stream = await client.conversations.stream();
+        const stream = await client.conversations.streamGroups();
         return wrapGroupStream(stream);
       }, "streamGroups");
+    },
+
+    async streamDms(): Promise<Result<DmStream, SignetError>> {
+      return wrapSdkCall(async () => {
+        const stream = await client.conversations.streamDms();
+        return wrapDmStream(stream);
+      }, "streamDms");
     },
 
     async getConsentState(

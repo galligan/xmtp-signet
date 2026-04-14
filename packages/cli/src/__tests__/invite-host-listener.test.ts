@@ -31,11 +31,11 @@ function makeRawMessageEvent(content: unknown): CoreRawEvent {
   };
 }
 
-function makeRawGroupJoinedEvent(groupId: string): CoreRawEvent {
+function makeRawDmJoinedEvent(dmId: string): CoreRawEvent {
   return {
-    type: "raw.group.joined",
-    groupId,
-    groupName: "",
+    type: "raw.dm.joined",
+    dmId,
+    peerInboxId: RIGHT_CREATOR_INBOX_ID,
   };
 }
 
@@ -219,7 +219,7 @@ describe("startManagedInviteHostListener", () => {
       },
     });
 
-    capturedHandler?.(makeRawGroupJoinedEvent("dm-join-1"));
+    capturedHandler?.(makeRawDmJoinedEvent("dm-join-1"));
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(addedByIdentity).toEqual([
@@ -269,12 +269,76 @@ describe("startManagedInviteHostListener", () => {
       },
     });
 
-    capturedHandler?.(makeRawGroupJoinedEvent("dm-join-2"));
+    capturedHandler?.(makeRawDmJoinedEvent("dm-join-2"));
     capturedHandler?.({
       ...makeRawMessageEvent(slug),
       messageId: "dm-msg-2",
       groupId: "dm-join-2",
     });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addMemberCalls).toBe(1);
+  });
+
+  test("paginates through DM history so older invite slugs are still discovered", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    const messages = Array.from({ length: 12 }, (_, index) => {
+      const sequence = 12 - index;
+      return {
+        messageId: `dm-page-${sequence}`,
+        groupId: "dm-join-3",
+        senderInboxId: TEST_REQUESTER_INBOX_ID,
+        contentType: "text",
+        content:
+          sequence === 1
+            ? slug
+            : `not-an-invite-${sequence.toString().padStart(2, "0")}`,
+        sentAt: new Date(Date.UTC(2026, 3, 13, 12, sequence, 0)).toISOString(),
+        threadId: null,
+      };
+    });
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            return Result.ok(undefined);
+          },
+          listMessages: async (_groupId, options) => {
+            const filtered = messages.filter((message) => {
+              if (!options?.before) return true;
+              return message.sentAt < options.before;
+            });
+
+            const sorted = [...filtered].sort((left, right) =>
+              right.sentAt.localeCompare(left.sentAt),
+            );
+
+            return Result.ok(sorted.slice(0, options?.limit ?? sorted.length));
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.(makeRawDmJoinedEvent("dm-join-3"));
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(addMemberCalls).toBe(1);

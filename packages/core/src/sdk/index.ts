@@ -16,6 +16,7 @@ export type {
 } from "./signer-adapter.js";
 export type {
   SdkClientShape,
+  SdkDmShape,
   SdkGroupShape,
   SdkGroupMemberShape,
   SdkDecodedMessageShape,
@@ -30,5 +31,9 @@ export type {
 } from "./sdk-types.js";
 export { wrapSdkCall } from "./error-mapping.js";
 export type { WrapSdkCallHints } from "./error-mapping.js";
-export { wrapMessageStream, wrapGroupStream } from "./stream-wrappers.js";
+export {
+  wrapMessageStream,
+  wrapDmStream,
+  wrapGroupStream,
+} from "./stream-wrappers.js";
 export { toGroupInfo, toDecodedMessage } from "./type-mapping.js";

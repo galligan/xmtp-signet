@@ -440,9 +440,11 @@ export function createConversationActions(
         const attachResult = await deps.attachManagedIdentity(
           joinResult.value.identityId,
         );
-        if (Result.isError(attachResult)) {
-          return attachResult;
-        }
+        // The durable join already succeeded at this point. If runtime
+        // hydration fails, return success and let the daemon recover the
+        // identity on the next attach or restart instead of encouraging
+        // duplicate join retries.
+        void attachResult;
       }
 
       const chatId = ensureLocalId(deps.idMappings, joinResult.value.groupId);

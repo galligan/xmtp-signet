@@ -18,6 +18,7 @@ import {
   createMockClientFactory,
   createMockXmtpClient,
   createTestConfig,
+  asyncIterableOf,
 } from "./fixtures.js";
 
 let core: SignetCoreImpl;
@@ -322,6 +323,80 @@ describe("SignetCoreImpl", () => {
       const managed = core.getManagedClient(created.value.id);
       expect(managed).toBeDefined();
       expect(managed?.inboxId).toBe(expectedInboxId);
+    });
+
+    test("attachPersistedIdentity registers an existing persisted identity in local mode", async () => {
+      await core.startLocal();
+
+      const created = await core.identityStore.create(null, "joiner");
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+
+      const expectedInboxId = `inbox-${created.value.id}`;
+      const setInboxId = await core.identityStore.setInboxId(
+        created.value.id,
+        expectedInboxId,
+      );
+      expect(setInboxId.isOk()).toBe(true);
+
+      const attached = await core.attachPersistedIdentity(created.value.id);
+      expect(attached.isOk()).toBe(true);
+
+      const managed = core.getManagedClient(created.value.id);
+      expect(managed).toBeDefined();
+      expect(managed?.inboxId).toBe(expectedInboxId);
+    });
+  });
+
+  describe("conversation discovery streams", () => {
+    test("emits DM discovery without registering the DM as a group membership", async () => {
+      const events: CoreRawEvent[] = [];
+      core.on((event) => events.push(event));
+
+      const dmClient = createMockXmtpClient({ inboxId: "inbox-dm-test" });
+      dmClient.streamGroups = async () =>
+        Result.ok({
+          groups: asyncIterableOf({
+            groupId: "group-stream-1",
+            groupName: "Support",
+          }),
+          abort: () => {},
+        });
+      dmClient.streamDms = async () =>
+        Result.ok({
+          dms: asyncIterableOf({
+            dmId: "dm-stream-1",
+            peerInboxId: "peer-inbox-1",
+          }),
+          abort: () => {},
+        });
+
+      core = new SignetCoreImpl(
+        createTestConfig(),
+        createMockSignerProviderFactory().factory,
+        createMockClientFactory(dmClient),
+      );
+      core.on((event) => events.push(event));
+
+      const created = await core.identityStore.create(null, "listener");
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+
+      const started = await core.start();
+      expect(started.isOk()).toBe(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const managed = core.getManagedClient(created.value.id);
+      expect(managed).toBeDefined();
+      expect(managed?.groupIds.has("group-stream-1")).toBe(true);
+      expect(managed?.groupIds.has("dm-stream-1")).toBe(false);
+      expect(core.getManagedClientForGroup("dm-stream-1")).toBeUndefined();
+      expect(events).toContainEqual({
+        type: "raw.dm.joined",
+        dmId: "dm-stream-1",
+        peerInboxId: "peer-inbox-1",
+      });
     });
   });
 
