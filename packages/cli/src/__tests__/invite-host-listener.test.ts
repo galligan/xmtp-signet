@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import { generateConvosInviteSlug, type CoreRawEvent } from "@xmtp/signet-core";
-import { InternalError, type SignetError } from "@xmtp/signet-schemas";
+import {
+  InternalError,
+  NotFoundError,
+  type SignetError,
+} from "@xmtp/signet-schemas";
 import { startManagedInviteHostListener } from "../invite-host-listener.js";
 
 const WRONG_PRIVATE_KEY_HEX =
@@ -505,5 +509,78 @@ describe("startManagedInviteHostListener", () => {
 
     expect(listMessageCalls).toBeGreaterThanOrEqual(2);
     expect(addMemberCalls).toBe(2);
+  });
+
+  test("does not retry DM recovery for identities that do not own the DM", async () => {
+    const slug = await buildValidSlug();
+
+    let wrongIdentityListCalls = 0;
+    let rightIdentityListCalls = 0;
+    let addMemberCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [
+          { id: "wrong", inboxId: WRONG_CREATOR_INBOX_ID },
+          { id: "right", inboxId: RIGHT_CREATOR_INBOX_ID },
+        ];
+      },
+      async getWalletPrivateKeyHex(identityId) {
+        return Result.ok(
+          identityId === "right"
+            ? RIGHT_PRIVATE_KEY_HEX
+            : WRONG_PRIVATE_KEY_HEX,
+        );
+      },
+      getManagedClient(identityId) {
+        if (identityId === "wrong") {
+          return {
+            addMembers: async () => Result.ok(undefined),
+            listMessages: async () => {
+              wrongIdentityListCalls += 1;
+              return Result.err(
+                NotFoundError.create("Conversation", "dm-owned-by-right"),
+              );
+            },
+          };
+        }
+
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            return Result.ok(undefined);
+          },
+          listMessages: async (groupId) => {
+            rightIdentityListCalls += 1;
+            return Result.ok([
+              {
+                messageId: "dm-owned-by-right-msg-1",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]);
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.(makeRawDmJoinedEvent("dm-owned-by-right"));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(addMemberCalls).toBe(1);
+    expect(rightIdentityListCalls).toBe(1);
+    expect(wrongIdentityListCalls).toBe(1);
   });
 });

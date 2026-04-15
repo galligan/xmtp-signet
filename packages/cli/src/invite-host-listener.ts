@@ -149,6 +149,9 @@ async function listRecentInviteCandidatesAcrossManagedIdentities(
         listOptions,
       );
       if (Result.isError(listResult)) {
+        if (listResult.error.category === "not_found") {
+          break;
+        }
         shouldRetry = true;
         break;
       }
