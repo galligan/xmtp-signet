@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { Result } from "better-result";
 import { InternalError } from "@xmtp/signet-schemas";
@@ -15,9 +18,11 @@ import {
   createMockClientFactory,
   createMockXmtpClient,
   createTestConfig,
+  asyncIterableOf,
 } from "./fixtures.js";
 
 let core: SignetCoreImpl;
+const tempDirs = new Set<string>();
 
 function createCore(
   configOverrides?: Parameters<typeof createTestConfig>[0],
@@ -40,7 +45,39 @@ afterEach(async () => {
   if (core.state === "running") {
     await core.stop();
   }
+  for (const dir of tempDirs) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  tempDirs.clear();
 });
+
+function createStableSignerProviderFactory(): {
+  factory: (identityId: string) => SignerProviderLike;
+} {
+  const dbKeys = new Map<string, Uint8Array>();
+
+  return {
+    factory(identityId: string): SignerProviderLike {
+      let dbKey = dbKeys.get(identityId);
+      if (!dbKey) {
+        dbKey = new Uint8Array(32);
+        crypto.getRandomValues(dbKey);
+        dbKeys.set(identityId, dbKey);
+      }
+
+      return {
+        sign: async () => Result.ok(new Uint8Array(64).fill(2)),
+        getPublicKey: async () => Result.ok(new Uint8Array(32).fill(1)),
+        getFingerprint: async () => Result.ok(`fingerprint-${identityId}`),
+        getDbEncryptionKey: async () => Result.ok(dbKey),
+        getXmtpIdentityKey: async () =>
+          Result.ok(
+            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const,
+          ),
+      };
+    },
+  };
+}
 
 describe("SignetCoreImpl", () => {
   describe("initial state", () => {
@@ -264,6 +301,172 @@ describe("SignetCoreImpl", () => {
       expect(
         core.getManagedClient(registered.value.identityId),
       ).toBeUndefined();
+    });
+
+    test("attachPersistedIdentity hydrates an existing persisted identity while running", async () => {
+      await core.start();
+
+      const created = await core.identityStore.create(null, "joiner");
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+
+      const expectedInboxId = `inbox-${created.value.id}`;
+      const setInboxId = await core.identityStore.setInboxId(
+        created.value.id,
+        expectedInboxId,
+      );
+      expect(setInboxId.isOk()).toBe(true);
+
+      const attached = await core.attachPersistedIdentity(created.value.id);
+      expect(attached.isOk()).toBe(true);
+
+      const managed = core.getManagedClient(created.value.id);
+      expect(managed).toBeDefined();
+      expect(managed?.inboxId).toBe(expectedInboxId);
+    });
+
+    test("attachPersistedIdentity registers an existing persisted identity in local mode", async () => {
+      await core.startLocal();
+
+      const created = await core.identityStore.create(null, "joiner");
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+
+      const expectedInboxId = `inbox-${created.value.id}`;
+      const setInboxId = await core.identityStore.setInboxId(
+        created.value.id,
+        expectedInboxId,
+      );
+      expect(setInboxId.isOk()).toBe(true);
+
+      const attached = await core.attachPersistedIdentity(created.value.id);
+      expect(attached.isOk()).toBe(true);
+
+      const managed = core.getManagedClient(created.value.id);
+      expect(managed).toBeDefined();
+      expect(managed?.inboxId).toBe(expectedInboxId);
+    });
+  });
+
+  describe("conversation discovery streams", () => {
+    test("emits DM discovery without registering the DM as a group membership", async () => {
+      const events: CoreRawEvent[] = [];
+      core.on((event) => events.push(event));
+
+      const dmClient = createMockXmtpClient({ inboxId: "inbox-dm-test" });
+      dmClient.streamGroups = async () =>
+        Result.ok({
+          groups: asyncIterableOf({
+            groupId: "group-stream-1",
+            groupName: "Support",
+          }),
+          abort: () => {},
+        });
+      dmClient.streamDms = async () =>
+        Result.ok({
+          dms: asyncIterableOf({
+            dmId: "dm-stream-1",
+            peerInboxId: "peer-inbox-1",
+          }),
+          abort: () => {},
+        });
+
+      core = new SignetCoreImpl(
+        createTestConfig(),
+        createMockSignerProviderFactory().factory,
+        createMockClientFactory(dmClient),
+      );
+      core.on((event) => events.push(event));
+
+      const created = await core.identityStore.create(null, "listener");
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+
+      const started = await core.start();
+      expect(started.isOk()).toBe(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const managed = core.getManagedClient(created.value.id);
+      expect(managed).toBeDefined();
+      expect(managed?.groupIds.has("group-stream-1")).toBe(true);
+      expect(managed?.groupIds.has("dm-stream-1")).toBe(false);
+      expect(core.getManagedClientForGroup("dm-stream-1")).toBeUndefined();
+      expect(events).toContainEqual({
+        type: "raw.dm.joined",
+        dmId: "dm-stream-1",
+        peerInboxId: "peer-inbox-1",
+      });
+    });
+  });
+
+  describe("restart persistence", () => {
+    test("rehydrates persisted identities with the same per-identity db path and key material", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "signet-core-restart-"));
+      tempDirs.add(tempDir);
+
+      const { factory: signerFactory } = createStableSignerProviderFactory();
+      const receivedOptions: XmtpClientCreateOptions[] = [];
+      const clientFactory = {
+        create: async (options: XmtpClientCreateOptions) => {
+          receivedOptions.push({
+            ...options,
+            dbEncryptionKey: new Uint8Array(options.dbEncryptionKey),
+          });
+          return Result.ok(
+            createMockXmtpClient({
+              inboxId: `inbox-${options.identityId}`,
+            }),
+          ) as Result<XmtpClient, SignetError>;
+        },
+      };
+
+      const config = createTestConfig({ dataDir: tempDir, env: "dev" });
+      core = new SignetCoreImpl(config, signerFactory, clientFactory);
+
+      const startResult = await core.start();
+      expect(startResult.isOk()).toBe(true);
+
+      const registered = await core.registerManagedIdentity({
+        label: "convos-host",
+      });
+      expect(registered.isOk()).toBe(true);
+      if (!registered.isOk()) return;
+
+      const firstCreate = receivedOptions[0];
+      expect(firstCreate).toBeDefined();
+      expect(firstCreate?.identityId).toBe(registered.value.identityId);
+      expect(firstCreate?.dbPath).toBe(
+        `${tempDir}/db/dev/${registered.value.identityId}.db3`,
+      );
+      const firstDbKeyHex = Buffer.from(
+        firstCreate?.dbEncryptionKey ?? new Uint8Array(),
+      ).toString("hex");
+
+      await core.stop();
+
+      core = new SignetCoreImpl(config, signerFactory, clientFactory);
+      const restartResult = await core.start();
+      expect(restartResult.isOk()).toBe(true);
+
+      const restartCreate = receivedOptions[1];
+      expect(restartCreate).toBeDefined();
+      expect(restartCreate?.identityId).toBe(registered.value.identityId);
+      expect(restartCreate?.dbPath).toBe(
+        `${tempDir}/db/dev/${registered.value.identityId}.db3`,
+      );
+      expect(
+        Buffer.from(restartCreate?.dbEncryptionKey ?? []).toString("hex"),
+      ).toBe(firstDbKeyHex);
+
+      const managed = core.getManagedClient(registered.value.identityId);
+      expect(managed).toBeDefined();
+      expect(managed?.inboxId).toBe(registered.value.inboxId);
+
+      const stored = await core.identityStore.getById(
+        registered.value.identityId,
+      );
+      expect(stored?.inboxId).toBe(registered.value.inboxId);
     });
   });
 

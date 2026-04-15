@@ -13,13 +13,18 @@ import type {
   XmtpGroupInfo,
   ListMessagesOptions,
   MessageStream,
+  DmStream,
   GroupStream,
   ConsentEntityType,
   ConsentState,
 } from "../xmtp-client-factory.js";
 import { wrapSdkCall } from "./error-mapping.js";
 import { toGroupInfo, toDecodedMessage } from "./type-mapping.js";
-import { wrapMessageStream, wrapGroupStream } from "./stream-wrappers.js";
+import {
+  wrapMessageStream,
+  wrapDmStream,
+  wrapGroupStream,
+} from "./stream-wrappers.js";
 import type {
   SdkClientShape,
   SdkGroupShape,
@@ -468,7 +473,9 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
     async streamAllMessages(): Promise<Result<MessageStream, SignetError>> {
       return wrapSdkCall(async () => {
-        const stream = await client.conversations.streamAllGroupMessages();
+        // Convos join requests arrive via DM, so the raw stream must include
+        // both group and DM traffic.
+        const stream = await client.conversations.streamAllMessages();
         return wrapMessageStream(stream);
       }, "streamAllMessages");
     },
@@ -478,6 +485,13 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
         const stream = await client.conversations.streamGroups();
         return wrapGroupStream(stream);
       }, "streamGroups");
+    },
+
+    async streamDms(): Promise<Result<DmStream, SignetError>> {
+      return wrapSdkCall(async () => {
+        const stream = await client.conversations.streamDms();
+        return wrapDmStream(stream);
+      }, "streamDms");
     },
 
     async getConsentState(

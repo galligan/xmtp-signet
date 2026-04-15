@@ -119,6 +119,12 @@ export interface XmtpClient {
   streamGroups(): Promise<Result<GroupStream, SignetError>>;
 
   /**
+   * Stream newly discovered DM conversations.
+   * Returns an async iterable and an abort function.
+   */
+  streamDms(): Promise<Result<DmStream, SignetError>>;
+
+  /**
    * Get consent state for an entity (inbox ID or group ID).
    *
    * @param entityType - The type of entity: "inbox_id" or "group_id"
@@ -184,6 +190,12 @@ export interface XmtpGroupEvent {
   readonly groupName: string;
 }
 
+/** A DM discovery event from the XMTP stream. */
+export interface XmtpDmEvent {
+  readonly dmId: string;
+  readonly peerInboxId: string;
+}
+
 /** Message stream with abort capability. */
 export interface MessageStream {
   readonly messages: AsyncIterable<XmtpDecodedMessage>;
@@ -208,6 +220,12 @@ export interface ListMessagesOptions {
 /** Group stream with abort capability. */
 export interface GroupStream {
   readonly groups: AsyncIterable<XmtpGroupEvent>;
+  readonly abort: () => void;
+}
+
+/** DM stream with abort capability. */
+export interface DmStream {
+  readonly dms: AsyncIterable<XmtpDmEvent>;
   readonly abort: () => void;
 }
 

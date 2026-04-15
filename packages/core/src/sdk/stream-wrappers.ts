@@ -1,5 +1,7 @@
 import type {
   MessageStream,
+  DmStream,
+  XmtpDmEvent,
   GroupStream,
   XmtpDecodedMessage,
   XmtpGroupEvent,
@@ -20,6 +22,14 @@ export interface AsyncStreamProxyLike<T> extends AsyncIterable<T> {
 interface GroupStreamItem {
   readonly id: string;
   readonly name: string;
+}
+
+/**
+ * Shape of a DM object needed for stream mapping.
+ */
+interface DmStreamItem {
+  readonly id: string;
+  readonly peerInboxId: string;
 }
 
 /**
@@ -72,6 +82,36 @@ export function wrapGroupStream(
 
   return {
     groups,
+    abort: () => {
+      abortController.abort();
+      sdkStream.return().catch(() => {});
+    },
+  };
+}
+
+/**
+ * Wraps an SDK DM stream into signet's DmStream type
+ * with abort support.
+ */
+export function wrapDmStream(
+  sdkStream: AsyncStreamProxyLike<DmStreamItem>,
+): DmStream {
+  const abortController = new AbortController();
+
+  const dms: AsyncIterable<XmtpDmEvent> = {
+    async *[Symbol.asyncIterator]() {
+      for await (const dm of sdkStream) {
+        if (abortController.signal.aborted) break;
+        yield {
+          dmId: dm.id,
+          peerInboxId: dm.peerInboxId,
+        };
+      }
+    },
+  };
+
+  return {
+    dms,
     abort: () => {
       abortController.abort();
       sdkStream.return().catch(() => {});

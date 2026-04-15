@@ -125,6 +125,12 @@ function makeMockDeps(): DirectModeDeps {
             abort() {},
           });
         },
+        async streamDms() {
+          return Result.ok({
+            dms: (async function* () {})(),
+            abort() {},
+          });
+        },
         async getConsentState() {
           return Result.ok("unknown" as const);
         },

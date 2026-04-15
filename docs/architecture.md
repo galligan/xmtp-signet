@@ -62,7 +62,10 @@ Packages that implement the signet's actual behavior.
 **`@xmtp/signet-core`**
 
 - XMTP client lifecycle and SDK integration
-- Identity store and conversation/message streaming
+- Persistent identity store in `${dataDir}/identities.db`
+- Per-identity XMTP MLS and message state in `${dataDir}/db/${env}/${identityId}.db3`
+- Ephemeral runtime client registry rebuilt from durable identity state on startup
+- Conversation and message streaming
 - Raw network-facing operations that stay behind the signet boundary
 
 **`@xmtp/signet-keys`**

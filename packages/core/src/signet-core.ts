@@ -1,5 +1,9 @@
 import { Result } from "better-result";
-import { InternalError, ValidationError } from "@xmtp/signet-schemas";
+import {
+  InternalError,
+  NotFoundError,
+  ValidationError,
+} from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { SignetCoreConfig } from "./config.js";
 import { CoreEventEmitter } from "./event-emitter.js";
@@ -13,6 +17,7 @@ import type {
   SignerProviderLike,
   XmtpClientFactory,
   XmtpDecodedMessage,
+  XmtpDmEvent,
   XmtpGroupEvent,
 } from "./xmtp-client-factory.js";
 import type {
@@ -176,6 +181,45 @@ export class SignetCoreImpl {
       env: this.#config.env,
       label: input.label,
     });
+  }
+
+  /**
+   * Hydrate an already persisted identity into the live runtime.
+   *
+   * This is used for flows like Convos invite joins, where the identity is
+   * created and persisted by a separate orchestrator but still needs to
+   * become immediately usable in the running daemon without a restart.
+   */
+  async attachPersistedIdentity(
+    identityId: string,
+  ): Promise<Result<void, SignetError>> {
+    if (this.#state !== "running" && this.#state !== "local") {
+      return Result.err(
+        ValidationError.create(
+          "state",
+          `Cannot attach inbox from '${this.#state}' state (expected 'running' or 'local')`,
+        ),
+      );
+    }
+
+    if (this.#registry.get(identityId)) {
+      return Result.ok(undefined);
+    }
+
+    const identity = await this.#identityStore.getById(identityId);
+    if (identity === null) {
+      return Result.err(NotFoundError.create("identity", identityId));
+    }
+
+    const hydrated = await this.#hydrateIdentity(identity, {
+      registerNetworkIdentity: false,
+    });
+    if (Result.isError(hydrated)) {
+      await this.detachManagedIdentity(identityId);
+      return hydrated;
+    }
+
+    return Result.ok(undefined);
   }
 
   /**
@@ -383,6 +427,26 @@ export class SignetCoreImpl {
     })();
   }
 
+  /**
+   * Consume DM discovery events and emit raw DM join events.
+   * DM conversations are intentionally not registered as group memberships.
+   */
+  #consumeDmStream(dms: AsyncIterable<XmtpDmEvent>): void {
+    void (async () => {
+      try {
+        for await (const dm of dms) {
+          this.#emitter.emit({
+            type: "raw.dm.joined",
+            dmId: dm.dmId,
+            peerInboxId: dm.peerInboxId,
+          });
+        }
+      } catch {
+        // Stream aborted or errored — expected during shutdown.
+      }
+    })();
+  }
+
   async #hydrateIdentity(
     identity: AgentIdentity,
     options: { registerNetworkIdentity: boolean },
@@ -442,9 +506,15 @@ export class SignetCoreImpl {
       groupIds: new Set(identity.groupId ? [identity.groupId] : []),
     };
 
-    if (this.#state === "running" || this.#state === "starting") {
+    if (
+      this.#state === "running" ||
+      this.#state === "starting" ||
+      this.#state === "local"
+    ) {
       this.#registry.register(managedClient);
+    }
 
+    if (this.#state === "running" || this.#state === "starting") {
       const syncResult = await client.syncAll();
       if (syncResult.isErr()) {
         return syncResult;
@@ -479,6 +549,17 @@ export class SignetCoreImpl {
         abort: groupStream.abort,
       });
       this.#consumeGroupStream(identity.id, groupStream.groups);
+
+      const dmStreamResult = await client.streamDms();
+      if (dmStreamResult.isErr()) {
+        return dmStreamResult;
+      }
+      const dmStream = dmStreamResult.value;
+      this.#streams.push({
+        identityId: identity.id,
+        abort: dmStream.abort,
+      });
+      this.#consumeDmStream(dmStream.dms);
     }
 
     return Result.ok(managedClient);

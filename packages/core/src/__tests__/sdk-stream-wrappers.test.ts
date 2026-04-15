@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { wrapMessageStream, wrapGroupStream } from "../sdk/stream-wrappers.js";
+import {
+  wrapMessageStream,
+  wrapDmStream,
+  wrapGroupStream,
+} from "../sdk/stream-wrappers.js";
 import {
   createMockAsyncStreamProxy,
   createMockDecodedMessage,
+  createMockDm,
   createMockGroup,
 } from "./sdk-fixtures.js";
 import type {
   XmtpDecodedMessage,
+  XmtpDmEvent,
   XmtpGroupEvent,
 } from "../xmtp-client-factory.js";
 
@@ -101,5 +107,26 @@ describe("wrapGroupStream", () => {
     }
 
     expect(collected).toHaveLength(1);
+  });
+});
+
+describe("wrapDmStream", () => {
+  test("yields DM events mapped to signet types", async () => {
+    const dms = [
+      createMockDm({ id: "dm-1", peerInboxId: "peer-1" }),
+      createMockDm({ id: "dm-2", peerInboxId: "peer-2" }),
+    ];
+    const proxy = createMockAsyncStreamProxy(dms);
+    const stream = wrapDmStream(proxy);
+
+    const collected: XmtpDmEvent[] = [];
+    for await (const event of stream.dms) {
+      collected.push(event);
+    }
+
+    expect(collected).toEqual([
+      { dmId: "dm-1", peerInboxId: "peer-1" },
+      { dmId: "dm-2", peerInboxId: "peer-2" },
+    ]);
   });
 });

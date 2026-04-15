@@ -22,6 +22,44 @@ The signet is infrastructure, not a group participant. From XMTP's point of
 view, each operator inbox is the participant; the signet manages that inbox and
 its MLS state behind the scenes.
 
+## Convos MLS State
+
+For the current local and self-hosted v1 runtime, Convos compatibility is
+primarily about **stable identity reuse and persistent XMTP state**, not about
+passkeys.
+
+The signet splits that persistence into three layers:
+
+- **identity records:** `${dataDir}/identities.db` tracks which managed
+  identities exist, their inbox IDs once registered, optional group bindings,
+  and labels
+- **XMTP MLS/message state:** each managed identity uses a persistent XMTP
+  database at `${dataDir}/db/${env}/${identityId}.db3`
+- **key material:** the signer or key manager re-derives the same DB
+  encryption key and XMTP identity key for a given `identityId`
+
+This matches the storage model used by the checked-in Convos references:
+runtime processes can come and go, but the durable identity and XMTP database
+state survive restart.
+
+The in-memory client registry is intentionally **not** durable. On startup, the
+signet rebuilds live clients from the identity store, reopens the per-identity
+XMTP databases, resynchronizes group membership, and reattaches streams.
+
+In practical terms:
+
+- **per-chat mode** usually means one durable identity and XMTP database per
+  isolated conversation
+- **shared mode** means one durable identity can participate in multiple chats
+- restart continuity comes from reopening persisted identity and XMTP state,
+  not from keeping a process alive forever
+
+Explicitly deferred from this v1 model:
+
+- split host or remote operation
+- Remote-MLS or minimum-trust hosted storage
+- Convos iOS passkey parity
+
 ## Roles: owner, admin, operator
 
 The v1 hierarchy is:

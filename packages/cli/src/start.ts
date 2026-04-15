@@ -709,6 +709,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
         getGroupInfo: (groupId: string) => core.context.getGroupInfo(groupId),
         clientFactory: createSdkClientFactory(),
         signerProviderFactory,
+        attachManagedIdentity: (identityId) =>
+          core.attachPersistedIdentity(identityId),
         config: core.config,
         idMappings: idMappingStoreRef,
         storeInviteTag: (groupId, tag) => inviteTagStore.set(groupId, tag),
@@ -857,6 +859,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
             return {
               addMembers: (groupId, inboxIds) =>
                 managed.client.addMembers(groupId, inboxIds as string[]),
+              listMessages: (groupId, options) =>
+                managed.client.listMessages(groupId, options),
             };
           },
           getGroupInviteTag: async (groupId) =>

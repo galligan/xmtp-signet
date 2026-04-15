@@ -29,6 +29,13 @@ export interface RawGroupJoinedEvent {
   readonly groupName: string;
 }
 
+/** A new DM conversation was discovered. */
+export interface RawDmJoinedEvent {
+  readonly type: "raw.dm.joined";
+  readonly dmId: string;
+  readonly peerInboxId: string;
+}
+
 /** Group membership changed. */
 export interface RawGroupUpdatedEvent {
   readonly type: "raw.group.updated";
@@ -66,6 +73,7 @@ export interface RawLivenessEvent {
 export type CoreRawEvent =
   | RawMessageEvent
   | RawGroupJoinedEvent
+  | RawDmJoinedEvent
   | RawGroupUpdatedEvent
   | RawCoreStartedEvent
   | RawCoreStoppedEvent

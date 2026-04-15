@@ -11,6 +11,7 @@ import type {
   SdkGroupMemberShape,
   SdkDecodedMessageShape,
   SdkAsyncStreamProxyShape,
+  SdkDmShape,
   SdkGroupShape,
   SdkClientShape,
 } from "../sdk/sdk-types.js";
@@ -98,6 +99,24 @@ export function createMockGroup(
   };
 }
 
+/** Create a mock DM. */
+export function createMockDm(
+  overrides?: Partial<{
+    id: string;
+    peerInboxId: string;
+  }>,
+): SdkDmShape {
+  const dm = createMockGroup({ id: overrides?.id ?? "dm-1", name: "" });
+  return {
+    ...dm,
+    peerInboxId: overrides?.peerInboxId ?? "peer-inbox-1",
+    metadata: async () => ({
+      creatorInboxId: "creator-inbox",
+      conversationType: "dm" as const,
+    }),
+  };
+}
+
 /** Create a mock SDK client. */
 export function createMockSdkNativeClient(
   overrides?: Partial<{
@@ -127,6 +146,7 @@ export function createMockSdkNativeClient(
       syncAll: async () => ({ numConversations: groups.length }),
       stream: async () => createMockAsyncStreamProxy<SdkGroupShape>([]),
       streamGroups: async () => createMockAsyncStreamProxy<SdkGroupShape>([]),
+      streamDms: async () => createMockAsyncStreamProxy<SdkDmShape>([]),
       streamAllMessages: async () =>
         createMockAsyncStreamProxy<SdkDecodedMessageShape>([]),
       streamAllGroupMessages: async () =>

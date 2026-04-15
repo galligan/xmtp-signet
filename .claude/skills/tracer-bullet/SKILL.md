@@ -9,7 +9,7 @@ Run predefined user stories against the real signet, catch every gap between "te
 
 ## Invocation
 
-If the user doesn't specify which tracer bullet to run, use `AskUserQuestion` to let them pick:
+If the user doesn't specify which tracer bullet to run, ask one focused question to let them pick. If the host supports richer chooser UI, use it. Otherwise, default to the local stories when the user says "all" or "full":
 
 | Option | Story | Needs |
 |--------|-------|-------|
@@ -53,14 +53,14 @@ Before each story, create a fresh directory. After each story, leave artifacts f
 
 ## Execution model
 
-Each tracer bullet runs as a **subagent** so the main conversation stays clean. The subagent:
+Each tracer bullet can run directly in the current agent or in a delegated subagent when the host supports it. The executor:
 
 1. Creates the test environment
 2. Executes each step using real CLI commands (`bun run packages/cli/src/bin.ts ...`)
 3. On failure: classifies → fixes if possible → retries
 4. Writes progress to a report file
 
-### Subagent prompt template
+### Execution prompt template
 
 ```
 Run the "{story_name}" tracer bullet for xmtp-signet.
@@ -78,9 +78,17 @@ Rules:
 - After fixing, re-run the step to confirm it passes before advancing.
 - Do NOT skip steps. Every step must pass or be documented as a known limitation.
 - Write your progress report to: {report_path}
-- Fix from the top of the Graphite stack. Use `gt absorb -a -f` to route fixes.
+- Apply fixes to the currently checked-out branch or the appropriate stack layer for the current repo workflow.
 - Run `bun run build && bun run test && bun run typecheck && bun run lint` after any fix.
 ```
+
+## Codex-friendly smoke runners
+
+These repo-native checks are useful when you want a fast smoke test without running a full interactive tracer bullet:
+
+- `bun test packages/cli/src/__tests__/smoke.test.ts`
+- `bun test packages/sessions/src/__tests__/v1-tracer-bullet.test.ts`
+- `XMTP_NETWORK_TESTS=1 bun test packages/cli/src/__tests__/dev-network.test.ts`
 
 ## Report format
 
@@ -256,7 +264,7 @@ Interactive story requiring an operator with the Convos app. The operator shares
  3. signet start --config {config} --json (background)
  4. Wait for daemon ready + core state "running"
  5. PAUSE: Ask operator for a Convos invite URL
-    → Use AskUserQuestion: "Paste a Convos invite URL (popup.convos.org/v2?i=...)"
+    → Prompt: "Paste a Convos invite URL (popup.convos.org/v2?i=...)"
  6. conversation join {invite_url} --label convos-joiner --config {config} --json --timeout 120
     → Signet parses invite, creates per-conversation identity, follows join protocol
     → Operator sees the signet appear as a new member in Convos
