@@ -73,6 +73,24 @@ function categoryToStatus(category: string): number {
   return CATEGORY_STATUS[category] ?? 500;
 }
 
+function mergeTransportControls(
+  rawParams: Record<string, unknown>,
+  validatedParams: Record<string, unknown>,
+): Record<string, unknown> {
+  const dangerousMessageReadFlag = rawParams["dangerouslyAllowMessageRead"];
+  if (
+    dangerousMessageReadFlag !== true &&
+    dangerousMessageReadFlag !== "true"
+  ) {
+    return validatedParams;
+  }
+
+  return {
+    ...validatedParams,
+    dangerouslyAllowMessageRead: dangerousMessageReadFlag,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
@@ -225,7 +243,7 @@ export function createHttpServer(
 
     const elevationResult = await readElevationManager.resolveForRequest({
       method,
-      params: paramsResult.value,
+      params: mergeTransportControls(params, paramsResult.value),
       adminFingerprint: verifyResult.value.iss,
       sessionKey: `${verifyResult.value.iss}:${verifyResult.value.jti}`,
     });

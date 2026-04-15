@@ -273,15 +273,24 @@ describe("AdminSocket round-trip", () => {
     const socketPath = testSocketPath();
     const registry = createActionRegistry();
     const keyManager = makeKeyManager();
-    const spec = makeTestSpec("message.list", async (_input, ctx) =>
-      Result.ok({
-        approvalId: ctx.adminReadElevation?.approvalId ?? null,
-        chatIds: ctx.adminReadElevation?.scope.chatIds ?? [],
-        approvalKeyFingerprint:
-          ctx.adminReadElevation?.approvalKeyFingerprint ?? null,
+    registry.register({
+      id: "message.list",
+      description: "List messages in a conversation",
+      intent: "read",
+      input: z.object({
+        chatId: z.string(),
       }),
-    );
-    registry.register(spec);
+      handler: async (_input, ctx) =>
+        Result.ok({
+          approvalId: ctx.adminReadElevation?.approvalId ?? null,
+          chatIds: ctx.adminReadElevation?.scope.chatIds ?? [],
+          approvalKeyFingerprint:
+            ctx.adminReadElevation?.approvalKeyFingerprint ?? null,
+        }),
+      cli: {
+        command: "message:list",
+      },
+    });
     const dispatcher = createAdminDispatcher(registry);
 
     server = createAdminServer(
@@ -323,8 +332,18 @@ describe("AdminSocket round-trip", () => {
     const socketPath = testSocketPath();
     const registry = createActionRegistry();
     const keyManager = makeKeyManager({ rejectElevation: true });
-    const spec = makeTestSpec("message.list", async () => Result.ok({}));
-    registry.register(spec);
+    registry.register({
+      id: "message.list",
+      description: "List messages in a conversation",
+      intent: "read",
+      input: z.object({
+        chatId: z.string(),
+      }),
+      handler: async () => Result.ok({}),
+      cli: {
+        command: "message:list",
+      },
+    });
     const dispatcher = createAdminDispatcher(registry);
 
     server = createAdminServer(

@@ -81,6 +81,24 @@ function jsonRpcCodeForCategory(category: string): number {
   }
 }
 
+function mergeTransportControls(
+  rawParams: Record<string, unknown>,
+  validatedParams: Record<string, unknown>,
+): Record<string, unknown> {
+  const dangerousMessageReadFlag = rawParams["dangerouslyAllowMessageRead"];
+  if (
+    dangerousMessageReadFlag !== true &&
+    dangerousMessageReadFlag !== "true"
+  ) {
+    return validatedParams;
+  }
+
+  return {
+    ...validatedParams,
+    dangerouslyAllowMessageRead: dangerousMessageReadFlag,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
@@ -257,7 +275,7 @@ export function createAdminServer(
 
     const elevationResult = await readElevationManager.resolveForRequest({
       method: request.method,
-      params: paramsResult.value,
+      params: mergeTransportControls(request.params, paramsResult.value),
       adminFingerprint: connState.adminFingerprint ?? "",
       sessionKey: connState.adminSessionKey ?? connState.adminFingerprint ?? "",
     });

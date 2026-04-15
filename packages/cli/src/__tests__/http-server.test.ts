@@ -169,22 +169,30 @@ describe("HttpServer", () => {
 
   test("POST /v1/admin/:method can attach and reuse admin read elevation", async () => {
     const approver = makeReadElevationApprover();
-    const dispatcher = makeDispatcher({
-      dispatch: async (_method, _params, ctx) => ({
-        ok: true as const,
-        data: {
+    const registry = createActionRegistry();
+    registry.register({
+      id: "message.list",
+      description: "List messages in a conversation",
+      intent: "read",
+      input: z.object({
+        chatId: z.string(),
+      }),
+      handler: async (_input, ctx) =>
+        Result.ok({
           approvalId: ctx.adminReadElevation?.approvalId ?? null,
           chatIds: ctx.adminReadElevation?.scope.chatIds ?? [],
-        },
-        meta: {
-          requestId: "req-1",
-          timestamp: new Date().toISOString(),
-          durationMs: 1,
-        },
-      }),
+        }),
+      cli: {
+        command: "message:list",
+      },
+      http: {
+        auth: "admin",
+      },
     });
+    const dispatcher = createAdminDispatcher(registry);
     const deps = makeDeps({
       dispatcher,
+      registry,
       readElevationApprover: approver,
     });
     const port = await startTestServer(deps);
