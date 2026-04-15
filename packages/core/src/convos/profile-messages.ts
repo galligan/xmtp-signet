@@ -63,6 +63,7 @@ root.add(ProfileUpdateType);
 root.add(MemberProfileType);
 root.add(ProfileSnapshotType);
 
+/** Content type descriptor for Convos profile updates. */
 export const ContentTypeProfileUpdate: ConvosContentTypeId = {
   authorityId: "convos.org",
   typeId: "profile_update",
@@ -70,6 +71,7 @@ export const ContentTypeProfileUpdate: ConvosContentTypeId = {
   versionMinor: 0,
 };
 
+/** Content type descriptor for Convos profile snapshots. */
 export const ContentTypeProfileSnapshot: ConvosContentTypeId = {
   authorityId: "convos.org",
   typeId: "profile_snapshot",
@@ -77,24 +79,29 @@ export const ContentTypeProfileSnapshot: ConvosContentTypeId = {
   versionMinor: 0,
 };
 
+/** Member kinds currently surfaced by the Convos profile protocol. */
 export enum MemberKind {
   Unspecified = 0,
   Agent = 1,
 }
 
+/** Reference to an encrypted profile image published through Convos metadata. */
 export interface EncryptedProfileImageRef {
   readonly url: string;
   readonly salt: Uint8Array;
   readonly nonce: Uint8Array;
 }
 
+/** Supported metadata value variants for Convos profile payloads. */
 export type ProfileMetadataValue =
   | { readonly type: "string"; readonly value: string }
   | { readonly type: "number"; readonly value: number }
   | { readonly type: "bool"; readonly value: boolean };
 
+/** Arbitrary key-value metadata attached to a Convos profile payload. */
 export type ProfileMetadata = Record<string, ProfileMetadataValue>;
 
+/** Structured payload for a member's latest Convos profile update. */
 export interface ProfileUpdateContent {
   readonly name?: string;
   readonly encryptedImage?: EncryptedProfileImageRef;
@@ -102,6 +109,7 @@ export interface ProfileUpdateContent {
   readonly metadata?: ProfileMetadata;
 }
 
+/** Resolved profile fields for a single inbox inside a profile snapshot. */
 export interface MemberProfileEntry {
   readonly inboxId: string;
   readonly name?: string;
@@ -110,6 +118,7 @@ export interface MemberProfileEntry {
   readonly metadata?: ProfileMetadata;
 }
 
+/** Snapshot of the member profiles a host wants to publish for a conversation. */
 export interface ProfileSnapshotContent {
   readonly profiles: readonly MemberProfileEntry[];
 }
@@ -182,6 +191,7 @@ function bytesToHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");
 }
 
+/** Encodes a profile update into the XMTP custom-content envelope Convos expects. */
 export function encodeProfileUpdate(
   update: ProfileUpdateContent,
 ): EncodedConvosContent {
@@ -221,6 +231,7 @@ export function encodeProfileUpdate(
   };
 }
 
+/** Decodes a profile update from the XMTP custom-content envelope. */
 export function decodeProfileUpdate(
   encoded: Pick<EncodedConvosContent, "content">,
 ): ProfileUpdateContent {
@@ -262,6 +273,7 @@ export function decodeProfileUpdate(
   };
 }
 
+/** Encodes a profile snapshot into the XMTP custom-content envelope. */
 export function encodeProfileSnapshot(
   snapshot: ProfileSnapshotContent,
 ): EncodedConvosContent {
@@ -309,6 +321,7 @@ export function encodeProfileSnapshot(
   };
 }
 
+/** Decodes a profile snapshot from the XMTP custom-content envelope. */
 export function decodeProfileSnapshot(
   encoded: Pick<EncodedConvosContent, "content">,
 ): ProfileSnapshotContent {
@@ -361,6 +374,7 @@ export function decodeProfileSnapshot(
   };
 }
 
+/** Codec that round-trips Convos profile updates through XMTP custom content. */
 export class ProfileUpdateCodec {
   get contentType(): ConvosContentTypeId {
     return ContentTypeProfileUpdate;
@@ -383,6 +397,7 @@ export class ProfileUpdateCodec {
   }
 }
 
+/** Codec that round-trips Convos profile snapshots through XMTP custom content. */
 export class ProfileSnapshotCodec {
   get contentType(): ConvosContentTypeId {
     return ContentTypeProfileSnapshot;

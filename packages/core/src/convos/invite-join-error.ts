@@ -4,18 +4,21 @@ import type {
 } from "./join-request-content.js";
 import { isEncodedConvosContent } from "./join-request-content.js";
 
+/** Error types surfaced by the Convos invite-join failure content. */
 export enum InviteJoinErrorType {
   ConversationExpired = "conversationExpired",
   GenericFailure = "genericFailure",
   Unknown = "unknown",
 }
 
+/** Structured payload describing why an invite join failed. */
 export interface InviteJoinError {
   readonly errorType: InviteJoinErrorType;
   readonly inviteTag: string;
   readonly timestamp: Date;
 }
 
+/** Content type descriptor for Convos invite-join errors. */
 export const ContentTypeInviteJoinError: ConvosContentTypeId = {
   authorityId: "convos.app",
   typeId: "inviteJoinError",
@@ -23,6 +26,7 @@ export const ContentTypeInviteJoinError: ConvosContentTypeId = {
   versionMinor: 0,
 };
 
+/** Encodes an invite-join error for transport over XMTP custom content. */
 export function encodeInviteJoinError(
   error: InviteJoinError,
 ): EncodedConvosContent {
@@ -40,6 +44,7 @@ export function encodeInviteJoinError(
   };
 }
 
+/** Decodes an invite-join error from the XMTP custom-content envelope. */
 export function decodeInviteJoinError(
   encoded: Pick<EncodedConvosContent, "content">,
 ): InviteJoinError {
@@ -63,6 +68,7 @@ export function decodeInviteJoinError(
   };
 }
 
+/** Extracts an invite-join error from decoded JSON or encoded Convos content. */
 export function extractInviteJoinError(
   value: unknown,
 ): InviteJoinError | undefined {
@@ -103,6 +109,7 @@ export function extractInviteJoinError(
   return undefined;
 }
 
+/** Matches legacy and fully qualified content-type labels for join failures. */
 export function isInviteJoinErrorContentType(
   contentType: string | undefined,
 ): boolean {
@@ -114,6 +121,7 @@ export function isInviteJoinErrorContentType(
   );
 }
 
+/** Returns the human-readable fallback string for an invite-join error. */
 export function getInviteJoinErrorMessage(error: InviteJoinError): string {
   switch (error.errorType) {
     case InviteJoinErrorType.ConversationExpired:
@@ -125,6 +133,7 @@ export function getInviteJoinErrorMessage(error: InviteJoinError): string {
   }
 }
 
+/** Codec that round-trips Convos invite-join errors through XMTP custom content. */
 export class InviteJoinErrorCodec {
   get contentType(): ConvosContentTypeId {
     return ContentTypeInviteJoinError;

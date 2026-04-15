@@ -1,3 +1,4 @@
+/** Canonical identifier for a Convos custom content type. */
 export interface ConvosContentTypeId {
   readonly authorityId: string;
   readonly typeId: string;
@@ -5,6 +6,7 @@ export interface ConvosContentTypeId {
   readonly versionMinor: number;
 }
 
+/** Decoded XMTP payload for a Convos custom content message. */
 export interface EncodedConvosContent {
   readonly type: ConvosContentTypeId;
   readonly parameters: Record<string, string>;
@@ -12,6 +14,7 @@ export interface EncodedConvosContent {
   readonly fallback?: string;
 }
 
+/** Content type descriptor for Convos join requests. */
 export const ContentTypeJoinRequest: ConvosContentTypeId = {
   authorityId: "convos.org",
   typeId: "join_request",
@@ -19,18 +22,21 @@ export const ContentTypeJoinRequest: ConvosContentTypeId = {
   versionMinor: 0,
 };
 
+/** Optional profile fields a joiner can include with a join request. */
 export interface JoinRequestProfile {
   readonly name?: string;
   readonly imageURL?: string;
   readonly memberKind?: string;
 }
 
+/** Structured join-request payload sent to a Convos invite host. */
 export interface JoinRequestContent {
   readonly inviteSlug: string;
   readonly profile?: JoinRequestProfile;
   readonly metadata?: Record<string, string>;
 }
 
+/** Returns true when a decoded XMTP payload matches the Convos content shape. */
 export function isEncodedConvosContent(
   value: unknown,
 ): value is EncodedConvosContent {
@@ -57,6 +63,7 @@ function isJoinRequestShape(value: unknown): value is JoinRequestContent {
   );
 }
 
+/** Decodes a serialized Convos join request from its binary payload. */
 export function decodeJoinRequest(
   encoded: Pick<EncodedConvosContent, "content">,
 ): JoinRequestContent {
@@ -68,6 +75,7 @@ export function decodeJoinRequest(
   return parsed;
 }
 
+/** Extracts a join request from decoded JSON or encoded Convos content. */
 export function extractJoinRequestContent(
   value: unknown,
 ): JoinRequestContent | undefined {
@@ -86,6 +94,7 @@ export function extractJoinRequestContent(
   return undefined;
 }
 
+/** Matches the legacy and fully qualified content-type labels for join requests. */
 export function isJoinRequestContentType(
   contentType: string | undefined,
 ): boolean {
@@ -95,6 +104,7 @@ export function isJoinRequestContentType(
   );
 }
 
+/** Codec that round-trips Convos join requests through XMTP custom content. */
 export class JoinRequestCodec {
   get contentType(): ConvosContentTypeId {
     return ContentTypeJoinRequest;

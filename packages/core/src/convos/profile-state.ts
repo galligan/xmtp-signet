@@ -10,6 +10,7 @@ import {
   type ProfileUpdateContent,
 } from "./profile-messages.js";
 
+/** Resolved profile fields for a member after combining updates and snapshots. */
 export interface ResolvedProfile extends MemberProfileEntry {}
 
 function isContentTypeMatch(
@@ -22,18 +23,21 @@ function isContentTypeMatch(
   );
 }
 
+/** Returns true when a content type identifies a Convos profile update. */
 export function isProfileUpdateContentType(
   contentType: string | undefined,
 ): boolean {
   return isContentTypeMatch(contentType, ContentTypeProfileUpdate);
 }
 
+/** Returns true when a content type identifies a Convos profile snapshot. */
 export function isProfileSnapshotContentType(
   contentType: string | undefined,
 ): boolean {
   return isContentTypeMatch(contentType, ContentTypeProfileSnapshot);
 }
 
+/** Extracts a profile update from decoded JSON or encoded Convos content. */
 export function extractProfileUpdateContent(
   content: unknown,
 ): ProfileUpdateContent | undefined {
@@ -52,6 +56,7 @@ export function extractProfileUpdateContent(
   return undefined;
 }
 
+/** Extracts a profile snapshot from decoded JSON or encoded Convos content. */
 export function extractProfileSnapshotContent(
   content: unknown,
 ): ProfileSnapshotContent | undefined {
@@ -75,6 +80,7 @@ export function extractProfileSnapshotContent(
   return undefined;
 }
 
+/** Resolves the latest known member profiles from a conversation's message history. */
 export function resolveProfilesFromMessages(
   messages: readonly XmtpDecodedMessage[],
   memberInboxIds?: readonly string[],
@@ -152,6 +158,10 @@ export function resolveProfilesFromMessages(
   return profilesByInboxId;
 }
 
+/**
+ * Builds a profile snapshot for the given members using known profile messages,
+ * optionally falling back to bare inbox entries when no profile is available.
+ */
 export function buildProfileSnapshotFromMessages(
   messages: readonly XmtpDecodedMessage[],
   memberInboxIds: readonly string[],
