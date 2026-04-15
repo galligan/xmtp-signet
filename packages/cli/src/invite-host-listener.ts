@@ -180,9 +180,9 @@ async function processInviteCandidate(
   event: RawMessageEvent,
   processedMessageIds: Set<string>,
   inflightMessageIds: Set<string>,
-): Promise<void> {
-  if (processedMessageIds.has(event.messageId)) return;
-  if (inflightMessageIds.has(event.messageId)) return;
+): Promise<boolean> {
+  if (processedMessageIds.has(event.messageId)) return true;
+  if (inflightMessageIds.has(event.messageId)) return true;
 
   inflightMessageIds.add(event.messageId);
 
@@ -193,7 +193,9 @@ async function processInviteCandidate(
     );
     if (result !== null && Result.isOk(result)) {
       processedMessageIds.add(event.messageId);
+      return true;
     }
+    return false;
   } finally {
     inflightMessageIds.delete(event.messageId);
   }
@@ -236,18 +238,22 @@ export function startManagedInviteHostListener(
       dmId,
       processedMessageIds,
     );
+    let shouldRetry = scanResult.shouldRetry;
 
     for (const message of scanResult.messages) {
-      await processInviteCandidate(
+      const processed = await processInviteCandidate(
         deps,
         message,
         processedMessageIds,
         inflightMessageIds,
       );
+      if (!processed) {
+        shouldRetry = true;
+      }
     }
 
     if (
-      !scanResult.shouldRetry ||
+      !shouldRetry ||
       retryCount >= MAX_DM_RECOVERY_RETRIES ||
       recoveryRetryTimers.has(dmId)
     ) {

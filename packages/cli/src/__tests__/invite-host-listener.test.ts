@@ -449,4 +449,61 @@ describe("startManagedInviteHostListener", () => {
     expect(listMessageCalls).toBeGreaterThanOrEqual(2);
     expect(addMemberCalls).toBe(1);
   });
+
+  test("retries recovered invites after a transient join-processing failure", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let listMessageCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            if (addMemberCalls === 1) {
+              return Result.err(
+                InternalError.create("temporary addMembers failure"),
+              );
+            }
+            return Result.ok(undefined);
+          },
+          listMessages: async (groupId) => {
+            listMessageCalls += 1;
+            return Result.ok([
+              {
+                messageId: "dm-recovered-retry-msg-1",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]);
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.(makeRawDmJoinedEvent("dm-join-recovered-retry"));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(listMessageCalls).toBeGreaterThanOrEqual(2);
+    expect(addMemberCalls).toBe(2);
+  });
 });
