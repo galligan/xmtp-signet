@@ -69,6 +69,7 @@ import {
 } from "./admin/read-elevation.js";
 import { createAdminReadDisclosureStore } from "./admin/read-disclosure-store.js";
 import { createReadDisclosureRollbackTracker } from "./admin/read-disclosure-rollback-tracker.js";
+import { createInviteHostEffects } from "./invite-host-effects.js";
 import { createWsRequestHandler } from "./ws/request-handler.js";
 import { createLazyCoreUpgrade } from "./ws/core-upgrade.js";
 import { createEventProjector } from "./ws/event-projector.js";
@@ -675,7 +676,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
       return createInboxActionSpecs(inboxActionDeps);
     },
 
-    createConversationActions() {
+    createConversationActions(deps) {
       if (coreImplRef === null) {
         throw new Error(
           "SignetCoreImpl not initialized before conversation actions",
@@ -844,6 +845,23 @@ export function createProductionDeps(): SignetRuntimeDeps {
       if (!inviteHostUnsub) {
         const core = coreImplRef;
         const spf = signerProviderFactory;
+        const inviteHostEffects = createInviteHostEffects({
+          auditLog: deps.auditLog,
+          getManagedClientForGroup: (groupId) => {
+            const managed = core.getManagedClientForGroup(groupId);
+            if (!managed) return undefined;
+            return {
+              getGroupInfo: (targetGroupId) =>
+                managed.client.getGroupInfo(targetGroupId),
+              listMessages: (targetGroupId, options) =>
+                managed.client.listMessages(targetGroupId, options),
+              sendMessage: (targetGroupId, content, contentType) =>
+                managed.client.sendMessage(targetGroupId, content, contentType),
+            };
+          },
+          resolveLocalChatId: (groupId) =>
+            idMappingStoreRef?.resolve(groupId)?.localId,
+        });
         inviteHostUnsub = startManagedInviteHostListener({
           subscribe: (handler) => core.on(handler),
           listIdentities: () => core.identityStore.list(),
@@ -865,6 +883,8 @@ export function createProductionDeps(): SignetRuntimeDeps {
           },
           getGroupInviteTag: async (groupId) =>
             Result.ok(inviteTagStore.get(groupId)),
+          onJoinAccepted: inviteHostEffects.onJoinAccepted,
+          onJoinRejected: inviteHostEffects.onJoinRejected,
         });
       }
 

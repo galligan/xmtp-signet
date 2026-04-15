@@ -231,7 +231,7 @@ describe("startManagedInviteHostListener", () => {
     ]);
   });
 
-  test("processes structured join requests alongside plain slug fallback", async () => {
+  test("deduplicates structured join requests and plain slug fallback", async () => {
     const slug = await buildValidSlug();
 
     const addedByIdentity: string[] = [];
@@ -265,15 +265,80 @@ describe("startManagedInviteHostListener", () => {
     capturedHandler?.({
       ...makeRawMessageEvent({
         inviteSlug: slug,
-        profile: { memberKind: "agent" },
+        profile: { name: "Codex", memberKind: "agent" },
       }),
       messageId: "structured-join-request-1",
       contentType: "join_request",
+    });
+    capturedHandler?.({
+      ...makeRawMessageEvent(slug),
+      messageId: "fallback-join-request-1",
+      contentType: "text",
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(addedByIdentity).toEqual([
       `${TEST_CONVERSATION_ID}:${TEST_REQUESTER_INBOX_ID}`,
+    ]);
+  });
+
+  test("notifies acceptance callbacks with host identity context", async () => {
+    const slug = await buildValidSlug();
+
+    const accepted: Array<{
+      hostIdentityId: string;
+      hostInboxId: string;
+      requesterInboxId: string;
+      groupId: string;
+      messageId: string;
+    }> = [];
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "right", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => Result.ok(undefined),
+          listMessages: async () => Result.ok([]),
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+      async onJoinAccepted(acceptance) {
+        accepted.push({
+          hostIdentityId: acceptance.hostIdentityId,
+          hostInboxId: acceptance.hostInboxId,
+          requesterInboxId: acceptance.join.requesterInboxId,
+          groupId: acceptance.join.groupId,
+          messageId: acceptance.requestMessage.messageId,
+        });
+      },
+    });
+
+    capturedHandler?.({
+      ...makeRawMessageEvent(slug),
+      messageId: "accepted-join-msg-1",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(accepted).toEqual([
+      {
+        hostIdentityId: "right",
+        hostInboxId: RIGHT_CREATOR_INBOX_ID,
+        requesterInboxId: TEST_REQUESTER_INBOX_ID,
+        groupId: TEST_CONVERSATION_ID,
+        messageId: "accepted-join-msg-1",
+      },
     ]);
   });
 
@@ -442,6 +507,52 @@ describe("startManagedInviteHostListener", () => {
     expect(addMemberCalls).toBe(2);
   });
 
+  test("allows a same-inbox rejoin after the logical dedupe window expires", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            return Result.ok(undefined);
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+      processedInviteKeyTtlMs: 20,
+    });
+
+    capturedHandler?.({
+      ...makeRawMessageEvent(slug),
+      messageId: "rejoin-msg-1",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    capturedHandler?.({
+      ...makeRawMessageEvent(slug),
+      messageId: "rejoin-msg-2",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addMemberCalls).toBe(2);
+  });
+
   test("retries DM recovery after a transient history lookup failure", async () => {
     const slug = await buildValidSlug();
 
@@ -555,6 +666,188 @@ describe("startManagedInviteHostListener", () => {
 
     expect(listMessageCalls).toBeGreaterThanOrEqual(2);
     expect(addMemberCalls).toBe(2);
+  });
+
+  test("retries DM recovery when host key lookup is not ready yet", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let keyLookupCalls = 0;
+    let listMessageCalls = 0;
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        keyLookupCalls += 1;
+        if (keyLookupCalls === 1) {
+          return Result.err(
+            InternalError.create("identity key not loaded yet"),
+          );
+        }
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => {
+            addMemberCalls += 1;
+            return Result.ok(undefined);
+          },
+          listMessages: async (groupId) => {
+            listMessageCalls += 1;
+            return Result.ok([
+              {
+                messageId: "dm-key-retry-msg-1",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]);
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.(makeRawDmJoinedEvent("dm-join-key-retry"));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(keyLookupCalls).toBeGreaterThanOrEqual(2);
+    expect(listMessageCalls).toBeGreaterThanOrEqual(2);
+    expect(addMemberCalls).toBe(1);
+  });
+
+  test("retries DM recovery when transient identity setup is mixed with validation misses", async () => {
+    const slug = await buildValidSlug();
+
+    let addMemberCalls = 0;
+    let rightKeyLookupCalls = 0;
+    const failures: string[] = [];
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [
+          { id: "wrong", inboxId: WRONG_CREATOR_INBOX_ID },
+          { id: "right", inboxId: RIGHT_CREATOR_INBOX_ID },
+        ];
+      },
+      async getWalletPrivateKeyHex(identityId) {
+        if (identityId === "wrong") {
+          return Result.ok(WRONG_PRIVATE_KEY_HEX);
+        }
+
+        rightKeyLookupCalls += 1;
+        if (rightKeyLookupCalls === 1) {
+          return Result.err(
+            InternalError.create("managed identity still attaching"),
+          );
+        }
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient(identityId) {
+        return {
+          addMembers: async () => {
+            if (identityId === "right") {
+              addMemberCalls += 1;
+            }
+            return Result.ok(undefined);
+          },
+          listMessages: async (groupId) =>
+            Result.ok([
+              {
+                messageId: "dm-mixed-retry-msg-1",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]),
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+      async onJoinRejected(failure) {
+        failures.push(failure.error.category);
+      },
+    });
+
+    capturedHandler?.(makeRawDmJoinedEvent("dm-join-mixed-retry"));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(rightKeyLookupCalls).toBeGreaterThanOrEqual(2);
+    expect(addMemberCalls).toBe(1);
+    expect(failures).toEqual([]);
+  });
+
+  test("does not retry recovered invites after a validation failure", async () => {
+    const slug = await buildValidSlug();
+
+    let listMessageCalls = 0;
+    const failures: string[] = [];
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "creator", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async () => Result.ok(undefined),
+          listMessages: async (groupId) => {
+            listMessageCalls += 1;
+            return Result.ok([
+              {
+                messageId: "dm-validation-failure-msg-1",
+                groupId,
+                senderInboxId: TEST_REQUESTER_INBOX_ID,
+                contentType: "text",
+                content: slug,
+                sentAt: new Date().toISOString(),
+                threadId: null,
+              },
+            ]);
+          },
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("wrong-host-tag");
+      },
+      async onJoinRejected(failure) {
+        failures.push(failure.error.category);
+      },
+    });
+
+    capturedHandler?.(makeRawDmJoinedEvent("dm-validation-failure"));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(listMessageCalls).toBe(1);
+    expect(failures).toEqual(["validation"]);
   });
 
   test("does not retry DM recovery for identities that do not own the DM", async () => {

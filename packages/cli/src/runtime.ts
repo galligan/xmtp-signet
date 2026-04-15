@@ -104,7 +104,9 @@ export interface SignetRuntimeDeps {
 
   /** Optional factory for conversation action specs, wired in production by start.ts. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createConversationActions?: () => ActionSpec<any, any, SignetError>[];
+  createConversationActions?: (deps: {
+    auditLog: AuditLog;
+  }) => ActionSpec<any, any, SignetError>[];
 
   /** Optional factory for inbox action specs, wired in production by start.ts. */
   createInboxActions?: () => ActionSpec<unknown, unknown, SignetError>[];
@@ -430,7 +432,7 @@ export async function createSignetRuntime(
   }
 
   if (deps.createConversationActions) {
-    for (const spec of deps.createConversationActions()) {
+    for (const spec of deps.createConversationActions({ auditLog })) {
       registry.register(spec);
     }
   }

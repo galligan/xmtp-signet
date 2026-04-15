@@ -448,6 +448,23 @@ describe("createSignetRuntime", () => {
     expect(runtime.paths.auditLog).toBe(join(tempDir, "audit.jsonl"));
   });
 
+  test("passes the runtime audit log into conversation action wiring", async () => {
+    const tracker = createCallTracker();
+    const config = makeConfig(tempDir);
+    const deps = makeMockDeps(tracker);
+    let conversationAuditLogPath: string | undefined;
+
+    deps.createConversationActions = ({ auditLog }) => {
+      conversationAuditLogPath = auditLog.path;
+      return [];
+    };
+
+    const result = await createSignetRuntime(config, deps);
+    expect(Result.isOk(result)).toBe(true);
+
+    expect(conversationAuditLogPath).toBe(join(tempDir, "audit.jsonl"));
+  });
+
   test("status() reports actual bound port, not config port", async () => {
     const tracker = createCallTracker();
     // Config with port 0 (dynamic allocation)
