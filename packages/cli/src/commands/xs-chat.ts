@@ -107,7 +107,7 @@ async function writeInviteOutput(
 /**
  * Create the `chat` subcommand group.
  *
- * Subcommands: create, list, info, update, sync, join, invite, leave, rm, member.
+ * Subcommands: create, list, info, update, sync, join, invite, update-profile, leave, rm, members.
  */
 export function createChatCommands(
   deps: Partial<XsChatCommandDeps> = {},
