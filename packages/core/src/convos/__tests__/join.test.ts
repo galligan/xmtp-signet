@@ -109,6 +109,7 @@ function createMockClient(options?: {
   inboxId?: string;
   onCreateDm?: (peerInboxId: string) => void;
   onSendDm?: (dmId: string, text: string) => void;
+  sendDmResult?: Result<string, InternalError>;
   onSendMessage?: (
     conversationId: string,
     content: unknown,
@@ -136,7 +137,7 @@ function createMockClient(options?: {
     },
     sendDmMessage: async (dmId, text) => {
       options?.onSendDm?.(dmId, text);
-      return Result.ok("dm-msg-1");
+      return options?.sendDmResult ?? Result.ok("dm-msg-1");
     },
     syncAll: async () => {
       syncCount.value++;
@@ -366,5 +367,41 @@ describe("joinConversation", () => {
     // Identity should have been cleaned up
     const identities = await store.list();
     expect(identities).toHaveLength(0);
+  });
+
+  test("keeps polling when plain-text fallback delivery fails", async () => {
+    const client = createMockClient({
+      sendDmResult: Result.err(
+        InternalError.create("temporary DM fallback failure"),
+      ),
+      groupsAfterSync: [
+        {
+          groupId: "joined-group-1",
+          name: "Joined Group",
+          description: "",
+          imageUrl: "",
+          memberInboxIds: ["joiner-inbox-123", TEST_CREATOR_INBOX_ID],
+          admins: [],
+          superAdmins: [],
+          consentState: "allowed",
+          createdAt: "2026-04-15T14:00:00.000Z",
+          updatedAt: "2026-04-15T14:00:00.000Z",
+        },
+      ],
+    });
+    const deps = createDeps({ client });
+
+    const result = await joinConversation(deps, buildTestUrl(), {
+      pollIntervalMs: 10,
+      maxPollAttempts: 3,
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.groupId).toBe("joined-group-1");
+    const identities = await deps.identityStore.list();
+    expect(identities).toHaveLength(1);
+    expect(identities[0]?.inboxId).toBe("joiner-inbox-123");
   });
 });

@@ -13,6 +13,16 @@ import {
 /** Resolved profile fields for a member after combining updates and snapshots. */
 export interface ResolvedProfile extends MemberProfileEntry {}
 
+function isSnapshotProfileEntry(value: unknown): value is MemberProfileEntry {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "inboxId" in value &&
+    typeof (value as { inboxId?: unknown }).inboxId === "string" &&
+    (value as { inboxId: string }).inboxId.length > 0
+  );
+}
+
 function isContentTypeMatch(
   contentType: string | undefined,
   target: { authorityId: string; typeId: string },
@@ -120,7 +130,7 @@ export function resolveProfilesFromMessages(
       if (!snapshot) continue;
       latestSnapshotProfiles = new Map(
         snapshot.profiles
-          .filter((profile) => profile.inboxId.length > 0)
+          .filter(isSnapshotProfileEntry)
           .map((profile) => [profile.inboxId.toLowerCase(), profile]),
       );
     }

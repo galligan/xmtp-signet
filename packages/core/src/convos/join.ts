@@ -179,8 +179,9 @@ export async function joinConversation(
 
   const sendResult = await client.sendDmMessage(dmResult.value.dmId, slug);
   if (!sendResult.isOk()) {
-    await identityStore.remove(identityId);
-    return sendResult;
+    // Keep polling after the structured request succeeds. Modern Convos hosts
+    // can accept the join without the plain-text fallback, so treating this as
+    // fatal creates a false local failure and encourages duplicate retries.
   }
 
   // Step 6: Poll for group discovery

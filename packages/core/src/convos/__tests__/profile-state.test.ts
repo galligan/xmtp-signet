@@ -94,4 +94,31 @@ describe("profile-state", () => {
       profiles: [{ inboxId: "aabbccdd", name: "Codex" }],
     });
   });
+
+  test("ignores malformed snapshot entries instead of throwing", () => {
+    const messages = [
+      makeMessage({
+        messageId: "profile-snapshot",
+        senderInboxId: "host",
+        contentType: "profile_snapshot",
+        content: {
+          profiles: [{}, { inboxId: "inbox-b", name: "Other Member" }],
+        },
+      }),
+    ];
+
+    expect(() =>
+      resolveProfilesFromMessages(messages, ["inbox-a", "inbox-b"]),
+    ).not.toThrow();
+
+    const resolved = resolveProfilesFromMessages(messages, [
+      "inbox-a",
+      "inbox-b",
+    ]);
+    expect(resolved.get("inbox-a")).toBeUndefined();
+    expect(resolved.get("inbox-b")).toEqual({
+      inboxId: "inbox-b",
+      name: "Other Member",
+    });
+  });
 });
