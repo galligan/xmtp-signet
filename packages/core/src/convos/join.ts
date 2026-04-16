@@ -205,7 +205,6 @@ export async function joinConversation(
     inviteSlug: slug,
     profile: { memberKind: "agent" },
   };
-  const joinRequestSentAfter = new Date().toISOString();
   const structuredSendResult = await client.sendMessage(
     dmResult.value.dmId,
     joinRequest,
@@ -256,7 +255,6 @@ export async function joinConversation(
       dmResult.value.dmId,
       {
         limit: 20,
-        after: joinRequestSentAfter,
         direction: "descending",
       },
     );

@@ -285,9 +285,13 @@ describe("joinConversation", () => {
   });
 
   test("surfaces invite-join errors returned on the creator DM", async () => {
+    const listCalls: Array<Record<string, unknown> | undefined> = [];
     const client = createMockClient({
-      listMessagesImpl: async () =>
-        Result.ok([
+      listMessagesImpl: async (_groupId, options) => {
+        listCalls.push(
+          options ? ({ ...options } as Record<string, unknown>) : undefined,
+        );
+        return Result.ok([
           {
             messageId: "invite-error-1",
             groupId: "dm-1",
@@ -301,7 +305,8 @@ describe("joinConversation", () => {
             sentAt: "2026-04-16T12:00:00.000Z",
             threadId: null,
           },
-        ]),
+        ]);
+      },
       groupsAfterSync: [],
     });
     const deps = createDeps({ client });
@@ -318,6 +323,12 @@ describe("joinConversation", () => {
     expect(result.error.message).toContain(
       "This conversation is no longer available",
     );
+    expect(listCalls).toEqual([
+      {
+        limit: 20,
+        direction: "descending",
+      },
+    ]);
 
     const identities = await deps.identityStore.list();
     expect(identities).toHaveLength(0);
