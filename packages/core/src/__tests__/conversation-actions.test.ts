@@ -179,7 +179,7 @@ function createJoinMockClient(): XmtpClient {
     removeSuperAdmin: notImplemented,
     createGroup: notImplemented,
     getMessageById: notImplemented,
-    listMessages: notImplemented,
+    listMessages: async () => Result.ok([]),
     streamAllMessages: async () =>
       Result.ok({ messages: emptyAsyncIterable(), abort: () => {} }),
     streamGroups: async () =>

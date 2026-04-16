@@ -30,6 +30,22 @@ describe("profile-messages", () => {
     });
   });
 
+  test("round-trips default-valued metadata variants in a profile update", () => {
+    const encoded = encodeProfileUpdate({
+      metadata: {
+        retries: { type: "number", value: 0 },
+        suspended: { type: "bool", value: false },
+      },
+    });
+
+    const decoded = decodeProfileUpdate(encoded);
+
+    expect(decoded.metadata).toEqual({
+      retries: { type: "number", value: 0 },
+      suspended: { type: "bool", value: false },
+    });
+  });
+
   test("round-trips a profile snapshot", () => {
     const encoded = encodeProfileSnapshot({
       profiles: [
@@ -49,6 +65,30 @@ describe("profile-messages", () => {
       inboxId: "aa".repeat(32),
       name: "Codex",
       memberKind: MemberKind.Agent,
+    });
+  });
+
+  test("round-trips default-valued metadata variants in a profile snapshot", () => {
+    const encoded = encodeProfileSnapshot({
+      profiles: [
+        {
+          inboxId: "bb".repeat(32),
+          metadata: {
+            retries: { type: "number", value: 0 },
+            suspended: { type: "bool", value: false },
+          },
+        },
+      ],
+    });
+
+    const decoded = decodeProfileSnapshot(encoded);
+
+    expect(decoded.profiles[0]).toMatchObject({
+      inboxId: "bb".repeat(32),
+      metadata: {
+        retries: { type: "number", value: 0 },
+        suspended: { type: "bool", value: false },
+      },
     });
   });
 });
