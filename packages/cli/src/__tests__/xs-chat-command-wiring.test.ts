@@ -161,7 +161,7 @@ describe("xs chat join", () => {
 });
 
 describe("xs chat invite", () => {
-  test("renders the link-friendly output format without falling back to key-value text", async () => {
+  test("preserves the legacy key-value output for non-JSON invite consumers", async () => {
     const harness = createHarness({
       inviteUrl: "https://popup.convos.org/v2?i=test",
       groupName: "Codex Group",
@@ -186,11 +186,11 @@ describe("xs chat invite", () => {
         },
       },
     ]);
-    expect(harness.stdout.join("")).toContain("Group: Codex Group (conv_abc)");
+    expect(harness.stdout.join("")).toContain("groupName: Codex Group");
     expect(harness.stdout.join("")).toContain(
       "https://popup.convos.org/v2?i=test",
     );
-    expect(harness.stdout.join("")).not.toContain("inviteUrl:");
+    expect(harness.stdout.join("")).toContain("inviteUrl:");
   });
 
   test("includes a QR data URL in JSON output", async () => {

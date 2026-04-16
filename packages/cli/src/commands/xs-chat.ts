@@ -70,17 +70,12 @@ function normalizeInviteFormat(format: string | undefined): InviteFormat {
 async function writeInviteOutput(
   deps: XsChatCommandDeps,
   inviteResult: Record<string, unknown>,
-  chatId: string,
   options: { readonly json: boolean; readonly format: InviteFormat },
 ): Promise<void> {
   const inviteUrl =
     typeof inviteResult["inviteUrl"] === "string"
       ? inviteResult["inviteUrl"]
       : "";
-  const groupName =
-    typeof inviteResult["groupName"] === "string"
-      ? inviteResult["groupName"]
-      : "unnamed";
 
   if (options.json) {
     const { renderQrToDataUrl } = await import("../invite/qr.js");
@@ -91,11 +86,7 @@ async function writeInviteOutput(
     return;
   }
 
-  deps.writeStdout(`Group: ${groupName} (${chatId})\n`);
-
-  if (options.format === "link" || options.format === "both") {
-    deps.writeStdout(`\nInvite URL:\n${inviteUrl}\n`);
-  }
+  deps.writeStdout(formatOutput(inviteResult, { json: false }) + "\n");
 
   if (options.format === "qr" || options.format === "both") {
     const { renderQrToTerminal } = await import("../invite/qr.js");
@@ -368,7 +359,6 @@ export function createChatCommands(
         await writeInviteOutput(
           resolvedDeps,
           result.value as Record<string, unknown>,
-          id,
           { json, format },
         );
       },
