@@ -190,8 +190,8 @@ The `xs` command groups are:
 - `operator` — `create`, `list`, `info`, `rename`, `rm`
 - `cred` — `issue`, `list`, `info`, `revoke`, `update`
 - `chat` — `create`, `list`, `info`, `update`, `sync`, `join`, `invite`,
-  `leave`, `rm`, plus `members` subgroup (`list`, `add`, `rm`, `promote`,
-  `demote`)
+  `update-profile`, `leave`, `rm`, plus `members` subgroup (`list`, `add`,
+  `rm`, `promote`, `demote`)
 - `msg` — `send`, `reply`, `react`, `read`, `list`, `info`
 - `policy` — `create`, `list`, `info`, `update`, `rm`
 - `seal` _(deferred)_ — `list`, `info`, `verify`, `history`

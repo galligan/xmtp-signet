@@ -4,7 +4,7 @@ import protobuf from "protobufjs";
 import Long from "long";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { InternalError } from "@xmtp/signet-schemas";
+import { InternalError, type SignetError } from "@xmtp/signet-schemas";
 import { SqliteIdentityStore } from "../../identity-store.js";
 import type {
   XmtpClient,
@@ -14,6 +14,7 @@ import type {
 } from "../../xmtp-client-factory.js";
 import { InviteJoinErrorType } from "../invite-join-error.js";
 import { joinConversation, type JoinConversationDeps } from "../join.js";
+import { extractProfileUpdateContent } from "../profile-state.js";
 
 // --- Protobuf setup (same as invite-parser tests) ---
 
@@ -110,7 +111,7 @@ function createMockClient(options?: {
   inboxId?: string;
   onCreateDm?: (peerInboxId: string) => void;
   onSendDm?: (dmId: string, text: string) => void;
-  sendDmResult?: Result<string, InternalError>;
+  sendDmResult?: Result<string, SignetError>;
   onSendMessage?: (
     conversationId: string,
     content: unknown,
@@ -250,21 +251,28 @@ describe("joinConversation", () => {
 
     expect(result.value.groupId).toBe("joined-group-1");
     expect(result.value.identityId).toBeDefined();
+    expect(result.value.profileApplied).toBe(true);
 
     // Verify DM was sent to creator
     expect(dmCalls).toHaveLength(1);
     expect(dmCalls[0]?.peerInboxId).toBe(TEST_CREATOR_INBOX_ID);
 
-    expect(structuredCalls).toEqual([
-      {
-        conversationId: "dm-1",
-        content: {
-          inviteSlug: buildTestSlug(),
-          profile: { memberKind: "agent" },
-        },
-        contentType: "convos.org/join_request:1.0",
+    expect(structuredCalls).toHaveLength(2);
+    expect(structuredCalls[0]).toEqual({
+      conversationId: "dm-1",
+      content: {
+        inviteSlug: buildTestSlug(),
+        profile: { memberKind: "agent" },
       },
-    ]);
+      contentType: "convos.org/join_request:1.0",
+    });
+    expect(structuredCalls[1]?.conversationId).toBe("joined-group-1");
+    expect(structuredCalls[1]?.contentType).toBe(
+      "convos.org/profile_update:1.0",
+    );
+    expect(extractProfileUpdateContent(structuredCalls[1]?.content)).toEqual({
+      memberKind: 1,
+    });
 
     // Verify slug was sent as DM text
     expect(sendCalls).toHaveLength(1);
@@ -272,6 +280,119 @@ describe("joinConversation", () => {
     expect(sendCalls[0]?.text).toBe(buildTestSlug());
 
     // Verify identity was persisted
+    const identities = await deps.identityStore.list();
+    expect(identities).toHaveLength(1);
+    expect(identities[0]?.inboxId).toBe("joiner-inbox-123");
+  });
+
+  test("includes the selected profile name and publishes a post-join profile update", async () => {
+    const structuredCalls: Array<{
+      conversationId: string;
+      content: unknown;
+      contentType: string | undefined;
+    }> = [];
+
+    const client = createMockClient({
+      onSendMessage: (conversationId, content, contentType) =>
+        structuredCalls.push({ conversationId, content, contentType }),
+      groupsAfterSync: [
+        {
+          groupId: "joined-group-1",
+          name: "Test Group",
+          description: "",
+          memberInboxIds: ["joiner-inbox-123", TEST_CREATOR_INBOX_ID],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const result = await joinConversation(
+      createDeps({ client }),
+      buildTestUrl(),
+      {
+        label: "codex",
+        profileName: "Codex",
+        pollIntervalMs: 10,
+        maxPollAttempts: 3,
+      },
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.profileName).toBe("Codex");
+    expect(result.value.profileApplied).toBe(true);
+    expect(structuredCalls).toHaveLength(2);
+    expect(structuredCalls[0]).toEqual({
+      conversationId: "dm-1",
+      content: {
+        inviteSlug: buildTestSlug(),
+        profile: { name: "Codex", memberKind: "agent" },
+      },
+      contentType: "convos.org/join_request:1.0",
+    });
+    expect(structuredCalls[1]?.conversationId).toBe("joined-group-1");
+    expect(structuredCalls[1]?.contentType).toBe(
+      "convos.org/profile_update:1.0",
+    );
+    expect(extractProfileUpdateContent(structuredCalls[1]?.content)).toEqual({
+      name: "Codex",
+      memberKind: 1,
+    });
+  });
+
+  test("continues polling when the plain-text fallback fails after a structured join request", async () => {
+    const structuredCalls: Array<{
+      conversationId: string;
+      content: unknown;
+      contentType: string | undefined;
+    }> = [];
+
+    const client = createMockClient({
+      sendDmResult: Result.err(
+        InternalError.create("temporary DM fallback failure"),
+      ),
+      onSendMessage: (conversationId, content, contentType) =>
+        structuredCalls.push({ conversationId, content, contentType }),
+      groupsAfterSync: [
+        {
+          groupId: "joined-group-1",
+          name: "Test Group",
+          description: "",
+          memberInboxIds: ["joiner-inbox-123", TEST_CREATOR_INBOX_ID],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const deps = createDeps({ client });
+    const result = await joinConversation(deps, buildTestUrl(), {
+      pollIntervalMs: 10,
+      maxPollAttempts: 3,
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.groupId).toBe("joined-group-1");
+    expect(result.value.profileApplied).toBe(true);
+    expect(structuredCalls).toHaveLength(2);
+    expect(structuredCalls[0]).toEqual({
+      conversationId: "dm-1",
+      content: {
+        inviteSlug: buildTestSlug(),
+        profile: { memberKind: "agent" },
+      },
+      contentType: "convos.org/join_request:1.0",
+    });
+    expect(structuredCalls[1]?.conversationId).toBe("joined-group-1");
+    expect(structuredCalls[1]?.contentType).toBe(
+      "convos.org/profile_update:1.0",
+    );
+    expect(extractProfileUpdateContent(structuredCalls[1]?.content)).toEqual({
+      memberKind: 1,
+    });
+
     const identities = await deps.identityStore.list();
     expect(identities).toHaveLength(1);
     expect(identities[0]?.inboxId).toBe("joiner-inbox-123");

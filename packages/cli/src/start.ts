@@ -704,6 +704,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
 
       const actions = createConversationActions({
         identityStore: core.identityStore,
+        ...(operatorManagerRef ? { operatorManager: operatorManagerRef } : {}),
         getManagedClient: (id) => core.getManagedClient(id),
         getManagedClientForGroup: (groupId) =>
           core.getManagedClientForGroup(groupId),

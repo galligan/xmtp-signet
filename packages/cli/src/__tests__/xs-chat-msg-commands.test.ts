@@ -197,9 +197,9 @@ describe("chat commands", () => {
 
   // -- total count --
 
-  test("has 10 direct subcommands (including member group)", async () => {
+  test("has 11 direct subcommands (including member group)", async () => {
     const cmd = await load();
-    expect(cmd.commands.length).toBe(10);
+    expect(cmd.commands.length).toBe(11);
   });
 });
 

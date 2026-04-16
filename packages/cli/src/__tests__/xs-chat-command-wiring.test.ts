@@ -122,6 +122,125 @@ describe("xs chat update", () => {
   });
 });
 
+describe("xs chat join", () => {
+  test("routes operator and explicit profile options through the daemon client", async () => {
+    const harness = createHarness({ groupId: "g1", profileName: "Codex" });
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "join",
+      "https://popup.convos.org/v2?i=test",
+      "--as",
+      "joiner",
+      "--op",
+      "op_codex",
+      "--profile-name",
+      "Codex",
+      "--timeout",
+      "45",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.withDaemonCalls).toEqual([{ configPath: "/tmp/test.toml" }]);
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "chat.join",
+        params: {
+          inviteUrl: "https://popup.convos.org/v2?i=test",
+          label: "joiner",
+          operatorId: "op_codex",
+          profileName: "Codex",
+          timeoutSeconds: 45,
+        },
+      },
+    ]);
+  });
+});
+
+describe("xs chat invite", () => {
+  test("preserves the legacy key-value output for non-JSON invite consumers", async () => {
+    const harness = createHarness({
+      inviteUrl: "https://popup.convos.org/v2?i=test",
+      groupName: "Codex Group",
+      groupId: "g1",
+    });
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "invite",
+      "conv_abc",
+      "--format",
+      "link",
+    ]);
+
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "chat.invite",
+        params: {
+          chatId: "conv_abc",
+        },
+      },
+    ]);
+    expect(harness.stdout.join("")).toContain("groupName: Codex Group");
+    expect(harness.stdout.join("")).toContain(
+      "https://popup.convos.org/v2?i=test",
+    );
+    expect(harness.stdout.join("")).toContain("inviteUrl:");
+  });
+
+  test("includes a QR data URL in JSON output", async () => {
+    const harness = createHarness({
+      inviteUrl: "https://popup.convos.org/v2?i=test",
+      groupName: "Codex Group",
+      groupId: "g1",
+    });
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync(["node", "chat", "invite", "conv_abc", "--json"]);
+
+    const parsed = JSON.parse(harness.stdout.join(""));
+    expect(parsed.inviteUrl).toBe("https://popup.convos.org/v2?i=test");
+    expect(parsed.qrDataUrl).toMatch(/^data:image\/png;base64,/);
+  });
+});
+
+describe("xs chat update-profile", () => {
+  test("routes identity and operator-backed defaults through the daemon client", async () => {
+    const harness = createHarness({ profileApplied: true });
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "update-profile",
+      "conv_abc",
+      "--as",
+      "joiner",
+      "--op",
+      "op_codex",
+      "--config",
+      "/tmp/test.toml",
+    ]);
+
+    expect(harness.withDaemonCalls).toEqual([{ configPath: "/tmp/test.toml" }]);
+    expect(harness.requestCalls).toEqual([
+      {
+        method: "chat.update-profile",
+        params: {
+          chatId: "conv_abc",
+          identityLabel: "joiner",
+          operatorId: "op_codex",
+        },
+      },
+    ]);
+  });
+});
+
 describe("xs chat leave", () => {
   test("without --force prints dry-run message and does not dispatch", async () => {
     const harness = createHarness({ leftGroup: true });

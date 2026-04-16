@@ -1,7 +1,12 @@
 import { Result } from "better-result";
 import { z } from "zod";
-import type { ActionSpec } from "@xmtp/signet-contracts";
-import { NotFoundError, createResourceId } from "@xmtp/signet-schemas";
+import type { ActionSpec, OperatorManager } from "@xmtp/signet-contracts";
+import {
+  InternalError,
+  NotFoundError,
+  ValidationError,
+  createResourceId,
+} from "@xmtp/signet-schemas";
 import type { SignetError, IdMappingStore } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
@@ -12,6 +17,7 @@ import type {
 import type { SignetCoreConfig } from "./config.js";
 import { joinConversation } from "./convos/join.js";
 import { generateConvosInviteUrl } from "./convos/invite-generator.js";
+import { encodeProfileUpdate, MemberKind } from "./convos/profile-messages.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
 
 const GroupInfoSchema = z.object({
@@ -36,10 +42,22 @@ const CleanupResultSchema = z.object({
   actions: z.array(z.string()),
 });
 
+const ProfileSourceSchema = z.enum(["explicit", "operator-default"]);
+
+const ProfileUpdateResultSchema = z.object({
+  chatId: z.string().optional(),
+  groupId: z.string(),
+  profileName: z.string(),
+  profileSource: ProfileSourceSchema,
+  profileApplied: z.literal(true),
+});
+
 /** Dependencies used to build conversation-related action specs. */
 export interface ConversationActionDeps {
   /** Identity store used to resolve conversation creators and viewers. */
   readonly identityStore: SqliteIdentityStore;
+  /** Optional operator manager for defaulting human-facing Convos profile names. */
+  readonly operatorManager?: OperatorManager;
   /** Lookup for the managed client tied to a signet identity. */
   readonly getManagedClient: (identityId: string) => ManagedClient | undefined;
   /** Optional lookup for the managed client currently responsible for a group. */
@@ -145,6 +163,48 @@ function ensureLocalId(
   const localId = createResourceId("conversation");
   idMappings.set(groupId, localId, "conversation");
   return localId;
+}
+
+type ProfileSelectionSource = z.infer<typeof ProfileSourceSchema>;
+
+interface ProfileSelection {
+  readonly profileName: string;
+  readonly profileSource: ProfileSelectionSource;
+}
+
+async function resolveProfileSelection(
+  operatorManager: OperatorManager | undefined,
+  input: {
+    readonly operatorId?: string | undefined;
+    readonly profileName?: string | undefined;
+  },
+): Promise<Result<ProfileSelection | null, SignetError>> {
+  if (input.profileName !== undefined) {
+    return Result.ok({
+      profileName: input.profileName,
+      profileSource: "explicit",
+    });
+  }
+
+  if (input.operatorId === undefined) {
+    return Result.ok(null);
+  }
+
+  if (!operatorManager) {
+    return Result.err(
+      InternalError.create(
+        "OperatorManager not initialized before resolving profile defaults",
+      ) as SignetError,
+    );
+  }
+
+  const operatorResult = await operatorManager.lookup(input.operatorId);
+  if (Result.isError(operatorResult)) return operatorResult;
+
+  return Result.ok({
+    profileName: operatorResult.value.config.label,
+    profileSource: "operator-default",
+  });
 }
 
 async function resolveManagedClientForGroup(
@@ -381,6 +441,8 @@ export function createConversationActions(
     {
       inviteUrl: string;
       label?: string | undefined;
+      operatorId?: string | undefined;
+      profileName?: string | undefined;
       timeoutSeconds?: number | undefined;
     },
     {
@@ -391,6 +453,9 @@ export function createConversationActions(
       inviteTag: string;
       groupName: string | undefined;
       creatorInboxId: string;
+      profileName?: string | undefined;
+      profileSource?: ProfileSelectionSource | undefined;
+      profileApplied?: boolean | undefined;
     },
     SignetError
   > = {
@@ -400,6 +465,8 @@ export function createConversationActions(
     input: z.object({
       inviteUrl: z.string(),
       label: z.string().optional(),
+      operatorId: z.string().optional(),
+      profileName: z.string().optional(),
       timeoutSeconds: z.number().positive().optional(),
     }),
     handler: async (input) => {
@@ -415,14 +482,24 @@ export function createConversationActions(
       const maxPollAttempts = input.timeoutSeconds
         ? Math.ceil((input.timeoutSeconds * 1000) / 2000)
         : undefined;
+      const profileSelectionResult = await resolveProfileSelection(
+        deps.operatorManager,
+        input,
+      );
+      if (Result.isError(profileSelectionResult)) return profileSelectionResult;
+      const profileSelection = profileSelectionResult.value;
 
       const joinOptions: {
         label?: string;
         maxPollAttempts?: number;
+        profileName?: string;
       } = {};
       if (input.label !== undefined) joinOptions.label = input.label;
       if (maxPollAttempts !== undefined)
         joinOptions.maxPollAttempts = maxPollAttempts;
+      if (profileSelection) {
+        joinOptions.profileName = profileSelection.profileName;
+      }
 
       const joinResult = await joinConversation(
         {
@@ -448,7 +525,13 @@ export function createConversationActions(
       }
 
       const chatId = ensureLocalId(deps.idMappings, joinResult.value.groupId);
-      return Result.ok({ ...joinResult.value, chatId });
+      return Result.ok({
+        ...joinResult.value,
+        chatId,
+        ...(profileSelection
+          ? { profileSource: profileSelection.profileSource }
+          : {}),
+      });
     },
     cli: {
       command: "chat:join",
@@ -688,6 +771,93 @@ export function createConversationActions(
     },
     cli: {
       command: "chat:update",
+    },
+    mcp: {},
+    http: {
+      auth: "admin",
+    },
+  };
+
+  const updateProfile: ActionSpec<
+    {
+      chatId: string;
+      identityLabel?: string | undefined;
+      operatorId?: string | undefined;
+      profileName?: string | undefined;
+    },
+    {
+      chatId?: string | undefined;
+      groupId: string;
+      profileName: string;
+      profileSource: ProfileSelectionSource;
+      profileApplied: true;
+    },
+    SignetError
+  > = {
+    id: "chat.update-profile",
+    description: "Publish a Convos profile update for a group identity",
+    intent: "write",
+    input: z
+      .object({
+        chatId: z.string(),
+        identityLabel: z.string().optional(),
+        operatorId: z.string().optional(),
+        profileName: z.string().optional(),
+      })
+      .refine(
+        (value) =>
+          value.profileName !== undefined || value.operatorId !== undefined,
+        {
+          message: "Provide a profile name or operator ID",
+          path: ["chatId"],
+        },
+      ),
+    output: ProfileUpdateResultSchema,
+    handler: async (input) => {
+      const groupId = resolveGroupId(deps.idMappings, input.chatId);
+      const managedResult = await resolveManagedClientForGroup(
+        deps,
+        groupId,
+        input.identityLabel,
+      );
+      if (Result.isError(managedResult)) return managedResult;
+
+      const profileSelectionResult = await resolveProfileSelection(
+        deps.operatorManager,
+        input,
+      );
+      if (Result.isError(profileSelectionResult)) return profileSelectionResult;
+
+      const profileSelection = profileSelectionResult.value;
+      if (!profileSelection) {
+        return Result.err(
+          ValidationError.create(
+            "profileName",
+            "A profile name or operator default is required",
+          ) as SignetError,
+        );
+      }
+
+      const updateResult = await managedResult.value.client.sendMessage(
+        groupId,
+        encodeProfileUpdate({
+          name: profileSelection.profileName,
+          memberKind: MemberKind.Agent,
+        }),
+        "convos.org/profile_update:1.0",
+      );
+      if (Result.isError(updateResult)) return updateResult;
+
+      return Result.ok({
+        chatId: input.chatId,
+        groupId,
+        profileName: profileSelection.profileName,
+        profileSource: profileSelection.profileSource,
+        profileApplied: true,
+      });
+    },
+    cli: {
+      command: "chat:update-profile",
     },
     mcp: {},
     http: {
@@ -1015,6 +1185,7 @@ export function createConversationActions(
     list,
     info,
     update,
+    updateProfile,
     join,
     invite,
     leave,

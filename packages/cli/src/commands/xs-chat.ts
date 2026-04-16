@@ -40,6 +40,8 @@ const defaultDeps: XsChatCommandDeps = {
   },
 };
 
+type InviteFormat = "link" | "qr" | "both";
+
 function writeError(
   deps: XsChatCommandDeps,
   error: SignetError,
@@ -59,10 +61,44 @@ function writeError(
   deps.exit(exitCodeFromCategory(error.category));
 }
 
+function normalizeInviteFormat(format: string | undefined): InviteFormat {
+  return format === "link" || format === "qr" || format === "both"
+    ? format
+    : "both";
+}
+
+async function writeInviteOutput(
+  deps: XsChatCommandDeps,
+  inviteResult: Record<string, unknown>,
+  options: { readonly json: boolean; readonly format: InviteFormat },
+): Promise<void> {
+  const inviteUrl =
+    typeof inviteResult["inviteUrl"] === "string"
+      ? inviteResult["inviteUrl"]
+      : "";
+
+  if (options.json) {
+    const { renderQrToDataUrl } = await import("../invite/qr.js");
+    const qrDataUrl = await renderQrToDataUrl(inviteUrl);
+    deps.writeStdout(
+      formatOutput({ ...inviteResult, qrDataUrl }, { json: true }) + "\n",
+    );
+    return;
+  }
+
+  deps.writeStdout(formatOutput(inviteResult, { json: false }) + "\n");
+
+  if (options.format === "qr" || options.format === "both") {
+    const { renderQrToTerminal } = await import("../invite/qr.js");
+    const qr = await renderQrToTerminal(inviteUrl);
+    deps.writeStdout(`\n${qr}`);
+  }
+}
+
 /**
  * Create the `chat` subcommand group.
  *
- * Subcommands: create, list, info, update, sync, join, invite, leave, rm, member.
+ * Subcommands: create, list, info, update, sync, join, invite, update-profile, leave, rm, members.
  */
 export function createChatCommands(
   deps: Partial<XsChatCommandDeps> = {},
@@ -237,17 +273,30 @@ export function createChatCommands(
     .description("Join a conversation via invite link")
     .argument("<url>", "Invite URL")
     .option("--config <path>", "Path to config file")
-    .option("--as <inbox>", "Inbox ID to act as")
+    .option("--as <label>", "Label for the new joined identity")
+    .option("--op <operator>", "Operator ID for profile defaults")
+    .option("--profile-name <name>", "Explicit Convos profile name")
     .option("--timeout <seconds>", "Timeout in seconds")
     .option("--json", "JSON output")
     .action(
       async (
         url: string,
-        opts: { config?: string; as?: string; timeout?: string; json?: true },
+        opts: {
+          config?: string;
+          as?: string;
+          op?: string;
+          profileName?: string;
+          timeout?: string;
+          json?: true;
+        },
       ) => {
         const json = opts.json === true;
         const payload: Record<string, unknown> = { inviteUrl: url };
         if (opts.as !== undefined) payload["label"] = opts.as;
+        if (opts.op !== undefined) payload["operatorId"] = opts.op;
+        if (opts.profileName !== undefined) {
+          payload["profileName"] = opts.profileName;
+        }
         if (opts.timeout !== undefined) {
           payload["timeoutSeconds"] = Number.parseInt(opts.timeout, 10);
         }
@@ -274,6 +323,7 @@ export function createChatCommands(
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--name <name>", "Invite display name")
     .option("--description <desc>", "Invite description")
+    .option("--format <type>", "Output format: link, qr, or both", "both")
     .option("--json", "JSON output")
     .action(
       async (
@@ -283,10 +333,12 @@ export function createChatCommands(
           as?: string;
           name?: string;
           description?: string;
+          format?: string;
           json?: true;
         },
       ) => {
         const json = opts.json === true;
+        const format = normalizeInviteFormat(opts.format);
         const payload: Record<string, unknown> = { chatId: id };
         if (opts.as !== undefined) payload["identityLabel"] = opts.as;
         if (opts.name !== undefined) payload["name"] = opts.name;
@@ -297,6 +349,52 @@ export function createChatCommands(
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
           (client) => client.request("chat.invite", payload),
+        );
+
+        if (result.isErr()) {
+          writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        await writeInviteOutput(
+          resolvedDeps,
+          result.value as Record<string, unknown>,
+          { json, format },
+        );
+      },
+    );
+
+  cmd
+    .command("update-profile")
+    .description("Publish a Convos profile update")
+    .argument("<id>", "Conversation ID")
+    .option("--config <path>", "Path to config file")
+    .option("--as <identity>", "Identity label to act as")
+    .option("--op <operator>", "Operator ID for profile defaults")
+    .option("--profile-name <name>", "Explicit Convos profile name")
+    .option("--json", "JSON output")
+    .action(
+      async (
+        id: string,
+        opts: {
+          config?: string;
+          as?: string;
+          op?: string;
+          profileName?: string;
+          json?: true;
+        },
+      ) => {
+        const json = opts.json === true;
+        const payload: Record<string, unknown> = { chatId: id };
+        if (opts.as !== undefined) payload["identityLabel"] = opts.as;
+        if (opts.op !== undefined) payload["operatorId"] = opts.op;
+        if (opts.profileName !== undefined) {
+          payload["profileName"] = opts.profileName;
+        }
+
+        const result = await resolvedDeps.withDaemonClient(
+          { configPath: opts.config },
+          (client) => client.request("chat.update-profile", payload),
         );
 
         if (result.isErr()) {

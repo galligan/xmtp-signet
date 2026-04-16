@@ -1,9 +1,9 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { Result } from "better-result";
-import { NotFoundError } from "@xmtp/signet-schemas";
+import { InternalError, NotFoundError } from "@xmtp/signet-schemas";
 import type { SignetError, IdMappingStore } from "@xmtp/signet-schemas";
-import type { HandlerContext } from "@xmtp/signet-contracts";
+import type { HandlerContext, OperatorManager } from "@xmtp/signet-contracts";
 import { SqliteIdentityStore } from "../identity-store.js";
 import { createSqliteIdMappingStore } from "../id-mapping-store.js";
 import type { ManagedClient } from "../client-registry.js";
@@ -18,6 +18,7 @@ import {
   type ConversationActionDeps,
 } from "../conversation-actions.js";
 import { generateConvosInviteUrl } from "../convos/invite-generator.js";
+import { extractProfileUpdateContent } from "../convos/profile-state.js";
 
 /** Minimal handler context for tests. */
 function stubCtx(): HandlerContext {
@@ -191,6 +192,37 @@ function createJoinMockClient(): XmtpClient {
   };
 }
 
+function createOperatorManager(
+  labels: Record<string, string>,
+): OperatorManager {
+  return {
+    create: async () => Result.err(InternalError.create("not implemented")),
+    list: async () => Result.err(InternalError.create("not implemented")),
+    lookup: async (operatorId) => {
+      const label = labels[operatorId];
+      if (!label) {
+        return Result.err(
+          NotFoundError.create("operator", operatorId) as SignetError,
+        );
+      }
+      return Result.ok({
+        id: operatorId,
+        config: {
+          label,
+          role: "operator",
+          scopeMode: "per-chat",
+          provider: "internal",
+        },
+        createdAt: new Date().toISOString(),
+        createdBy: "owner",
+        status: "active",
+      });
+    },
+    update: async () => Result.err(InternalError.create("not implemented")),
+    remove: async () => Result.err(InternalError.create("not implemented")),
+  };
+}
+
 describe("conversation actions", () => {
   let identityStore: SqliteIdentityStore;
   let idMappings: IdMappingStore;
@@ -215,9 +247,11 @@ describe("conversation actions", () => {
       groupId: string,
     ) => Promise<Result<XmtpGroupInfo, SignetError>>,
     cleanupLocalState?: ConversationActionDeps["cleanupLocalState"],
+    operatorManager?: OperatorManager,
   ): void {
     deps = {
       identityStore,
+      ...(operatorManager ? { operatorManager } : {}),
       getManagedClient: (id) => managedClients.get(id),
       getManagedClientForGroup: (groupId) =>
         [...managedClients.values()].find((managed) =>
@@ -243,6 +277,9 @@ describe("conversation actions", () => {
     const updateAction = actions.find((a) => a.id === "chat.update");
     const leaveAction = actions.find((a) => a.id === "chat.leave");
     const rmAction = actions.find((a) => a.id === "chat.rm");
+    const updateProfileAction = actions.find(
+      (a) => a.id === "chat.update-profile",
+    );
     const removeMemberAction = actions.find(
       (a) => a.id === "chat.remove-member",
     );
@@ -266,6 +303,9 @@ describe("conversation actions", () => {
 
     expect(updateAction?.intent).toBe("write");
     expect(updateAction?.http?.auth).toBe("admin");
+
+    expect(updateProfileAction?.intent).toBe("write");
+    expect(updateProfileAction?.http?.auth).toBe("admin");
 
     expect(leaveAction?.intent).toBe("write");
     expect(leaveAction?.http?.auth).toBe("admin");
@@ -452,7 +492,58 @@ describe("conversation actions", () => {
       if (!result.isOk()) return;
 
       expect(result.value.groupId).toBe("joined-group-1");
+      expect(result.value.profileApplied).toBe(true);
       expect(attachedIdentityIds).toEqual([result.value.identityId]);
+    });
+
+    test("defaults the profile name from the operator label when requested", async () => {
+      const inviteUrl = await buildJoinInviteUrl();
+      const joinClient = createJoinMockClient();
+      const joinClientFactory: XmtpClientFactory = {
+        create: async () => Result.ok(joinClient),
+      };
+
+      deps = {
+        identityStore,
+        operatorManager: createOperatorManager({ op_codex: "Codex" }),
+        getManagedClient: (id) => managedClients.get(id),
+        getManagedClientForGroup: (groupId) =>
+          [...managedClients.values()].find((managed) =>
+            managed.groupIds.has(groupId),
+          ),
+        getGroupInfo: async (groupId) =>
+          Result.err(NotFoundError.create("group", groupId) as SignetError),
+        idMappings,
+        clientFactory: joinClientFactory,
+        signerProviderFactory: () => createJoinMockSignerProvider(),
+        config: {
+          dataDir: ":memory:",
+          env: "dev",
+          appVersion: "xmtp-signet/test",
+        },
+      };
+
+      const actions = createConversationActions(deps);
+      const joinAction = actions.find((a) => a.id === "chat.join");
+      expect(joinAction).toBeDefined();
+      if (!joinAction) return;
+
+      const result = await joinAction.handler(
+        {
+          inviteUrl,
+          label: "joiner",
+          operatorId: "op_codex",
+          timeoutSeconds: 2,
+        },
+        stubCtx(),
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value.profileName).toBe("Codex");
+      expect(result.value.profileSource).toBe("operator-default");
+      expect(result.value.profileApplied).toBe(true);
     });
 
     test("returns success even when live attach fails after the durable join completes", async () => {
@@ -501,6 +592,113 @@ describe("conversation actions", () => {
       if (!result.isOk()) return;
 
       expect(result.value.groupId).toBe("joined-group-1");
+      expect(result.value.profileApplied).toBe(true);
+    });
+  });
+
+  describe("chat.update-profile", () => {
+    test("publishes a profile update with an explicit name", async () => {
+      const managed = await seedIdentity("profile-updater");
+      managed.groupIds.add("g-profile");
+      const sent: Array<{
+        groupId: string;
+        content: unknown;
+        contentType: string | undefined;
+      }> = [];
+      const trackedClient: XmtpClient = {
+        ...createMockClient({ inboxId: managed.inboxId }),
+        sendMessage: async (groupId, content, contentType) => {
+          sent.push({ groupId, content, contentType });
+          return Result.ok("profile-msg-1");
+        },
+      };
+      managedClients.set(managed.identityId, {
+        ...managed,
+        client: trackedClient,
+      });
+      setupDeps();
+
+      const actions = createConversationActions(deps);
+      const updateProfileAction = actions.find(
+        (a) => a.id === "chat.update-profile",
+      );
+      expect(updateProfileAction).toBeDefined();
+      if (!updateProfileAction) return;
+
+      const result = await updateProfileAction.handler(
+        {
+          chatId: "g-profile",
+          identityLabel: "profile-updater",
+          profileName: "Codex",
+        },
+        stubCtx(),
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value).toEqual({
+        chatId: "g-profile",
+        groupId: "g-profile",
+        profileName: "Codex",
+        profileSource: "explicit",
+        profileApplied: true,
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.groupId).toBe("g-profile");
+      expect(sent[0]?.contentType).toBe("convos.org/profile_update:1.0");
+      expect(extractProfileUpdateContent(sent[0]?.content)).toEqual({
+        name: "Codex",
+        memberKind: 1,
+      });
+    });
+
+    test("defaults the profile name from the operator label", async () => {
+      const managed = await seedIdentity("profile-updater");
+      managed.groupIds.add("g-profile");
+      const sent: Array<{ content: unknown }> = [];
+      const trackedClient: XmtpClient = {
+        ...createMockClient({ inboxId: managed.inboxId }),
+        sendMessage: async (_groupId, content) => {
+          sent.push({ content });
+          return Result.ok("profile-msg-2");
+        },
+      };
+      managedClients.set(managed.identityId, {
+        ...managed,
+        client: trackedClient,
+      });
+      setupDeps(
+        undefined,
+        undefined,
+        createOperatorManager({ op_codex: "Codex" }),
+      );
+
+      const actions = createConversationActions(deps);
+      const updateProfileAction = actions.find(
+        (a) => a.id === "chat.update-profile",
+      );
+      expect(updateProfileAction).toBeDefined();
+      if (!updateProfileAction) return;
+
+      const result = await updateProfileAction.handler(
+        {
+          chatId: "g-profile",
+          operatorId: "op_codex",
+        },
+        stubCtx(),
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) return;
+
+      expect(result.value.profileName).toBe("Codex");
+      expect(result.value.profileSource).toBe("operator-default");
+      expect(sent).toHaveLength(1);
+      expect(extractProfileUpdateContent(sent[0]?.content)).toEqual({
+        name: "Codex",
+        memberKind: 1,
+      });
     });
   });
 

@@ -11,6 +11,7 @@ import {
   getInviteJoinErrorMessage,
   isInviteJoinErrorContentType,
 } from "./invite-join-error.js";
+import { encodeProfileUpdate, MemberKind } from "./profile-messages.js";
 import { parseConvosInviteUrl, verifyConvosInvite } from "./invite-parser.js";
 import type { JoinRequestContent } from "./join-request-content.js";
 
@@ -26,6 +27,8 @@ export interface JoinConversationDeps {
 export interface JoinConversationOptions {
   /** Human-readable label for the new identity. */
   readonly label?: string;
+  /** Optional Convos profile name to publish for the joined identity. */
+  readonly profileName?: string;
   /** Milliseconds between poll attempts for group discovery. */
   readonly pollIntervalMs?: number;
   /** Maximum number of poll attempts before timing out. */
@@ -46,6 +49,10 @@ export interface JoinResult {
   readonly groupName: string | undefined;
   /** The creator's inbox ID. */
   readonly creatorInboxId: string;
+  /** The profile name selected for this join, if any. */
+  readonly profileName?: string;
+  /** Whether the best-effort profile update succeeded after the join. */
+  readonly profileApplied?: boolean;
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
@@ -203,7 +210,12 @@ export async function joinConversation(
   const slug = extractSlugForDm(inviteUrl);
   const joinRequest: JoinRequestContent = {
     inviteSlug: slug,
-    profile: { memberKind: "agent" },
+    profile: {
+      memberKind: "agent",
+      ...(options?.profileName !== undefined
+        ? { name: options.profileName }
+        : {}),
+    },
   };
   const structuredSendResult = await client.sendMessage(
     dmResult.value.dmId,
@@ -240,6 +252,17 @@ export async function joinConversation(
     if (groups.length > 0) {
       const group = groups[0];
       if (group !== undefined) {
+        const profileUpdateResult = await client.sendMessage(
+          group.groupId,
+          encodeProfileUpdate({
+            memberKind: MemberKind.Agent,
+            ...(options?.profileName !== undefined
+              ? { name: options.profileName }
+              : {}),
+          }),
+          "convos.org/profile_update:1.0",
+        );
+
         return Result.ok({
           identityId,
           inboxId,
@@ -247,6 +270,10 @@ export async function joinConversation(
           inviteTag: invite.tag,
           groupName: group.name || invite.name,
           creatorInboxId: invite.creatorInboxId,
+          ...(options?.profileName !== undefined
+            ? { profileName: options.profileName }
+            : {}),
+          profileApplied: profileUpdateResult.isOk(),
         });
       }
     }
