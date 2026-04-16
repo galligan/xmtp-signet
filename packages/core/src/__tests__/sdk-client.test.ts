@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { encodeProfileSnapshot } from "../convos/profile-messages.js";
 import { createSdkClient } from "../sdk/sdk-client.js";
 import {
   createMockSdkNativeClient,
@@ -43,6 +44,32 @@ describe("createSdkClient", () => {
       if (result.isErr()) {
         expect(result.error._tag).toBe("NotFoundError");
       }
+    });
+
+    test("sends encoded convos payloads without JSON re-encoding", async () => {
+      let capturedPayload: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.send = async (encoded: unknown) => {
+        capturedPayload = encoded;
+        return "msg-id-encoded";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+      const snapshot = encodeProfileSnapshot({
+        profiles: [{ inboxId: "abcd", name: "Codex" }],
+      });
+
+      const result = await client.sendMessage(
+        "g1",
+        snapshot,
+        "convos.org/profile_snapshot:1.0",
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-encoded");
+      }
+      expect(capturedPayload).toEqual(snapshot);
     });
   });
 

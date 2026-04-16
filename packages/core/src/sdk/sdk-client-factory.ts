@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import { InternalError } from "@xmtp/signet-schemas";
+import type { Client as NodeSdkClient } from "@xmtp/node-sdk";
 import type {
   XmtpClientFactory,
   XmtpClientCreateOptions,
@@ -10,6 +11,7 @@ import { createXmtpSigner } from "./signer-adapter.js";
 import type { SdkEoaSigner } from "./signer-adapter.js";
 import { createSdkClient } from "./sdk-client.js";
 import type { SdkClientShape } from "./sdk-types.js";
+import { createConvosCodecs } from "../convos/codecs.js";
 
 /**
  * A function that creates a native SDK client.
@@ -24,6 +26,7 @@ export type SdkCreateClientFn = (
     env: string;
     appVersion: string;
     disableDeviceSync: boolean;
+    codecs: NodeSdkCodecs;
   },
 ) => Promise<SdkClientShape>;
 
@@ -34,6 +37,9 @@ export interface SdkClientFactoryOptions {
 }
 
 const DEFAULT_SYNC_TIMEOUT_MS = 30_000;
+type NodeSdkCreateOptions = Parameters<typeof NodeSdkClient.create>[1];
+type NodeSdkSigner = Parameters<typeof NodeSdkClient.create>[0];
+type NodeSdkCodecs = NonNullable<NonNullable<NodeSdkCreateOptions>["codecs"]>;
 
 /**
  * Creates a production XmtpClientFactory backed by @xmtp/node-sdk.
@@ -63,6 +69,7 @@ export function createSdkClientFactory(
           env: options.env,
           appVersion: options.appVersion,
           disableDeviceSync: true,
+          codecs: createConvosCodecs(),
         });
 
         const client = createSdkClient({
@@ -97,6 +104,7 @@ async function defaultSdkCreate(
     env: string;
     appVersion: string;
     disableDeviceSync: boolean;
+    codecs: NodeSdkCodecs;
   },
 ): Promise<SdkClientShape> {
   // Dynamic import so native binding errors surface at runtime, not import time
@@ -109,7 +117,7 @@ async function defaultSdkCreate(
     Ethereum: 0,
     Passkey: 1,
   };
-  const sdkSigner = {
+  const sdkSigner: NodeSdkSigner = {
     type: "EOA" as const,
     getIdentifier() {
       const id = signer.getIdentifier();
@@ -127,8 +135,9 @@ async function defaultSdkCreate(
     },
     signMessage: (message: string) => signer.signMessage(message),
   };
+  const clientOptions: NodeSdkCreateOptions = options;
 
-  const client = await Client.create(sdkSigner, options);
+  const client = await Client.create(sdkSigner, clientOptions);
   // The SDK Client is structurally compatible with SdkClientShape
   return client as unknown as SdkClientShape;
 }

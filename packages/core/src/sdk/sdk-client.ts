@@ -25,6 +25,7 @@ import {
   wrapDmStream,
   wrapGroupStream,
 } from "./stream-wrappers.js";
+import { isEncodedConvosContent } from "../convos/join-request-content.js";
 import type {
   SdkClientShape,
   SdkGroupShape,
@@ -134,6 +135,9 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
       // For custom content types, use group.send() with encoded content
       if (contentType && contentType !== "xmtp.org/text:1.0") {
+        if (isEncodedConvosContent(content)) {
+          return wrapSdkCall(async () => group.send(content), "sendMessage");
+        }
         // Parse "authority/type:major.minor" format
         const slashIdx = contentType.indexOf("/");
         const colonIdx = contentType.indexOf(":");

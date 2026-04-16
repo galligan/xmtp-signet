@@ -5,6 +5,7 @@ import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import { parseConvosInviteUrl } from "./invite-parser.js";
 import { decryptConversationToken } from "./invite-generator.js";
+import { extractJoinRequestContent } from "./join-request-content.js";
 
 // --- Types ---
 
@@ -29,8 +30,8 @@ export interface ProcessJoinRequestDeps {
 export interface IncomingJoinMessage {
   /** Inbox ID of the message sender (the requester). */
   readonly senderInboxId: string;
-  /** The text content of the DM. */
-  readonly messageText: string;
+  /** The decoded DM content. */
+  readonly content: unknown;
 }
 
 /** Result of successfully processing a join request. */
@@ -105,8 +106,22 @@ export async function processJoinRequest(
   deps: ProcessJoinRequestDeps,
   message: IncomingJoinMessage,
 ): Promise<Result<JoinRequestResult, SignetError>> {
+  const joinRequest = extractJoinRequestContent(message.content);
+  const inviteText =
+    joinRequest?.inviteSlug ??
+    (typeof message.content === "string" ? message.content : undefined);
+
+  if (!inviteText) {
+    return Result.err(
+      ValidationError.create(
+        "invite",
+        "Join request does not contain an invite",
+      ),
+    );
+  }
+
   // Step 1: Parse the message as an invite slug
-  const parseResult = parseConvosInviteUrl(message.messageText);
+  const parseResult = parseConvosInviteUrl(inviteText);
   if (!parseResult.isOk()) return parseResult;
 
   const invite = parseResult.value;

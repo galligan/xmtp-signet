@@ -6,6 +6,7 @@ import {
   processJoinRequest,
   type ProcessJoinRequestDeps,
 } from "../process-join-requests.js";
+import { type JoinRequestContent } from "../join-request-content.js";
 
 // --- Test key material ---
 
@@ -54,7 +55,7 @@ describe("processJoinRequest", () => {
 
     const result = await processJoinRequest(deps, {
       senderInboxId: TEST_REQUESTER_INBOX_ID,
-      messageText: slug,
+      content: slug,
     });
 
     expect(result.isOk()).toBe(true);
@@ -72,7 +73,7 @@ describe("processJoinRequest", () => {
 
     const result = await processJoinRequest(deps, {
       senderInboxId: TEST_REQUESTER_INBOX_ID,
-      messageText: slug,
+      content: slug,
     });
 
     expect(result.isErr()).toBe(true);
@@ -100,7 +101,7 @@ describe("processJoinRequest", () => {
     const deps = createMockDeps();
     const result = await processJoinRequest(deps, {
       senderInboxId: TEST_REQUESTER_INBOX_ID,
-      messageText: slugResult.value,
+      content: slugResult.value,
     });
 
     expect(result.isErr()).toBe(true);
@@ -113,7 +114,7 @@ describe("processJoinRequest", () => {
     const deps = createMockDeps();
     const result = await processJoinRequest(deps, {
       senderInboxId: TEST_REQUESTER_INBOX_ID,
-      messageText: "hello, I would like to join!",
+      content: "hello, I would like to join!",
     });
 
     expect(result.isErr()).toBe(true);
@@ -127,7 +128,7 @@ describe("processJoinRequest", () => {
 
     const result = await processJoinRequest(deps, {
       senderInboxId: TEST_REQUESTER_INBOX_ID,
-      messageText: slug,
+      content: slug,
     });
 
     expect(result.isErr()).toBe(true);
@@ -144,9 +145,32 @@ describe("processJoinRequest", () => {
 
     const result = await processJoinRequest(deps, {
       senderInboxId: TEST_REQUESTER_INBOX_ID,
-      messageText: slug,
+      content: slug,
     });
 
     expect(result.isOk()).toBe(true);
+  });
+
+  test("accepts a structured join request payload", async () => {
+    const slug = await buildValidSlug();
+    const deps = createMockDeps();
+    const joinRequest: JoinRequestContent = {
+      inviteSlug: slug,
+      profile: {
+        name: "Codex",
+        memberKind: "agent",
+      },
+    };
+
+    const result = await processJoinRequest(deps, {
+      senderInboxId: TEST_REQUESTER_INBOX_ID,
+      content: joinRequest,
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.groupId).toBe(TEST_CONVERSATION_ID);
+    expect(result.value.requesterInboxId).toBe(TEST_REQUESTER_INBOX_ID);
   });
 });

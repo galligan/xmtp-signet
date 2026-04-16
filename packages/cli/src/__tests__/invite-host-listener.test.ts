@@ -231,6 +231,52 @@ describe("startManagedInviteHostListener", () => {
     ]);
   });
 
+  test("processes structured join requests alongside plain slug fallback", async () => {
+    const slug = await buildValidSlug();
+
+    const addedByIdentity: string[] = [];
+    let capturedHandler: ((event: CoreRawEvent) => void) | null = null;
+
+    startManagedInviteHostListener({
+      subscribe(handler) {
+        capturedHandler = handler;
+        return () => {};
+      },
+      async listIdentities() {
+        return [{ id: "right", inboxId: RIGHT_CREATOR_INBOX_ID }];
+      },
+      async getWalletPrivateKeyHex() {
+        return Result.ok(RIGHT_PRIVATE_KEY_HEX);
+      },
+      getManagedClient() {
+        return {
+          addMembers: async (groupId, inboxIds) => {
+            addedByIdentity.push(`${groupId}:${inboxIds.join(",")}`);
+            return Result.ok(undefined);
+          },
+          listMessages: async () => Result.ok([]),
+        };
+      },
+      async getGroupInviteTag() {
+        return Result.ok("host-test-tag");
+      },
+    });
+
+    capturedHandler?.({
+      ...makeRawMessageEvent({
+        inviteSlug: slug,
+        profile: { memberKind: "agent" },
+      }),
+      messageId: "structured-join-request-1",
+      contentType: "join_request",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addedByIdentity).toEqual([
+      `${TEST_CONVERSATION_ID}:${TEST_REQUESTER_INBOX_ID}`,
+    ]);
+  });
+
   test("does not process the same invite twice when the message stream catches up", async () => {
     const slug = await buildValidSlug();
 

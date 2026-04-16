@@ -6,7 +6,13 @@ import type { XmtpClientFactory } from "../xmtp-client-factory.js";
 import type { XmtpEnv, SignetCoreConfig } from "../config.js";
 import type { SignerProviderFactory } from "../identity-registration.js";
 import { registerIdentity } from "../identity-registration.js";
+import {
+  extractInviteJoinError,
+  getInviteJoinErrorMessage,
+  isInviteJoinErrorContentType,
+} from "./invite-join-error.js";
 import { parseConvosInviteUrl, verifyConvosInvite } from "./invite-parser.js";
+import type { JoinRequestContent } from "./join-request-content.js";
 
 /** Dependencies injected into the join orchestrator. */
 export interface JoinConversationDeps {
@@ -62,6 +68,39 @@ function extractSlugForDm(input: string): string {
   return trimmed;
 }
 
+function findInviteJoinErrorReply(
+  messages: readonly {
+    senderInboxId: string;
+    contentType: string;
+    content: unknown;
+  }[],
+  creatorInboxId: string,
+  inviteTag: string,
+): string | undefined {
+  const normalizedCreatorInboxId = creatorInboxId.toLowerCase();
+
+  for (const message of messages) {
+    if (message.senderInboxId.toLowerCase() !== normalizedCreatorInboxId) {
+      continue;
+    }
+    if (!isInviteJoinErrorContentType(message.contentType)) {
+      continue;
+    }
+
+    const inviteJoinError = extractInviteJoinError(message.content);
+    if (!inviteJoinError) {
+      continue;
+    }
+    if (inviteJoinError.inviteTag !== inviteTag) {
+      continue;
+    }
+
+    return getInviteJoinErrorMessage(inviteJoinError);
+  }
+
+  return undefined;
+}
+
 /**
  * Join a Convos conversation via an invite URL.
  *
@@ -70,7 +109,7 @@ function extractSlugForDm(input: string): string {
  * 2. Check expiration
  * 3. Create a new per-conversation identity and XMTP client
  * 4. Create a DM with the creator's inbox ID
- * 5. Send the invite slug as a join request
+ * 5. Send the structured join request and text fallback via DM
  * 6. Poll for group discovery (creator adds joiner to the group)
  * 7. Return the joined group info
  *
@@ -162,10 +201,25 @@ export async function joinConversation(
   }
 
   const slug = extractSlugForDm(inviteUrl);
+  const joinRequest: JoinRequestContent = {
+    inviteSlug: slug,
+    profile: { memberKind: "agent" },
+  };
+  const structuredSendResult = await client.sendMessage(
+    dmResult.value.dmId,
+    joinRequest,
+    "convos.org/join_request:1.0",
+  );
+  if (!structuredSendResult.isOk()) {
+    await identityStore.remove(identityId);
+    return structuredSendResult;
+  }
+
   const sendResult = await client.sendDmMessage(dmResult.value.dmId, slug);
   if (!sendResult.isOk()) {
-    await identityStore.remove(identityId);
-    return sendResult;
+    // Keep polling after the structured request succeeds. Modern Convos hosts
+    // can accept the join without the plain-text fallback, so treating this as
+    // fatal creates a false local failure and encourages duplicate retries.
   }
 
   // Step 6: Poll for group discovery
@@ -194,6 +248,27 @@ export async function joinConversation(
           groupName: group.name || invite.name,
           creatorInboxId: invite.creatorInboxId,
         });
+      }
+    }
+
+    const rejectionMessagesResult = await client.listMessages(
+      dmResult.value.dmId,
+      {
+        limit: 20,
+        direction: "descending",
+      },
+    );
+    if (rejectionMessagesResult.isOk()) {
+      const rejectionMessage = findInviteJoinErrorReply(
+        rejectionMessagesResult.value,
+        invite.creatorInboxId,
+        invite.tag,
+      );
+      if (rejectionMessage !== undefined) {
+        await identityStore.remove(identityId);
+        return Result.err(
+          ValidationError.create("inviteUrl", rejectionMessage),
+        );
       }
     }
 

@@ -12,6 +12,7 @@ import type {
   XmtpGroupInfo,
   SignerProviderLike,
 } from "../../xmtp-client-factory.js";
+import { InviteJoinErrorType } from "../invite-join-error.js";
 import { joinConversation, type JoinConversationDeps } from "../join.js";
 
 // --- Protobuf setup (same as invite-parser tests) ---
@@ -109,6 +110,13 @@ function createMockClient(options?: {
   inboxId?: string;
   onCreateDm?: (peerInboxId: string) => void;
   onSendDm?: (dmId: string, text: string) => void;
+  sendDmResult?: Result<string, InternalError>;
+  onSendMessage?: (
+    conversationId: string,
+    content: unknown,
+    contentType?: string,
+  ) => void;
+  listMessagesImpl?: XmtpClient["listMessages"];
   groupsAfterSync?: XmtpGroupInfo[];
   syncCount?: { value: number };
 }): XmtpClient {
@@ -121,14 +129,17 @@ function createMockClient(options?: {
 
   return {
     inboxId,
-    sendMessage: notImplemented,
+    sendMessage: async (conversationId, content, contentType) => {
+      options?.onSendMessage?.(conversationId, content, contentType);
+      return Result.ok("msg-structured-1");
+    },
     createDm: async (peerInboxId) => {
       options?.onCreateDm?.(peerInboxId);
       return Result.ok({ dmId: "dm-1", peerInboxId });
     },
     sendDmMessage: async (dmId, text) => {
       options?.onSendDm?.(dmId, text);
-      return Result.ok("dm-msg-1");
+      return options?.sendDmResult ?? Result.ok("dm-msg-1");
     },
     syncAll: async () => {
       syncCount.value++;
@@ -137,7 +148,7 @@ function createMockClient(options?: {
     syncGroup: notImplemented,
     getGroupInfo: notImplemented,
     getMessageById: notImplemented,
-    listMessages: notImplemented,
+    listMessages: options?.listMessagesImpl ?? (async () => Result.ok([])),
     listGroups: async () => {
       // Return groups only after sync has been called (simulating acceptance)
       if (syncCount.value > 0 && groupsAfterSync.length > 0) {
@@ -203,10 +214,17 @@ describe("joinConversation", () => {
   test("successful join flow: creates identity, DMs slug, discovers group", async () => {
     const dmCalls: Array<{ peerInboxId: string }> = [];
     const sendCalls: Array<{ dmId: string; text: string }> = [];
+    const structuredCalls: Array<{
+      conversationId: string;
+      content: unknown;
+      contentType: string | undefined;
+    }> = [];
 
     const client = createMockClient({
       onCreateDm: (peerInboxId) => dmCalls.push({ peerInboxId }),
       onSendDm: (dmId, text) => sendCalls.push({ dmId, text }),
+      onSendMessage: (conversationId, content, contentType) =>
+        structuredCalls.push({ conversationId, content, contentType }),
       groupsAfterSync: [
         {
           groupId: "joined-group-1",
@@ -237,9 +255,21 @@ describe("joinConversation", () => {
     expect(dmCalls).toHaveLength(1);
     expect(dmCalls[0]?.peerInboxId).toBe(TEST_CREATOR_INBOX_ID);
 
+    expect(structuredCalls).toEqual([
+      {
+        conversationId: "dm-1",
+        content: {
+          inviteSlug: buildTestSlug(),
+          profile: { memberKind: "agent" },
+        },
+        contentType: "convos.org/join_request:1.0",
+      },
+    ]);
+
     // Verify slug was sent as DM text
     expect(sendCalls).toHaveLength(1);
     expect(sendCalls[0]?.dmId).toBe("dm-1");
+    expect(sendCalls[0]?.text).toBe(buildTestSlug());
 
     // Verify identity was persisted
     const identities = await deps.identityStore.list();
@@ -252,6 +282,56 @@ describe("joinConversation", () => {
 
     const result = await joinConversation(deps, "not-a-valid-invite");
     expect(result.isErr()).toBe(true);
+  });
+
+  test("surfaces invite-join errors returned on the creator DM", async () => {
+    const listCalls: Array<Record<string, unknown> | undefined> = [];
+    const client = createMockClient({
+      listMessagesImpl: async (_groupId, options) => {
+        listCalls.push(
+          options ? ({ ...options } as Record<string, unknown>) : undefined,
+        );
+        return Result.ok([
+          {
+            messageId: "invite-error-1",
+            groupId: "dm-1",
+            senderInboxId: TEST_CREATOR_INBOX_ID,
+            contentType: "convos.app/inviteJoinError:1.0",
+            content: {
+              errorType: InviteJoinErrorType.ConversationExpired,
+              inviteTag: "test-join-tag",
+              timestamp: "2026-04-16T12:00:00.000Z",
+            },
+            sentAt: "2026-04-16T12:00:00.000Z",
+            threadId: null,
+          },
+        ]);
+      },
+      groupsAfterSync: [],
+    });
+    const deps = createDeps({ client });
+
+    const result = await joinConversation(deps, buildTestUrl(), {
+      pollIntervalMs: 10,
+      maxPollAttempts: 3,
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+
+    expect(result.error.category).toBe("validation");
+    expect(result.error.message).toContain(
+      "This conversation is no longer available",
+    );
+    expect(listCalls).toEqual([
+      {
+        limit: 20,
+        direction: "descending",
+      },
+    ]);
+
+    const identities = await deps.identityStore.list();
+    expect(identities).toHaveLength(0);
   });
 
   test("returns error when invite is expired", async () => {
@@ -339,5 +419,37 @@ describe("joinConversation", () => {
     // Identity should have been cleaned up
     const identities = await store.list();
     expect(identities).toHaveLength(0);
+  });
+
+  test("keeps polling when plain-text fallback delivery fails", async () => {
+    const client = createMockClient({
+      sendDmResult: Result.err(
+        InternalError.create("temporary DM fallback failure"),
+      ),
+      groupsAfterSync: [
+        {
+          groupId: "joined-group-1",
+          name: "Joined Group",
+          description: "",
+          imageUrl: "",
+          memberInboxIds: ["joiner-inbox-123", TEST_CREATOR_INBOX_ID],
+          createdAt: "2026-04-15T14:00:00.000Z",
+        },
+      ],
+    });
+    const deps = createDeps({ client });
+
+    const result = await joinConversation(deps, buildTestUrl(), {
+      pollIntervalMs: 10,
+      maxPollAttempts: 3,
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.groupId).toBe("joined-group-1");
+    const identities = await deps.identityStore.list();
+    expect(identities).toHaveLength(1);
+    expect(identities[0]?.inboxId).toBe("joiner-inbox-123");
   });
 });

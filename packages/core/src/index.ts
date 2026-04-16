@@ -143,6 +143,59 @@ export type {
   IncomingJoinMessage,
   JoinRequestResult,
 } from "./convos/process-join-requests.js";
+export {
+  ContentTypeJoinRequest,
+  JoinRequestCodec,
+  decodeJoinRequest,
+  extractJoinRequestContent,
+  isEncodedConvosContent,
+  isJoinRequestContentType,
+} from "./convos/join-request-content.js";
+export type {
+  JoinRequestContent,
+  JoinRequestProfile,
+  EncodedConvosContent,
+  ConvosContentTypeId,
+} from "./convos/join-request-content.js";
+export {
+  ContentTypeInviteJoinError,
+  InviteJoinErrorCodec,
+  InviteJoinErrorType,
+  decodeInviteJoinError,
+  encodeInviteJoinError,
+  extractInviteJoinError,
+  getInviteJoinErrorMessage,
+  isInviteJoinErrorContentType,
+} from "./convos/invite-join-error.js";
+export type { InviteJoinError } from "./convos/invite-join-error.js";
+export {
+  ContentTypeProfileUpdate,
+  ContentTypeProfileSnapshot,
+  MemberKind,
+  ProfileUpdateCodec,
+  ProfileSnapshotCodec,
+  encodeProfileUpdate,
+  decodeProfileUpdate,
+  encodeProfileSnapshot,
+  decodeProfileSnapshot,
+} from "./convos/profile-messages.js";
+export type {
+  ProfileUpdateContent,
+  ProfileSnapshotContent,
+  MemberProfileEntry,
+  ProfileMetadata,
+  ProfileMetadataValue,
+  EncryptedProfileImageRef,
+} from "./convos/profile-messages.js";
+export {
+  buildProfileSnapshotFromMessages,
+  extractProfileSnapshotContent,
+  extractProfileUpdateContent,
+  isProfileSnapshotContentType,
+  isProfileUpdateContentType,
+  resolveProfilesFromMessages,
+} from "./convos/profile-state.js";
+export type { ResolvedProfile } from "./convos/profile-state.js";
 
 // Convos invite host (join request listener)
 export {

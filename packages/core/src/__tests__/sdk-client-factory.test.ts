@@ -64,6 +64,8 @@ describe("createSdkClientFactory", () => {
     expect(capturedOptions["dbPath"]).toBe("/tmp/test.db3");
     expect(capturedOptions["env"]).toBe("local");
     expect(capturedOptions["appVersion"]).toBe("test/0.1.0");
+    expect(Array.isArray(capturedOptions["codecs"])).toBe(true);
+    expect(capturedOptions["codecs"] as unknown[]).toHaveLength(4);
   });
 
   test("creates signer from signerPrivateKey in options", async () => {

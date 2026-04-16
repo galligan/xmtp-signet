@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import {
   tryProcessJoinRequest,
+  isJoinRequestContentType,
   type CoreRawEvent,
   type ListMessagesOptions,
   type RawMessageEvent,
@@ -60,6 +61,9 @@ interface InviteRecoveryScanResult {
 function isInviteCandidate(event: CoreRawEvent): event is RawMessageEvent {
   if (event.type !== "raw.message") return false;
   if (event.isHistorical) return false;
+  if (isJoinRequestContentType(event.contentType)) {
+    return true;
+  }
   if (typeof event.content !== "string") return false;
 
   const text = event.content.trim();

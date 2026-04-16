@@ -7,6 +7,7 @@ import {
   type IncomingJoinMessage,
   type JoinRequestResult,
 } from "./process-join-requests.js";
+import { extractJoinRequestContent } from "./join-request-content.js";
 
 /** Dependencies for the invite host listener. */
 export interface InviteHostDeps {
@@ -36,17 +37,16 @@ export async function tryProcessJoinRequest(
   deps: InviteHostDeps,
   event: RawMessageEvent,
 ): Promise<Result<JoinRequestResult, SignetError> | null> {
-  // Only process text content
-  if (typeof event.content !== "string") return null;
-
-  // Quick heuristic: invite slugs/URLs are always long single-token strings.
-  // Short messages or multi-word text are clearly not invites.
-  const text = event.content.trim();
-  if (text.length < 50 || text.includes(" ")) return null;
+  const joinRequest = extractJoinRequestContent(event.content);
+  const text =
+    typeof event.content === "string" ? event.content.trim() : undefined;
+  const looksLikeSlug =
+    text !== undefined && text.length >= 50 && !text.includes(" ");
+  if (!joinRequest && !looksLikeSlug) return null;
 
   const message: IncomingJoinMessage = {
     senderInboxId: event.senderInboxId,
-    messageText: text,
+    content: joinRequest ?? text ?? event.content,
   };
 
   return processJoinRequest(
