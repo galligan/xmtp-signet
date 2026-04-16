@@ -252,27 +252,16 @@ export async function joinConversation(
     if (groups.length > 0) {
       const group = groups[0];
       if (group !== undefined) {
-        if (options?.profileName !== undefined) {
-          const profileUpdateResult = await client.sendMessage(
-            group.groupId,
-            encodeProfileUpdate({
-              name: options.profileName,
-              memberKind: MemberKind.Agent,
-            }),
-            "convos.org/profile_update:1.0",
-          );
-
-          return Result.ok({
-            identityId,
-            inboxId,
-            groupId: group.groupId,
-            inviteTag: invite.tag,
-            groupName: group.name || invite.name,
-            creatorInboxId: invite.creatorInboxId,
-            profileName: options.profileName,
-            profileApplied: profileUpdateResult.isOk(),
-          });
-        }
+        const profileUpdateResult = await client.sendMessage(
+          group.groupId,
+          encodeProfileUpdate({
+            memberKind: MemberKind.Agent,
+            ...(options?.profileName !== undefined
+              ? { name: options.profileName }
+              : {}),
+          }),
+          "convos.org/profile_update:1.0",
+        );
 
         return Result.ok({
           identityId,
@@ -281,6 +270,10 @@ export async function joinConversation(
           inviteTag: invite.tag,
           groupName: group.name || invite.name,
           creatorInboxId: invite.creatorInboxId,
+          ...(options?.profileName !== undefined
+            ? { profileName: options.profileName }
+            : {}),
+          profileApplied: profileUpdateResult.isOk(),
         });
       }
     }

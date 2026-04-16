@@ -492,6 +492,7 @@ describe("conversation actions", () => {
       if (!result.isOk()) return;
 
       expect(result.value.groupId).toBe("joined-group-1");
+      expect(result.value.profileApplied).toBe(true);
       expect(attachedIdentityIds).toEqual([result.value.identityId]);
     });
 
@@ -591,6 +592,7 @@ describe("conversation actions", () => {
       if (!result.isOk()) return;
 
       expect(result.value.groupId).toBe("joined-group-1");
+      expect(result.value.profileApplied).toBe(true);
     });
   });
 

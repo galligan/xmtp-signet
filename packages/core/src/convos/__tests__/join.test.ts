@@ -251,21 +251,28 @@ describe("joinConversation", () => {
 
     expect(result.value.groupId).toBe("joined-group-1");
     expect(result.value.identityId).toBeDefined();
+    expect(result.value.profileApplied).toBe(true);
 
     // Verify DM was sent to creator
     expect(dmCalls).toHaveLength(1);
     expect(dmCalls[0]?.peerInboxId).toBe(TEST_CREATOR_INBOX_ID);
 
-    expect(structuredCalls).toEqual([
-      {
-        conversationId: "dm-1",
-        content: {
-          inviteSlug: buildTestSlug(),
-          profile: { memberKind: "agent" },
-        },
-        contentType: "convos.org/join_request:1.0",
+    expect(structuredCalls).toHaveLength(2);
+    expect(structuredCalls[0]).toEqual({
+      conversationId: "dm-1",
+      content: {
+        inviteSlug: buildTestSlug(),
+        profile: { memberKind: "agent" },
       },
-    ]);
+      contentType: "convos.org/join_request:1.0",
+    });
+    expect(structuredCalls[1]?.conversationId).toBe("joined-group-1");
+    expect(structuredCalls[1]?.contentType).toBe(
+      "convos.org/profile_update:1.0",
+    );
+    expect(extractProfileUpdateContent(structuredCalls[1]?.content)).toEqual({
+      memberKind: 1,
+    });
 
     // Verify slug was sent as DM text
     expect(sendCalls).toHaveLength(1);
@@ -368,7 +375,8 @@ describe("joinConversation", () => {
     if (!result.isOk()) return;
 
     expect(result.value.groupId).toBe("joined-group-1");
-    expect(structuredCalls).toHaveLength(1);
+    expect(result.value.profileApplied).toBe(true);
+    expect(structuredCalls).toHaveLength(2);
     expect(structuredCalls[0]).toEqual({
       conversationId: "dm-1",
       content: {
@@ -376,6 +384,13 @@ describe("joinConversation", () => {
         profile: { memberKind: "agent" },
       },
       contentType: "convos.org/join_request:1.0",
+    });
+    expect(structuredCalls[1]?.conversationId).toBe("joined-group-1");
+    expect(structuredCalls[1]?.contentType).toBe(
+      "convos.org/profile_update:1.0",
+    );
+    expect(extractProfileUpdateContent(structuredCalls[1]?.content)).toEqual({
+      memberKind: 1,
     });
 
     const identities = await deps.identityStore.list();
