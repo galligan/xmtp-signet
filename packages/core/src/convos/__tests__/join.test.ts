@@ -381,11 +381,7 @@ describe("joinConversation", () => {
           description: "",
           imageUrl: "",
           memberInboxIds: ["joiner-inbox-123", TEST_CREATOR_INBOX_ID],
-          admins: [],
-          superAdmins: [],
-          consentState: "allowed",
           createdAt: "2026-04-15T14:00:00.000Z",
-          updatedAt: "2026-04-15T14:00:00.000Z",
         },
       ],
     });
