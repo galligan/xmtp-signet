@@ -98,7 +98,8 @@ bun run check
 ### Run the signet
 
 ```bash
-# Create a local XMTP identity and key hierarchy with the recommended posture
+# Create a local XMTP identity and key hierarchy with the recommended posture.
+# The label also becomes the default Convos profile name for chat join/invite flows.
 xs init --env dev --label owner
 
 # Use the lower-ceremony trusted local posture for smoke testing
@@ -126,6 +127,9 @@ xs cred info cred_b2c1
 # Create a conversation
 xs chat create --name "Design Team"
 
+# Create a conversation and immediately get a Convos QR/link
+xs chat create --name "Device Test" --invite
+
 # Send a message
 xs msg send "Hello from the signet" --to conv_9e2d1a4b8c3f7e60
 
@@ -150,24 +154,29 @@ stay simple without collapsing the custody boundary:
 All three presets keep the signet as the real XMTP client. They do not hand raw
 keys, raw databases, or direct XMTP SDK access to the harness.
 
+When `xs init` writes the config, it also stores the init label as the default
+Convos profile name. That means common flows like `xs chat join <invite>` and
+`xs chat create --invite` can publish a human-facing profile without requiring
+extra `--profile-name` ceremony every time.
+
 See [docs/development.md](docs/development.md) for the development workflow and
 package layout.
 
 ## CLI commands
 
-| Group                 | Commands                                                                    |
-| --------------------- | --------------------------------------------------------------------------- |
-| top-level             | `init`, `status`, `reset`, `logs`, `lookup`, `search`, `consent`            |
-| `daemon`              | `start`, `stop`, `status`                                                   |
-| `operator`            | `create`, `list`, `info`, `rename`, `rm`                                    |
-| `cred`                | `issue`, `list`, `info`, `revoke`, `update`                                 |
-| `chat`                | `create`, `list`, `info`, `update`, `sync`, `join`, `invite`, `leave`, `rm` |
-| `chat ... member`     | `list`, `add`, `rm`, `promote`, `demote`                                    |
-| `msg`                 | `send`, `reply`, `react`, `read`, `list`, `info`                            |
-| `policy`              | `create`, `list`, `info`, `update`, `rm`                                    |
-| `seal` _(deferred)_   | `list`, `info`, `verify`, `history`                                         |
-| `wallet` _(deferred)_ | `list`, `info`, `provider set`, `provider list`                             |
-| `key` _(deferred)_    | `init`, `rotate`, `list`, `info`                                            |
+| Group                 | Commands                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| top-level             | `init`, `status`, `reset`, `logs`, `lookup`, `search`, `consent`                              |
+| `daemon`              | `start`, `stop`, `status`                                                                     |
+| `operator`            | `create`, `list`, `info`, `rename`, `rm`                                                      |
+| `cred`                | `issue`, `list`, `info`, `revoke`, `update`                                                   |
+| `chat`                | `create`, `list`, `info`, `update`, `sync`, `join`, `invite`, `update-profile`, `leave`, `rm` |
+| `chat ... member`     | `list`, `add`, `rm`, `promote`, `demote`                                                      |
+| `msg`                 | `send`, `reply`, `react`, `read`, `list`, `info`                                              |
+| `policy`              | `create`, `list`, `info`, `update`, `rm`                                                      |
+| `seal` _(deferred)_   | `list`, `info`, `verify`, `history`                                                           |
+| `wallet` _(deferred)_ | `list`, `info`, `provider set`, `provider list`                                               |
+| `key` _(deferred)_    | `init`, `rotate`, `list`, `info`                                                              |
 
 ## What's working
 

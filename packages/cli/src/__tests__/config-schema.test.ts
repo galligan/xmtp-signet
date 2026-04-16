@@ -11,6 +11,7 @@ describe("CliConfigSchema", () => {
     expect(config.signet.env).toBe("dev");
     expect(config.signet.identityMode).toBe("per-group");
     expect(config.signet.dataDir).toBeUndefined();
+    expect(config.defaults.profileName).toBeUndefined();
     expect(config.keys.rootKeyPolicy).toBe("biometric");
     expect(config.keys.operationalKeyPolicy).toBe("open");
     expect(config.keys.vaultKeyPolicy).toBe("open");
@@ -35,6 +36,15 @@ describe("CliConfigSchema", () => {
     if (!result.success) return;
     expect(result.data.signet.env).toBe("dev");
     expect(result.data.signet.identityMode).toBe("per-group");
+  });
+
+  test("accepts a default Convos profile name", () => {
+    const result = CliConfigSchema.safeParse({
+      defaults: { profileName: "Codex" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.defaults.profileName).toBe("Codex");
   });
 
   test("rejects unknown legacy section", () => {
