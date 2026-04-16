@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
 import { InternalError } from "@xmtp/signet-schemas";
+import type { Client as NodeSdkClient } from "@xmtp/node-sdk";
 import type {
   XmtpClientFactory,
   XmtpClientCreateOptions,
@@ -25,7 +26,7 @@ export type SdkCreateClientFn = (
     env: string;
     appVersion: string;
     disableDeviceSync: boolean;
-    codecs: unknown[];
+    codecs: NodeSdkCodecs;
   },
 ) => Promise<SdkClientShape>;
 
@@ -36,6 +37,9 @@ export interface SdkClientFactoryOptions {
 }
 
 const DEFAULT_SYNC_TIMEOUT_MS = 30_000;
+type NodeSdkCreateOptions = Parameters<typeof NodeSdkClient.create>[1];
+type NodeSdkSigner = Parameters<typeof NodeSdkClient.create>[0];
+type NodeSdkCodecs = NonNullable<NonNullable<NodeSdkCreateOptions>["codecs"]>;
 
 /**
  * Creates a production XmtpClientFactory backed by @xmtp/node-sdk.
@@ -100,7 +104,7 @@ async function defaultSdkCreate(
     env: string;
     appVersion: string;
     disableDeviceSync: boolean;
-    codecs: unknown[];
+    codecs: NodeSdkCodecs;
   },
 ): Promise<SdkClientShape> {
   // Dynamic import so native binding errors surface at runtime, not import time
@@ -113,7 +117,7 @@ async function defaultSdkCreate(
     Ethereum: 0,
     Passkey: 1,
   };
-  const sdkSigner = {
+  const sdkSigner: NodeSdkSigner = {
     type: "EOA" as const,
     getIdentifier() {
       const id = signer.getIdentifier();
@@ -131,11 +135,9 @@ async function defaultSdkCreate(
     },
     signMessage: (message: string) => signer.signMessage(message),
   };
+  const clientOptions: NodeSdkCreateOptions = options;
 
-  const client = await Client.create(
-    sdkSigner,
-    options as Parameters<typeof Client.create>[1],
-  );
+  const client = await Client.create(sdkSigner, clientOptions);
   // The SDK Client is structurally compatible with SdkClientShape
   return client as unknown as SdkClientShape;
 }

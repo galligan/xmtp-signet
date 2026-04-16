@@ -127,7 +127,7 @@ export class JoinRequestCodec {
     return content.inviteSlug;
   }
 
-  shouldPush(_content: JoinRequestContent): boolean {
+  shouldPush(_content: unknown): boolean {
     return true;
   }
 }
