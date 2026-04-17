@@ -91,6 +91,24 @@ export type { ConsentActionDeps } from "./consent-actions.js";
 // Conversation actions
 export { createConversationActions } from "./conversation-actions.js";
 export type { ConversationActionDeps } from "./conversation-actions.js";
+export type {
+  ConversationRef,
+  CreatorContext,
+  EncodedOnboardingContent,
+  GeneratedInvite,
+  HostContext,
+  IncomingJoinRequestMessage,
+  InviteMetadata,
+  InviteOptions,
+  MemberProfileData,
+  OnboardingCodecs,
+  OnboardingContentTypeId,
+  OnboardingScheme,
+  ParsedInvite,
+  ProcessedJoinRequest,
+  ProfileData,
+  ResolvedOnboardingProfile,
+} from "./schemes/onboarding-scheme.js";
 
 // Message actions
 export { createMessageActions } from "./message-actions.js";
