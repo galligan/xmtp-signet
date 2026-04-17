@@ -14,6 +14,7 @@ import { writeConfig } from "../config/writer.js";
 import { resolvePaths } from "../config/paths.js";
 import { formatOutput } from "../output/formatter.js";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
+import { resolveOnboardingScheme } from "../onboarding-schemes.js";
 
 /**
  * Identity bootstrap and listing commands (direct mode, no daemon required).
@@ -207,6 +208,7 @@ export function createIdentityInitCommand(): Command {
           km,
           paths,
           env,
+          onboardingSchemeId: config.onboarding.scheme,
           label: typeof options.label === "string" ? options.label : "default",
           rootPublicKey,
           operationalKeyId: opKey.identityId,
@@ -231,6 +233,7 @@ export function createIdentityInitCommand(): Command {
           : {}),
         configPath,
         configWritten,
+        onboardingScheme: config.onboarding.scheme,
         rootPublicKey,
         operationalKeyId: opKey.identityId,
         adminKeyFingerprint,
@@ -273,6 +276,7 @@ async function registerXmtpIdentity(opts: {
   readonly km: KeyManager;
   readonly paths: ReturnType<typeof resolvePaths>;
   readonly env: "dev" | "production";
+  readonly onboardingSchemeId: "convos";
   readonly label: string;
   readonly rootPublicKey: string;
   readonly operationalKeyId: string;
@@ -288,6 +292,7 @@ async function registerXmtpIdentity(opts: {
     km,
     paths,
     env,
+    onboardingSchemeId,
     label,
     rootPublicKey,
     operationalKeyId,
@@ -312,7 +317,9 @@ async function registerXmtpIdentity(opts: {
   const identityStore = new SqliteIdentityStore(
     `${paths.dataDir}/identities.db`,
   );
-  const clientFactory = createSdkClientFactory();
+  const clientFactory = createSdkClientFactory({
+    onboardingScheme: resolveOnboardingScheme(onboardingSchemeId),
+  });
   const signerProviderFactory = (identityId: string) =>
     createSignerProviderFn(km, identityId);
 
@@ -349,6 +356,7 @@ async function registerXmtpIdentity(opts: {
       : {}),
     configPath,
     configWritten,
+    onboardingScheme: onboardingSchemeId,
     rootPublicKey,
     operationalKeyId,
     adminKeyFingerprint,

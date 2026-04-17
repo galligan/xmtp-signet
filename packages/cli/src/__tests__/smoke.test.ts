@@ -233,10 +233,12 @@ describe("Phase 2B smoke tests", () => {
     ]);
     expect(statusResult.exitCode).toBe(0);
     const status = JSON.parse(statusResult.stdout) as {
+      onboardingScheme: string;
       state: string;
       wsPort: number;
     };
     expect(status).toMatchObject({
+      onboardingScheme: "convos",
       state: "running",
     });
     expect(status.wsPort).toBeGreaterThan(0);

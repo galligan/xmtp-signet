@@ -176,6 +176,7 @@ describe("daemon-backed CLI command wiring", () => {
       uptime: 5,
       activeCredentials: 2,
       activeConnections: 1,
+      onboardingScheme: "convos" as const,
       xmtpEnv: "local" as const,
       identityMode: "per-group" as const,
       wsPort: 8393,

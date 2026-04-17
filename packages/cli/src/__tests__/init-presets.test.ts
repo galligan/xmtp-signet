@@ -33,6 +33,7 @@ describe("init posture presets", () => {
     const config = applyInitPreset(base, "recommended");
 
     expect(config.signet.identityMode).toBe("per-group");
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.keys.rootKeyPolicy).toBe("biometric");
     expect(config.keys.vaultKeyPolicy).toBe("open");
     expect(config.biometricGating.adminReadElevation).toBe(true);
@@ -45,6 +46,7 @@ describe("init posture presets", () => {
     const config = applyInitPreset(base, "trusted-local");
 
     expect(config.signet.identityMode).toBe("shared");
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.keys.rootKeyPolicy).toBe("biometric");
     expect(config.keys.operationalKeyPolicy).toBe("open");
     expect(config.keys.vaultKeyPolicy).toBe("open");
@@ -57,6 +59,7 @@ describe("init posture presets", () => {
     const config = applyInitPreset(base, "hardened");
 
     expect(config.signet.identityMode).toBe("per-group");
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.keys.rootKeyPolicy).toBe("biometric");
     expect(config.keys.vaultKeyPolicy).toBe("passcode");
     expect(config.biometricGating.scopeExpansion).toBe(true);
@@ -145,6 +148,8 @@ describe("init posture presets", () => {
     await writeConfig(configPath, config);
 
     const raw = await readFile(configPath, "utf8");
+    expect(raw).toContain("[onboarding]");
+    expect(raw).toContain('scheme = "convos"');
     expect(raw).toContain("[signet]");
     expect(raw).toContain('identityMode = "per-group"');
     expect(raw).toContain("[biometricGating]");
@@ -152,6 +157,7 @@ describe("init posture presets", () => {
     const loaded = await loadConfig({ configPath });
     expect(loaded.isOk()).toBe(true);
     if (!loaded.isOk()) return;
+    expect(loaded.value.onboarding.scheme).toBe("convos");
     expect(loaded.value.defaults.profileName).toBe("Codex");
     expect(loaded.value.keys.vaultKeyPolicy).toBe("passcode");
     expect(loaded.value.biometricGating.adminReadElevation).toBe(true);

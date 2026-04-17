@@ -27,7 +27,6 @@ import {
   SignetCoreConfigSchema,
   createSdkClientFactory,
   createConsentActions,
-  createConvosOnboardingScheme,
   createConversationActions,
   createInboxActions as createInboxActionSpecs,
   createLookupActions,
@@ -61,7 +60,7 @@ import {
   type HttpServerConfig as HttpServerImplConfig,
   type HttpServerDeps,
 } from "./http/server.js";
-import type { AdminServerConfig } from "./config/schema.js";
+import type { AdminServerConfig, OnboardingSchemeId } from "./config/schema.js";
 import type { SignetRuntimeDeps } from "./runtime.js";
 import { createSealActions as createSealActionSpecs } from "./actions/seal-actions.js";
 import {
@@ -77,6 +76,7 @@ import { createEventProjector } from "./ws/event-projector.js";
 import { createPendingActionStore } from "@xmtp/signet-sessions";
 import { startManagedInviteHostListener } from "./invite-host-listener.js";
 import { createSealInputResolver } from "./seal-input-resolver.js";
+import { resolveOnboardingScheme } from "./onboarding-schemes.js";
 
 /** Map SignetCoreImpl states to the contract's CoreState. */
 function mapSignetState(state: SignetState): CoreState {
@@ -105,7 +105,13 @@ function mapSignetState(state: SignetState): CoreState {
  * createSignetRuntime -- the `unknown` params are narrowed here
  * to the concrete types each package expects.
  */
-export function createProductionDeps(): SignetRuntimeDeps {
+export function createProductionDeps(options?: {
+  onboardingSchemeId?: OnboardingSchemeId;
+}): SignetRuntimeDeps {
+  const onboardingScheme = resolveOnboardingScheme(
+    options?.onboardingSchemeId ?? "convos",
+  );
+
   // Hold references so downstream factories can access shared instances
   let keyManagerRef: KeyManager | null = null;
   let coreImplRef: SignetCoreImpl | null = null;
@@ -186,7 +192,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
         return createSignerProvider(keyManagerRef, identityId);
       };
 
-      const clientFactory = createSdkClientFactory();
+      const clientFactory = createSdkClientFactory({ onboardingScheme });
 
       // Parse through schema so defaults (heartbeatIntervalMs, etc.) are applied
       const coreConfig = SignetCoreConfigSchema.parse({
@@ -704,14 +710,14 @@ export function createProductionDeps(): SignetRuntimeDeps {
       }
 
       const actions = createConversationActions({
-        onboardingScheme: createConvosOnboardingScheme(),
+        onboardingScheme,
         identityStore: core.identityStore,
         ...(operatorManagerRef ? { operatorManager: operatorManagerRef } : {}),
         getManagedClient: (id) => core.getManagedClient(id),
         getManagedClientForGroup: (groupId) =>
           core.getManagedClientForGroup(groupId),
         getGroupInfo: (groupId: string) => core.context.getGroupInfo(groupId),
-        clientFactory: createSdkClientFactory(),
+        clientFactory: createSdkClientFactory({ onboardingScheme }),
         signerProviderFactory,
         attachManagedIdentity: (identityId) =>
           core.attachPersistedIdentity(identityId),
@@ -866,6 +872,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
             idMappingStoreRef?.resolve(groupId)?.localId,
         });
         inviteHostUnsub = startManagedInviteHostListener({
+          onboardingScheme,
           subscribe: (handler) => core.on(handler),
           listIdentities: () => core.identityStore.list(),
           getWalletPrivateKeyHex: async (identityId) => {
