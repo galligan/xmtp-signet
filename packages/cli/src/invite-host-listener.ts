@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import {
-  createConvosOnboardingScheme,
   extractJoinRequestContent,
   type CoreRawEvent,
   type JoinRequestResult,
@@ -73,7 +72,7 @@ export interface ManagedInviteHostListenerDeps {
     groupId: string,
   ) => Promise<Result<string | undefined, SignetError>>;
   /** Onboarding scheme used to detect and process invite joins. */
-  readonly onboardingScheme?: OnboardingScheme;
+  readonly onboardingScheme: OnboardingScheme;
   /** Best-effort callback after a join request is accepted. */
   readonly onJoinAccepted?: (
     acceptance: ManagedInviteJoinAcceptance,
@@ -96,7 +95,6 @@ const RECENT_JOIN_SCAN_OPTIONS = {
 const DM_RECOVERY_RETRY_DELAY_MS = 250;
 const MAX_DM_RECOVERY_RETRIES = 3;
 const DEFAULT_PROCESSED_INVITE_KEY_TTL_MS = 5_000;
-const DEFAULT_ONBOARDING_SCHEME = createConvosOnboardingScheme();
 
 interface InviteRecoveryScanResult {
   readonly messages: readonly RawMessageEvent[];
@@ -185,7 +183,7 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
   deps: ManagedInviteHostListenerDeps,
   event: CoreRawEvent,
 ): Promise<ManagedInviteJoinDispatchOutcome> {
-  const onboardingScheme = deps.onboardingScheme ?? DEFAULT_ONBOARDING_SCHEME;
+  const onboardingScheme = deps.onboardingScheme;
 
   if (!isInviteCandidate(event, onboardingScheme)) {
     return { result: null, shouldRetry: false };
@@ -255,7 +253,7 @@ async function listRecentInviteCandidatesAcrossManagedIdentities(
   processedMessageIds: ReadonlySet<string>,
   processedInviteKeys: ReadonlySet<string>,
 ): Promise<InviteRecoveryScanResult> {
-  const onboardingScheme = deps.onboardingScheme ?? DEFAULT_ONBOARDING_SCHEME;
+  const onboardingScheme = deps.onboardingScheme;
   const identities = await deps.listIdentities();
   const messages = new Map<string, RawMessageEvent>();
   let shouldRetry = false;
@@ -394,7 +392,7 @@ async function processInviteCandidate(
 export function startManagedInviteHostListener(
   deps: ManagedInviteHostListenerDeps,
 ): () => void {
-  const onboardingScheme = deps.onboardingScheme ?? DEFAULT_ONBOARDING_SCHEME;
+  const onboardingScheme = deps.onboardingScheme;
   const processedMessageIds = new Set<string>();
   const processedInviteKeys = new Set<string>();
   const inflightMessageIds = new Set<string>();

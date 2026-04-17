@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { generateConvosInviteSlug, type CoreRawEvent } from "@xmtp/signet-core";
+import {
+  createConvosOnboardingScheme,
+  generateConvosInviteSlug,
+  type CoreRawEvent,
+} from "@xmtp/signet-core";
 import {
   InternalError,
   NotFoundError,
   type SignetError,
 } from "@xmtp/signet-schemas";
-import { startManagedInviteHostListener } from "../invite-host-listener.js";
+import {
+  startManagedInviteHostListener as startManagedInviteHostListenerBase,
+  type ManagedInviteHostListenerDeps,
+} from "../invite-host-listener.js";
 
 const WRONG_PRIVATE_KEY_HEX =
   "0000000000000000000000000000000000000000000000000000000000000002";
@@ -20,6 +27,16 @@ const RIGHT_CREATOR_INBOX_ID =
 
 const TEST_CONVERSATION_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TEST_REQUESTER_INBOX_ID = "requester-inbox-id-abc123";
+const TEST_ONBOARDING_SCHEME = createConvosOnboardingScheme();
+
+function startManagedInviteHostListener(
+  deps: Omit<ManagedInviteHostListenerDeps, "onboardingScheme">,
+): () => void {
+  return startManagedInviteHostListenerBase({
+    onboardingScheme: TEST_ONBOARDING_SCHEME,
+    ...deps,
+  });
+}
 
 function makeRawMessageEvent(content: unknown): CoreRawEvent {
   return {
