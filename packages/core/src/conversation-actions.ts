@@ -15,7 +15,7 @@ import type {
   XmtpGroupInfo,
 } from "./xmtp-client-factory.js";
 import type { SignetCoreConfig } from "./config.js";
-import { joinConversation } from "./convos/join.js";
+import { joinConversation } from "./schemes/join.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
 import type { OnboardingScheme } from "./schemes/onboarding-scheme.js";
 
