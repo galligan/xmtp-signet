@@ -91,6 +91,9 @@ type SignetConfigInput =
 /** Top-level CLI configuration. Parsed from TOML with env var overrides. */
 export type CliConfig = {
   signet: SignetConfig;
+  defaults: {
+    profileName?: string | undefined;
+  };
   keys: {
     rootKeyPolicy: "biometric" | "passcode" | "open";
     operationalKeyPolicy: "biometric" | "passcode" | "open";
@@ -116,6 +119,11 @@ export type CliConfig = {
 
 type CliConfigInput = {
   signet?: SignetConfigInput;
+  defaults?:
+    | {
+        profileName?: string | undefined;
+      }
+    | undefined;
   keys?:
     | {
         rootKeyPolicy?: "biometric" | "passcode" | "open" | undefined;
@@ -168,6 +176,14 @@ const SignetConfigSchema: z.ZodType<
 const CliConfigBaseSchema = z
   .object({
     signet: SignetConfigSchema,
+    defaults: z
+      .object({
+        profileName: z
+          .string()
+          .optional()
+          .describe("Default human-facing profile name for Convos flows"),
+      })
+      .default({}),
     keys: z
       .object({
         rootKeyPolicy: z

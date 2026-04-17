@@ -10,7 +10,10 @@
  */
 
 import { Command } from "commander";
-import type { SignetError } from "@xmtp/signet-schemas";
+import { Result } from "better-result";
+import { InternalError, type SignetError } from "@xmtp/signet-schemas";
+import { loadConfig } from "../config/loader.js";
+import type { CliConfig } from "../config/schema.js";
 import { requireForce } from "../output/confirm.js";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { formatOutput } from "../output/formatter.js";
@@ -22,6 +25,10 @@ import {
 /** Dependencies for v1 chat commands. */
 export interface XsChatCommandDeps {
   readonly withDaemonClient: WithDaemonClient;
+  readonly loadConfig: (options?: {
+    configPath?: string;
+    envOverrides?: Record<string, string>;
+  }) => Promise<Result<CliConfig, SignetError>>;
   readonly writeStdout: (message: string) => void;
   readonly writeStderr: (message: string) => void;
   readonly exit: (code: number) => void;
@@ -29,6 +36,7 @@ export interface XsChatCommandDeps {
 
 const defaultDeps: XsChatCommandDeps = {
   withDaemonClient: createWithDaemonClient(),
+  loadConfig: (options) => loadConfig(options),
   writeStdout(message) {
     process.stdout.write(message);
   },
@@ -65,6 +73,34 @@ function normalizeInviteFormat(format: string | undefined): InviteFormat {
   return format === "link" || format === "qr" || format === "both"
     ? format
     : "both";
+}
+
+async function resolveProfileNameOverride(
+  deps: XsChatCommandDeps,
+  options: {
+    readonly configPath?: string | undefined;
+    readonly explicitProfileName?: string | undefined;
+    readonly hasOperatorId?: boolean;
+  },
+): Promise<Result<string | undefined, SignetError>> {
+  if (options.explicitProfileName !== undefined) {
+    return Result.ok(options.explicitProfileName);
+  }
+
+  if (options.hasOperatorId === true) {
+    return Result.ok(undefined);
+  }
+
+  const configResult = await deps.loadConfig(
+    options.configPath !== undefined
+      ? { configPath: options.configPath }
+      : undefined,
+  );
+  if (configResult.isErr()) {
+    return configResult;
+  }
+
+  return Result.ok(configResult.value.defaults.profileName);
 }
 
 async function writeInviteOutput(
@@ -108,12 +144,25 @@ export function createChatCommands(
 
   cmd
     .command("create")
-    .description("Create a conversation")
+    .description(
+      "Create a conversation, optionally publishing a profile and invite in one flow",
+    )
     .option("--config <path>", "Path to config file")
     .requiredOption("--name <name>", "Conversation name")
     .option("--members <inboxIds>", "Member inbox IDs (comma-separated)")
     .option("--as <inbox>", "Inbox ID to act as")
     .option("--op <operator>", "Operator ID")
+    .option(
+      "--invite",
+      "Generate a Convos invite immediately after creating the chat",
+    )
+    .option(
+      "--profile-name <name>",
+      "Convos profile name to publish after create (or before invite output)",
+    )
+    .option("--invite-name <name>", "Invite display name override")
+    .option("--invite-description <desc>", "Invite description override")
+    .option("--format <type>", "Output format: link, qr, or both", "both")
     .option("--json", "JSON output")
     .action(
       async (opts: {
@@ -122,9 +171,15 @@ export function createChatCommands(
         members?: string;
         as?: string;
         op?: string;
+        invite?: true;
+        profileName?: string;
+        inviteName?: string;
+        inviteDescription?: string;
+        format?: string;
         json?: true;
       }) => {
         const json = opts.json === true;
+        const format = normalizeInviteFormat(opts.format);
         const payload: Record<string, unknown> = {
           name: opts.name,
           memberInboxIds:
@@ -138,13 +193,175 @@ export function createChatCommands(
         if (opts.as !== undefined) payload["creatorIdentityLabel"] = opts.as;
         if (opts.op !== undefined) payload["operatorId"] = opts.op;
 
+        const shouldResolveProfile =
+          opts.profileName !== undefined || opts.invite === true;
+        const profileNameResult = shouldResolveProfile
+          ? await resolveProfileNameOverride(resolvedDeps, {
+              configPath: opts.config,
+              explicitProfileName: opts.profileName,
+              hasOperatorId: opts.op !== undefined,
+            })
+          : Result.ok(undefined);
+        if (profileNameResult.isErr()) {
+          writeError(resolvedDeps, profileNameResult.error, json);
+          return;
+        }
+
         const result = await resolvedDeps.withDaemonClient(
           { configPath: opts.config },
-          (client) => client.request("chat.create", payload),
+          async (client) => {
+            const created = await client.request("chat.create", payload);
+            if (created.isErr()) {
+              return created;
+            }
+
+            const createdValue = created.value as Record<string, unknown>;
+            const chatId =
+              typeof createdValue["chatId"] === "string"
+                ? createdValue["chatId"]
+                : typeof createdValue["groupId"] === "string"
+                  ? createdValue["groupId"]
+                  : undefined;
+            if (chatId === undefined) {
+              return Result.err(
+                InternalError.create(
+                  "chat.create response did not include chatId or groupId",
+                ) as SignetError,
+              );
+            }
+
+            let profile: Record<string, unknown> | undefined;
+            let profileWarning:
+              | { category: string; message: string }
+              | undefined;
+            if (profileNameResult.value !== undefined) {
+              const profileResult = await client.request(
+                "chat.update-profile",
+                {
+                  chatId,
+                  ...(opts.as !== undefined ? { identityLabel: opts.as } : {}),
+                  ...(opts.op !== undefined ? { operatorId: opts.op } : {}),
+                  profileName: profileNameResult.value,
+                },
+              );
+              if (profileResult.isErr()) {
+                profileWarning = {
+                  category: profileResult.error.category,
+                  message: profileResult.error.message,
+                };
+              } else {
+                profile = profileResult.value as Record<string, unknown>;
+              }
+            }
+
+            if (opts.invite !== true) {
+              return Result.ok({
+                ...createdValue,
+                ...(profile ? { profile } : {}),
+                ...(profileWarning ? { profileWarning } : {}),
+              });
+            }
+
+            const invite = await client.request("chat.invite", {
+              chatId,
+              ...(opts.as !== undefined ? { identityLabel: opts.as } : {}),
+              ...(opts.inviteName !== undefined
+                ? { name: opts.inviteName }
+                : {}),
+              ...(opts.inviteDescription !== undefined
+                ? { description: opts.inviteDescription }
+                : {}),
+            });
+            if (invite.isErr()) {
+              return Result.ok({
+                ...createdValue,
+                ...(profile ? { profile } : {}),
+                ...(profileWarning ? { profileWarning } : {}),
+                inviteWarning: {
+                  category: invite.error.category,
+                  message: invite.error.message,
+                },
+              });
+            }
+
+            return Result.ok({
+              ...createdValue,
+              ...(profile ? { profile } : {}),
+              ...(profileWarning ? { profileWarning } : {}),
+              invite: invite.value,
+            });
+          },
         );
 
         if (result.isErr()) {
           writeError(resolvedDeps, result.error, json);
+          return;
+        }
+
+        if (opts.invite === true) {
+          const output = result.value as Record<string, unknown>;
+          const invite = output["invite"] as
+            | Record<string, unknown>
+            | undefined;
+          const profileWarning = output["profileWarning"] as
+            | { category: string; message: string }
+            | undefined;
+          const inviteWarning = output["inviteWarning"] as
+            | { category: string; message: string }
+            | undefined;
+
+          if (json) {
+            if (invite !== undefined) {
+              const { renderQrToDataUrl } = await import("../invite/qr.js");
+              const inviteUrl =
+                typeof invite["inviteUrl"] === "string"
+                  ? invite["inviteUrl"]
+                  : "";
+              const qrDataUrl = await renderQrToDataUrl(inviteUrl);
+              resolvedDeps.writeStdout(
+                formatOutput(
+                  {
+                    ...output,
+                    invite: {
+                      ...invite,
+                      qrDataUrl,
+                    },
+                  },
+                  { json: true },
+                ) + "\n",
+              );
+            } else {
+              resolvedDeps.writeStdout(
+                formatOutput(output, { json: true }) + "\n",
+              );
+            }
+            return;
+          }
+
+          resolvedDeps.writeStdout(
+            formatOutput(
+              Object.fromEntries(
+                Object.entries(output).filter(([key]) => key !== "invite"),
+              ),
+              { json: false },
+            ) + "\n",
+          );
+          if (profileWarning) {
+            resolvedDeps.writeStderr(
+              `warning: profile update failed (${profileWarning.category}): ${profileWarning.message}\n`,
+            );
+          }
+          if (inviteWarning) {
+            resolvedDeps.writeStderr(
+              `warning: invite failed (${inviteWarning.category}): ${inviteWarning.message}\n`,
+            );
+          }
+          if (invite !== undefined) {
+            await writeInviteOutput(resolvedDeps, invite, {
+              json: false,
+              format,
+            });
+          }
           return;
         }
 
@@ -294,8 +511,20 @@ export function createChatCommands(
         const payload: Record<string, unknown> = { inviteUrl: url };
         if (opts.as !== undefined) payload["label"] = opts.as;
         if (opts.op !== undefined) payload["operatorId"] = opts.op;
-        if (opts.profileName !== undefined) {
-          payload["profileName"] = opts.profileName;
+        const profileNameResult = await resolveProfileNameOverride(
+          resolvedDeps,
+          {
+            configPath: opts.config,
+            explicitProfileName: opts.profileName,
+            hasOperatorId: opts.op !== undefined,
+          },
+        );
+        if (profileNameResult.isErr()) {
+          writeError(resolvedDeps, profileNameResult.error, json);
+          return;
+        }
+        if (profileNameResult.value !== undefined) {
+          payload["profileName"] = profileNameResult.value;
         }
         if (opts.timeout !== undefined) {
           payload["timeoutSeconds"] = Number.parseInt(opts.timeout, 10);
@@ -388,8 +617,20 @@ export function createChatCommands(
         const payload: Record<string, unknown> = { chatId: id };
         if (opts.as !== undefined) payload["identityLabel"] = opts.as;
         if (opts.op !== undefined) payload["operatorId"] = opts.op;
-        if (opts.profileName !== undefined) {
-          payload["profileName"] = opts.profileName;
+        const profileNameResult = await resolveProfileNameOverride(
+          resolvedDeps,
+          {
+            configPath: opts.config,
+            explicitProfileName: opts.profileName,
+            hasOperatorId: opts.op !== undefined,
+          },
+        );
+        if (profileNameResult.isErr()) {
+          writeError(resolvedDeps, profileNameResult.error, json);
+          return;
+        }
+        if (profileNameResult.value !== undefined) {
+          payload["profileName"] = profileNameResult.value;
         }
 
         const result = await resolvedDeps.withDaemonClient(

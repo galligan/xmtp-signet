@@ -131,6 +131,20 @@ export function createIdentityInitCommand(): Command {
         };
       }
 
+      if (
+        typeof options.label === "string" &&
+        options.label.trim().length > 0 &&
+        config.defaults.profileName === undefined
+      ) {
+        config = {
+          ...config,
+          defaults: {
+            ...config.defaults,
+            profileName: options.label.trim(),
+          },
+        };
+      }
+
       const configWritten = !configExists || presetArg !== undefined;
       if (configWritten) {
         await writeConfig(configPath, config);

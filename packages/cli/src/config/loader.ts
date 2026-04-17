@@ -62,9 +62,7 @@ export async function loadConfig(options?: {
   return Result.ok(parseResult.data);
 }
 
-/**
- * Returns the default CLI configuration path for the current environment.
- */
+/** Resolve the default CLI config file path from schema defaults and XDG rules. */
 export function defaultConfigPath(): string {
   const defaults = resolvePaths(CliConfigSchema.parse({}));
   return defaults.configFile;

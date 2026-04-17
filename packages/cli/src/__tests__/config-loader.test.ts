@@ -35,6 +35,9 @@ describe("loadConfig", () => {
 env = "production"
 identityMode = "shared"
 
+[defaults]
+profileName = "Codex"
+
 [ws]
 port = 9000
 host = "0.0.0.0"
@@ -50,6 +53,7 @@ defaultTtlSeconds = 7200
     const config = result.value;
     expect(config.signet.env).toBe("production");
     expect(config.signet.identityMode).toBe("shared");
+    expect(config.defaults.profileName).toBe("Codex");
     expect(config.ws.port).toBe(9000);
     expect(config.ws.host).toBe("0.0.0.0");
     expect(config.credentials.defaultTtlSeconds).toBe(7200);

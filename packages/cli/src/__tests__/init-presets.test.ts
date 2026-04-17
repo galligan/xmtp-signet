@@ -73,6 +73,7 @@ describe("init posture presets", () => {
     const configPath = join(dir, "config.toml");
 
     const config = applyInitPreset(CliConfigSchema.parse({}), "hardened");
+    config.defaults.profileName = "Codex";
     await writeConfig(configPath, config);
 
     const raw = await readFile(configPath, "utf8");
@@ -83,6 +84,7 @@ describe("init posture presets", () => {
     const loaded = await loadConfig({ configPath });
     expect(loaded.isOk()).toBe(true);
     if (!loaded.isOk()) return;
+    expect(loaded.value.defaults.profileName).toBe("Codex");
     expect(loaded.value.keys.vaultKeyPolicy).toBe("passcode");
     expect(loaded.value.biometricGating.adminReadElevation).toBe(true);
   });
