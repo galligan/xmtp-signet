@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { XmtpDecodedMessage } from "../../xmtp-client-factory.js";
+import type { XmtpDecodedMessage } from "../../../xmtp-client-factory.js";
 import { encodeProfileSnapshot, MemberKind } from "../profile-messages.js";
 import {
   buildProfileSnapshotFromMessages,

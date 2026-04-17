@@ -14,7 +14,7 @@ import type {
   ProcessedJoinRequest,
   ProfileData,
   ResolvedOnboardingProfile,
-} from "../schemes/onboarding-scheme.js";
+} from "../onboarding-scheme.js";
 import { createConvosCodecs } from "./codecs.js";
 import {
   generateConvosInviteSlug,

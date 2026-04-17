@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { generatePrivateKey } from "viem/accounts";
-import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
+import { createConvosOnboardingScheme } from "../schemes/convos/onboarding-scheme.js";
 import { createSdkClientFactory } from "../sdk/sdk-client-factory.js";
 import { createMockSdkNativeClient } from "./sdk-fixtures.js";
 import type { XmtpClientCreateOptions } from "../xmtp-client-factory.js";

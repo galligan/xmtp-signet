@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import type { XmtpDecodedMessage } from "../../xmtp-client-factory.js";
+import type { XmtpDecodedMessage } from "../../../xmtp-client-factory.js";
 import { createConvosOnboardingScheme } from "../onboarding-scheme.js";
 import {
   generateConvosInviteUrl,

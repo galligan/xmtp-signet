@@ -1,4 +1,4 @@
-import type { XmtpDecodedMessage } from "../xmtp-client-factory.js";
+import type { XmtpDecodedMessage } from "../../xmtp-client-factory.js";
 import { isEncodedConvosContent } from "./join-request-content.js";
 import {
   ContentTypeProfileSnapshot,

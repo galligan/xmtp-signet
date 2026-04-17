@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
-import type { RawMessageEvent, CoreRawEvent } from "../../raw-events.js";
+import type { RawMessageEvent, CoreRawEvent } from "../../../raw-events.js";
 import { generateConvosInviteSlug } from "../invite-generator.js";
 import {
   tryProcessJoinRequest,

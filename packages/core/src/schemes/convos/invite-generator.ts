@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import protobuf from "protobufjs";
 import { InternalError } from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
-import { createInviteCrypto } from "../schemes/invite-crypto.js";
+import { createInviteCrypto } from "../invite-crypto.js";
 
 // --- Protobuf schema definitions (must match invite-parser.ts) ---
 

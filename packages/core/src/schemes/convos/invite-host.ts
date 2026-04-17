@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SignetError } from "@xmtp/signet-schemas";
-import type { CoreRawEvent, RawMessageEvent } from "../raw-events.js";
+import type { CoreRawEvent, RawMessageEvent } from "../../raw-events.js";
 import {
   processJoinRequest,
   type ProcessJoinRequestDeps,

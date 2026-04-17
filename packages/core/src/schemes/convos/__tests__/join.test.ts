@@ -5,13 +5,13 @@ import Long from "long";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import { InternalError, type SignetError } from "@xmtp/signet-schemas";
-import { SqliteIdentityStore } from "../../identity-store.js";
+import { SqliteIdentityStore } from "../../../identity-store.js";
 import type {
   XmtpClient,
   XmtpClientFactory,
   XmtpGroupInfo,
   SignerProviderLike,
-} from "../../xmtp-client-factory.js";
+} from "../../../xmtp-client-factory.js";
 import { InviteJoinErrorType } from "../invite-join-error.js";
 import { createConvosOnboardingScheme } from "../onboarding-scheme.js";
 import { joinConversation, type JoinConversationDeps } from "../join.js";

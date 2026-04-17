@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { TimeoutError, ValidationError } from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
-import type { SqliteIdentityStore } from "../identity-store.js";
-import type { XmtpClientFactory } from "../xmtp-client-factory.js";
-import type { XmtpEnv, SignetCoreConfig } from "../config.js";
-import type { SignerProviderFactory } from "../identity-registration.js";
-import { registerIdentity } from "../identity-registration.js";
-import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
+import type { SqliteIdentityStore } from "../../identity-store.js";
+import type { XmtpClientFactory } from "../../xmtp-client-factory.js";
+import type { XmtpEnv, SignetCoreConfig } from "../../config.js";
+import type { SignerProviderFactory } from "../../identity-registration.js";
+import { registerIdentity } from "../../identity-registration.js";
+import type { OnboardingScheme } from "../onboarding-scheme.js";
 import {
   extractInviteJoinError,
   getInviteJoinErrorMessage,

@@ -3,7 +3,7 @@ import { ValidationError } from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
 import protobuf from "protobufjs";
 import Long from "long";
-import { createInviteCrypto } from "../schemes/invite-crypto.js";
+import { createInviteCrypto } from "../invite-crypto.js";
 
 // --- Protobuf schema definitions (programmatic, matching Convos format) ---
 

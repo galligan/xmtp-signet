@@ -11,7 +11,7 @@ import { createXmtpSigner } from "./signer-adapter.js";
 import type { SdkEoaSigner } from "./signer-adapter.js";
 import { createSdkClient } from "./sdk-client.js";
 import type { SdkClientShape } from "./sdk-types.js";
-import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
+import { createConvosOnboardingScheme } from "../schemes/convos/onboarding-scheme.js";
 import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 
 /**

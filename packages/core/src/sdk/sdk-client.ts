@@ -25,7 +25,7 @@ import {
   wrapDmStream,
   wrapGroupStream,
 } from "./stream-wrappers.js";
-import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
+import { createConvosOnboardingScheme } from "../schemes/convos/onboarding-scheme.js";
 import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 import type {
   SdkClientShape,

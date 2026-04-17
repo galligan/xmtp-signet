@@ -17,9 +17,9 @@ import {
   createConversationActions,
   type ConversationActionDeps,
 } from "../conversation-actions.js";
-import { generateConvosInviteUrl } from "../convos/invite-generator.js";
-import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
-import { extractProfileUpdateContent } from "../convos/profile-state.js";
+import { generateConvosInviteUrl } from "../schemes/convos/invite-generator.js";
+import { createConvosOnboardingScheme } from "../schemes/convos/onboarding-scheme.js";
+import { extractProfileUpdateContent } from "../schemes/convos/profile-state.js";
 
 /** Minimal handler context for tests. */
 function stubCtx(): HandlerContext {
