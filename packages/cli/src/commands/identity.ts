@@ -1,9 +1,16 @@
 import { Command } from "commander";
 import { Result } from "better-result";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { createKeyManager } from "@xmtp/signet-keys";
 import type { KeyManager } from "@xmtp/signet-keys";
-import { loadConfig } from "../config/loader.js";
+import { loadConfig, defaultConfigPath } from "../config/loader.js";
+import {
+  applyInitPreset,
+  describeInitPreset,
+  resolveInitPreset,
+  type InitPreset,
+} from "../config/init-presets.js";
+import { writeConfig } from "../config/writer.js";
 import { resolvePaths } from "../config/paths.js";
 import { formatOutput } from "../output/formatter.js";
 import { exitCodeFromCategory } from "../output/exit-codes.js";
@@ -66,28 +73,68 @@ export function createIdentityCommands(): Command {
 /** Create the direct-mode identity bootstrap command used by `identity init` and `xs init`. */
 export function createIdentityInitCommand(): Command {
   return new Command("init")
-    .description("Create a new XMTP identity and key hierarchy")
+    .description(
+      "Create a new XMTP identity and key hierarchy, optionally applying a posture preset",
+    )
+    .argument(
+      "[preset]",
+      "Initialization posture: recommended, trusted-local, or hardened",
+    )
     .option("--config <path>", "Path to config file")
     .option("--json", "JSON output")
     .option("--env <env>", "XMTP environment (local|dev|production)")
     .option("--label <name>", "Human-readable label for this identity")
-    .action(async (options) => {
+    .action(async (presetArg: string | undefined, options) => {
       const json = Boolean(options.json);
       const print = (data: unknown) =>
         process.stdout.write(formatOutput(data, { json }) + "\n");
       const printErr = (data: unknown) =>
         process.stderr.write(formatOutput(data, { json }) + "\n");
 
-      const configResult = await loadConfig(
+      const presetResult = resolveInitPreset(presetArg);
+      if (presetResult.isErr()) {
+        printErr({
+          error: presetResult.error.message,
+          ...(presetResult.error.context !== null
+            ? { context: presetResult.error.context }
+            : {}),
+        });
+        process.exit(exitCodeFromCategory(presetResult.error.category));
+      }
+      const preset = presetResult.value;
+      const configPath =
         typeof options.config === "string"
-          ? { configPath: options.config }
-          : {},
-      );
+          ? options.config
+          : defaultConfigPath();
+      const configExists = existsSync(configPath);
+
+      const configResult = await loadConfig({
+        configPath,
+        envOverrides: {},
+      });
       if (configResult.isErr()) {
         printErr({ error: configResult.error.message });
         process.exit(exitCodeFromCategory(configResult.error.category));
       }
-      const config = configResult.value;
+      let config =
+        !configExists || presetArg !== undefined
+          ? applyInitPreset(configResult.value, preset)
+          : configResult.value;
+      const env = resolveEnv(options.env, config.signet.env);
+      if (config.signet.env !== env) {
+        config = {
+          ...config,
+          signet: {
+            ...config.signet,
+            env,
+          },
+        };
+      }
+
+      const configWritten = !configExists || presetArg !== undefined;
+      if (configWritten) {
+        await writeConfig(configPath, config);
+      }
       const paths = resolvePaths(config);
 
       mkdirSync(paths.dataDir, { recursive: true });
@@ -141,7 +188,6 @@ export function createIdentityInitCommand(): Command {
         adminKeyFingerprint = adminResult.value.fingerprint;
       }
 
-      const env = resolveEnv(options.env, config.signet.env);
       if (env !== "local") {
         await registerXmtpIdentity({
           km,
@@ -152,6 +198,9 @@ export function createIdentityInitCommand(): Command {
           operationalKeyId: opKey.identityId,
           adminKeyFingerprint,
           platform: km.platform,
+          configPath,
+          configWritten,
+          ...(configWritten ? { preset } : {}),
           print,
           printErr,
         });
@@ -160,6 +209,14 @@ export function createIdentityInitCommand(): Command {
 
       print({
         initialized: true,
+        ...(configWritten
+          ? {
+              preset,
+              presetDescription: describeInitPreset(preset),
+            }
+          : {}),
+        configPath,
+        configWritten,
         rootPublicKey,
         operationalKeyId: opKey.identityId,
         adminKeyFingerprint,
@@ -207,6 +264,9 @@ async function registerXmtpIdentity(opts: {
   readonly operationalKeyId: string;
   readonly adminKeyFingerprint: string;
   readonly platform: string;
+  readonly configPath: string;
+  readonly configWritten: boolean;
+  readonly preset?: InitPreset;
   readonly print: (data: unknown) => void;
   readonly printErr: (data: unknown) => void;
 }): Promise<void> {
@@ -219,6 +279,9 @@ async function registerXmtpIdentity(opts: {
     operationalKeyId,
     adminKeyFingerprint,
     platform,
+    configPath,
+    configWritten,
+    preset,
     print,
     printErr,
   } = opts;
@@ -264,6 +327,14 @@ async function registerXmtpIdentity(opts: {
 
   print({
     initialized: true,
+    ...(preset !== undefined
+      ? {
+          preset,
+          presetDescription: describeInitPreset(preset),
+        }
+      : {}),
+    configPath,
+    configWritten,
     rootPublicKey,
     operationalKeyId,
     adminKeyFingerprint,

@@ -62,7 +62,10 @@ export async function loadConfig(options?: {
   return Result.ok(parseResult.data);
 }
 
-function defaultConfigPath(): string {
+/**
+ * Returns the default CLI configuration path for the current environment.
+ */
+export function defaultConfigPath(): string {
   const defaults = resolvePaths(CliConfigSchema.parse({}));
   return defaults.configFile;
 }

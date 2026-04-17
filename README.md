@@ -98,8 +98,14 @@ bun run check
 ### Run the signet
 
 ```bash
-# Create a local XMTP identity and key hierarchy
+# Create a local XMTP identity and key hierarchy with the recommended posture
 xs init --env dev --label owner
+
+# Use the lower-ceremony trusted local posture for smoke testing
+xs init trusted-local --env dev --label owner
+
+# Use the stricter hardened posture for shorter-lived defaults and explicit approval gates
+xs init hardened --env production --label owner
 
 # Start the daemon
 xs daemon start
@@ -129,6 +135,20 @@ xs policy create --label chatty --allow send,reply
 
 `xs cred ...` is the canonical v1 lifecycle surface. Credential metadata
 includes the scoped conversations and effective allow/deny sets directly.
+
+### `xs init` posture presets
+
+`xs init` now supports a small set of onboarding postures so first-run setup can
+stay simple without collapsing the custody boundary:
+
+| Command                 | Posture                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `xs init`               | Recommended default: per-chat isolation with owner-gated sensitive reads               |
+| `xs init trusted-local` | Trusted local testing: shared identity mode and lower ceremony                         |
+| `xs init hardened`      | Stricter approval defaults, shorter-lived credentials, stronger operational boundaries |
+
+All three presets keep the signet as the real XMTP client. They do not hand raw
+keys, raw databases, or direct XMTP SDK access to the harness.
 
 See [docs/development.md](docs/development.md) for the development workflow and
 package layout.
