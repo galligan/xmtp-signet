@@ -109,6 +109,11 @@ export type {
   ProfileData,
   ResolvedOnboardingProfile,
 } from "./schemes/onboarding-scheme.js";
+export {
+  createInviteCrypto,
+  type InviteCrypto,
+  type InviteCryptoConfig,
+} from "./schemes/invite-crypto.js";
 
 // Message actions
 export { createMessageActions } from "./message-actions.js";

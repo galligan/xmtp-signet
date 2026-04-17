@@ -1,11 +1,9 @@
-import { inflateSync } from "node:zlib";
 import { Result } from "better-result";
 import { ValidationError } from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
 import protobuf from "protobufjs";
 import Long from "long";
-import { secp256k1 } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha256";
+import { createInviteCrypto } from "../schemes/invite-crypto.js";
 
 // --- Protobuf schema definitions (programmatic, matching Convos format) ---
 
@@ -38,10 +36,9 @@ new protobuf.Root().add(InvitePayloadType).add(SignedInviteType);
  * Format: [0x1f marker][4-byte BE original size][zlib deflate data]
  * Matches the iOS and CLI implementations.
  */
-const COMPRESSION_MARKER = 0x1f;
-
-/** Maximum decompressed size (1 MB) to prevent decompression bombs. */
-const MAX_DECOMPRESSED_SIZE = 1024 * 1024;
+const convosInviteCrypto = createInviteCrypto({
+  salt: "ConvosInviteV1",
+});
 
 // --- Types ---
 
@@ -101,27 +98,6 @@ function base64UrlDecode(str: string): Uint8Array {
   const padLength = (4 - (base64.length % 4)) % 4;
   base64 += "=".repeat(padLength);
   return new Uint8Array(Buffer.from(base64, "base64"));
-}
-
-function decompress(data: Uint8Array): Result<Uint8Array, SignetError> {
-  if (data.length === 0 || data[0] !== COMPRESSION_MARKER) {
-    return Result.ok(data);
-  }
-
-  // Skip 5-byte header: [marker][4-byte BE original size]
-  const compressed = data.slice(5);
-  const decompressed = inflateSync(compressed);
-
-  if (decompressed.length > MAX_DECOMPRESSED_SIZE) {
-    return Result.err(
-      ValidationError.create(
-        "inviteUrl",
-        `Decompressed size exceeds maximum: ${decompressed.length}`,
-      ),
-    );
-  }
-
-  return Result.ok(new Uint8Array(decompressed));
 }
 
 /**
@@ -192,7 +168,9 @@ export function parseConvosInviteUrl(
     }
 
     // Step 4: Decompress
-    const decompressResult = decompress(decoded);
+    const decompressResult = convosInviteCrypto.decompress(decoded, {
+      errorField: "inviteUrl",
+    });
     if (decompressResult.isErr()) return decompressResult;
     const decompressed = decompressResult.value;
 
@@ -307,23 +285,10 @@ export function verifyConvosInvite(
       );
     }
 
-    const messageHash = sha256(signedInvitePayloadBytes);
-    const compactSig = signedInviteSignature.slice(0, 64);
-    const recoveryBit = signedInviteSignature[64];
-
-    if (recoveryBit === undefined || recoveryBit > 3) {
-      return Result.err(
-        ValidationError.create(
-          "inviteSignature",
-          `Invalid recovery bit: ${recoveryBit}`,
-        ),
-      );
-    }
-
-    // Attempt to recover public key -- will throw if signature is invalid
-    const sig =
-      secp256k1.Signature.fromCompact(compactSig).addRecoveryBit(recoveryBit);
-    sig.recoverPublicKey(messageHash);
+    convosInviteCrypto.recoverPublicKey(
+      signedInvitePayloadBytes,
+      signedInviteSignature,
+    );
 
     return Result.ok();
   } catch (cause) {

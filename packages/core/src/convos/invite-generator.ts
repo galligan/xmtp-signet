@@ -1,12 +1,8 @@
-import { deflateSync } from "node:zlib";
 import { Result } from "better-result";
 import protobuf from "protobufjs";
 import { InternalError } from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
-import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
-import { hkdf } from "@noble/hashes/hkdf";
-import { sha256 as nobleSha256 } from "@noble/hashes/sha256";
-import { secp256k1 } from "@noble/curves/secp256k1";
+import { createInviteCrypto } from "../schemes/invite-crypto.js";
 
 // --- Protobuf schema definitions (must match invite-parser.ts) ---
 
@@ -31,10 +27,11 @@ new protobuf.Root().add(InvitePayloadType).add(SignedInviteType);
 
 // --- Constants ---
 
-const FORMAT_VERSION = 1;
-const HKDF_SALT = new TextEncoder().encode("ConvosInviteV1");
-const COMPRESSION_MARKER = 0x1f;
 const SEPARATOR_INTERVAL = 300;
+
+const convosInviteCrypto = createInviteCrypto({
+  salt: "ConvosInviteV1",
+});
 
 // --- Types ---
 
@@ -64,16 +61,6 @@ export interface GenerateInviteSlugOptions {
 export interface GenerateInviteUrlOptions extends GenerateInviteSlugOptions {
   /** XMTP environment: "production" or "dev". Defaults to "production". */
   readonly env?: "production" | "dev" | "local";
-}
-
-// --- Key derivation ---
-
-function deriveTokenKey(
-  privateKeyBytes: Uint8Array,
-  inboxId: string,
-): Uint8Array {
-  const info = new TextEncoder().encode(`inbox:${inboxId}`);
-  return hkdf(nobleSha256, privateKeyBytes, HKDF_SALT, info, 32);
 }
 
 // --- Conversation ID packing ---
@@ -152,20 +139,11 @@ function encryptConversationToken(
   creatorInboxId: string,
   privateKeyBytes: Uint8Array,
 ): Uint8Array {
-  const key = deriveTokenKey(privateKeyBytes, creatorInboxId);
-  const plaintext = packConversationId(conversationId);
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const aad = new TextEncoder().encode(creatorInboxId);
-
-  const cipher = chacha20poly1305(key, nonce, aad);
-  const ciphertext = cipher.encrypt(plaintext);
-
-  // Token format: [version=0x01][12-byte nonce][ciphertext+authTag]
-  const token = new Uint8Array(1 + 12 + ciphertext.length);
-  token[0] = FORMAT_VERSION;
-  token.set(nonce, 1);
-  token.set(ciphertext, 13);
-  return token;
+  return convosInviteCrypto.encryptToken(
+    packConversationId(conversationId),
+    creatorInboxId,
+    privateKeyBytes,
+  );
 }
 
 /**
@@ -177,17 +155,13 @@ export function decryptConversationToken(
   creatorInboxId: string,
   privateKeyBytes: Uint8Array,
 ): string {
-  if (tokenBytes[0] !== FORMAT_VERSION) {
-    throw new Error(`Unsupported token version: ${tokenBytes[0]}`);
-  }
-  const nonce = tokenBytes.slice(1, 13);
-  const ciphertextWithTag = tokenBytes.slice(13);
-  const key = deriveTokenKey(privateKeyBytes, creatorInboxId);
-  const aad = new TextEncoder().encode(creatorInboxId);
-
-  const cipher = chacha20poly1305(key, nonce, aad);
-  const plaintext = cipher.decrypt(ciphertextWithTag);
-  return unpackConversationId(plaintext);
+  return unpackConversationId(
+    convosInviteCrypto.decryptToken(
+      tokenBytes,
+      creatorInboxId,
+      privateKeyBytes,
+    ),
+  );
 }
 
 // --- Hex helpers ---
@@ -205,46 +179,10 @@ function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// --- secp256k1 signing ---
-
-/**
- * Sign a message hash with secp256k1 and produce a 65-byte recoverable
- * signature (r:32 + s:32 + recovery:1).
- */
-function signWithRecovery(
-  messageHash: Uint8Array,
-  privateKeyBytes: Uint8Array,
-): Uint8Array {
-  const sig = secp256k1.sign(messageHash, privateKeyBytes);
-  const compact = sig.toCompactRawBytes();
-  const result = new Uint8Array(65);
-  result.set(compact, 0);
-  result[64] = sig.recovery;
-  return result;
-}
-
 // --- Base64URL ---
 
 function base64UrlEncode(data: Uint8Array): string {
   return Buffer.from(data).toString("base64url");
-}
-
-// --- Compression ---
-
-function compressIfSmaller(data: Uint8Array): Uint8Array {
-  if (data.length <= 100) return data;
-  const compressed = deflateSync(data);
-  if (compressed.length + 5 < data.length) {
-    const result = new Uint8Array(compressed.length + 5);
-    result[0] = COMPRESSION_MARKER;
-    result[1] = (data.length >>> 24) & 0xff;
-    result[2] = (data.length >>> 16) & 0xff;
-    result[3] = (data.length >>> 8) & 0xff;
-    result[4] = data.length & 0xff;
-    result.set(new Uint8Array(compressed), 5);
-    return result;
-  }
-  return data;
 }
 
 // --- iMessage compatibility ---
@@ -312,8 +250,7 @@ export async function generateConvosInviteSlug(
     ).finish();
 
     // Step 3: Sign SHA256(payload) with secp256k1
-    const messageHash = nobleSha256(payloadBytes);
-    const signature = signWithRecovery(messageHash, privateKeyBytes);
+    const signature = convosInviteCrypto.sign(payloadBytes, privateKeyBytes);
 
     // Step 4: Wrap in SignedInvite
     const signedInviteBytes = SignedInviteType.encode(
@@ -324,7 +261,7 @@ export async function generateConvosInviteSlug(
     ).finish();
 
     // Compress if beneficial
-    const compressed = compressIfSmaller(signedInviteBytes);
+    const compressed = convosInviteCrypto.compress(signedInviteBytes);
 
     // Step 5: Base64url encode and insert separators
     const encoded = base64UrlEncode(compressed);
