@@ -11,7 +11,8 @@ import { createXmtpSigner } from "./signer-adapter.js";
 import type { SdkEoaSigner } from "./signer-adapter.js";
 import { createSdkClient } from "./sdk-client.js";
 import type { SdkClientShape } from "./sdk-types.js";
-import { createConvosCodecs } from "../convos/codecs.js";
+import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
+import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 
 /**
  * A function that creates a native SDK client.
@@ -34,9 +35,12 @@ export type SdkCreateClientFn = (
 export interface SdkClientFactoryOptions {
   /** Override the SDK Client.create function (for testing). */
   readonly sdkCreateClient?: SdkCreateClientFn;
+  /** Onboarding scheme that owns custom codecs and content handling. */
+  readonly onboardingScheme?: OnboardingScheme;
 }
 
 const DEFAULT_SYNC_TIMEOUT_MS = 30_000;
+const DEFAULT_ONBOARDING_SCHEME = createConvosOnboardingScheme();
 type NodeSdkCreateOptions = Parameters<typeof NodeSdkClient.create>[1];
 type NodeSdkSigner = Parameters<typeof NodeSdkClient.create>[0];
 type NodeSdkCodecs = NonNullable<NonNullable<NodeSdkCreateOptions>["codecs"]>;
@@ -53,6 +57,8 @@ export function createSdkClientFactory(
   factoryOptions?: SdkClientFactoryOptions,
 ): XmtpClientFactory {
   const sdkCreate = factoryOptions?.sdkCreateClient ?? defaultSdkCreate;
+  const onboardingScheme =
+    factoryOptions?.onboardingScheme ?? DEFAULT_ONBOARDING_SCHEME;
 
   return {
     async create(
@@ -69,12 +75,13 @@ export function createSdkClientFactory(
           env: options.env,
           appVersion: options.appVersion,
           disableDeviceSync: true,
-          codecs: createConvosCodecs(),
+          codecs: onboardingScheme.codecs(),
         });
 
         const client = createSdkClient({
           client: nativeClient,
           syncTimeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+          onboardingScheme,
         });
 
         return Result.ok(client);

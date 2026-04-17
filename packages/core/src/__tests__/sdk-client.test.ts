@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { encodeProfileSnapshot } from "../convos/profile-messages.js";
+import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
+import type { EncodedOnboardingContent } from "../schemes/onboarding-scheme.js";
 import { createSdkClient } from "../sdk/sdk-client.js";
 import {
   createMockSdkNativeClient,
@@ -70,6 +72,42 @@ describe("createSdkClient", () => {
         expect(result.value).toBe("msg-id-encoded");
       }
       expect(capturedPayload).toEqual(snapshot);
+    });
+
+    test("uses scheme-owned encoded content detection for custom onboarding types", async () => {
+      const baseScheme = createConvosOnboardingScheme();
+      const customType = "example.org/profile_snapshot:9.9";
+      const customEncoded = { custom: true };
+
+      let capturedPayload: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.send = async (encoded: unknown) => {
+        capturedPayload = encoded;
+        return "msg-id-custom";
+      };
+
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({
+        client: native,
+        syncTimeoutMs: 5000,
+        onboardingScheme: {
+          ...baseScheme,
+          isEncodedContent(value): value is EncodedOnboardingContent {
+            return value === customEncoded;
+          },
+          profileSnapshotContentType() {
+            return customType;
+          },
+        },
+      });
+
+      const result = await client.sendMessage("g1", customEncoded, customType);
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-custom");
+      }
+      expect(capturedPayload).toBe(customEncoded);
     });
   });
 

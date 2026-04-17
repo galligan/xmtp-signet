@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { generatePrivateKey } from "viem/accounts";
+import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
 import { createSdkClientFactory } from "../sdk/sdk-client-factory.js";
 import { createMockSdkNativeClient } from "./sdk-fixtures.js";
 import type { XmtpClientCreateOptions } from "../xmtp-client-factory.js";
@@ -51,8 +52,14 @@ describe("createSdkClientFactory", () => {
   });
 
   test("passes options through to SDK create", async () => {
+    const baseScheme = createConvosOnboardingScheme();
+    const customCodecs = baseScheme.codecs().slice(0, 1);
     let capturedOptions: Record<string, unknown> = {};
     const factory = createSdkClientFactory({
+      onboardingScheme: {
+        ...baseScheme,
+        codecs: () => customCodecs,
+      },
       sdkCreateClient: async (_signer, options) => {
         capturedOptions = options as Record<string, unknown>;
         return createMockSdkNativeClient();
@@ -64,8 +71,7 @@ describe("createSdkClientFactory", () => {
     expect(capturedOptions["dbPath"]).toBe("/tmp/test.db3");
     expect(capturedOptions["env"]).toBe("local");
     expect(capturedOptions["appVersion"]).toBe("test/0.1.0");
-    expect(Array.isArray(capturedOptions["codecs"])).toBe(true);
-    expect(capturedOptions["codecs"] as unknown[]).toHaveLength(4);
+    expect(capturedOptions["codecs"]).toBe(customCodecs);
   });
 
   test("creates signer from signerPrivateKey in options", async () => {

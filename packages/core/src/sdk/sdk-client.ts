@@ -25,7 +25,8 @@ import {
   wrapDmStream,
   wrapGroupStream,
 } from "./stream-wrappers.js";
-import { isEncodedConvosContent } from "../convos/join-request-content.js";
+import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
+import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 import type {
   SdkClientShape,
   SdkGroupShape,
@@ -39,7 +40,11 @@ export interface SdkClientOptions {
   readonly client: SdkClientShape;
   /** Timeout for sync operations in milliseconds. */
   readonly syncTimeoutMs: number;
+  /** Onboarding scheme that owns custom content-type handling. */
+  readonly onboardingScheme?: OnboardingScheme;
 }
+
+const DEFAULT_ONBOARDING_SCHEME = createConvosOnboardingScheme();
 
 /**
  * Look up a group by ID, returning NotFoundError if missing.
@@ -117,7 +122,17 @@ function toSdkConsentState(state: "allowed" | "denied"): SdkConsentState {
  * Wraps every SDK call in try/catch, converting exceptions to Result errors.
  */
 export function createSdkClient(options: SdkClientOptions): XmtpClient {
-  const { client, syncTimeoutMs } = options;
+  const {
+    client,
+    syncTimeoutMs,
+    onboardingScheme = DEFAULT_ONBOARDING_SCHEME,
+  } = options;
+
+  const isOnboardingContentType = (contentType: string): boolean =>
+    contentType === onboardingScheme.joinRequestContentType() ||
+    contentType === onboardingScheme.errorContentType() ||
+    contentType === onboardingScheme.profileUpdateContentType() ||
+    contentType === onboardingScheme.profileSnapshotContentType();
 
   return {
     get inboxId(): string {
@@ -135,7 +150,10 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
       // For custom content types, use group.send() with encoded content
       if (contentType && contentType !== "xmtp.org/text:1.0") {
-        if (isEncodedConvosContent(content)) {
+        if (
+          isOnboardingContentType(contentType) &&
+          onboardingScheme.isEncodedContent(content)
+        ) {
           return wrapSdkCall(async () => group.send(content), "sendMessage");
         }
         // Parse "authority/type:major.minor" format
