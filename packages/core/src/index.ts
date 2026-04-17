@@ -226,6 +226,7 @@ export {
   startInviteHostListener,
 } from "./convos/invite-host.js";
 export type { InviteHostDeps } from "./convos/invite-host.js";
+export { createConvosOnboardingScheme } from "./convos/onboarding-scheme.js";
 
 // SDK integration (production XmtpClientFactory implementation)
 export {
