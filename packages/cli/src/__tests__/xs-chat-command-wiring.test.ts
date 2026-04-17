@@ -3,10 +3,60 @@ import { Result } from "better-result";
 import { InternalError, type SignetError } from "@xmtp/signet-schemas";
 import type { AdminClient } from "../admin/client.js";
 import { createChatCommands } from "../commands/xs-chat.js";
+import type { DaemonCommandContext } from "../commands/daemon-client.js";
+import type { CliConfig } from "../config/schema.js";
 
 interface RequestCall {
   readonly method: string;
   readonly params: Record<string, unknown> | undefined;
+}
+
+function stubConfig(profileNameDefault?: string): CliConfig {
+  return {
+    signet: {
+      env: "dev",
+      identityMode: "per-group",
+      dataDir: undefined,
+    },
+    defaults: {
+      profileName: profileNameDefault,
+    },
+    keys: {
+      rootKeyPolicy: "biometric",
+      operationalKeyPolicy: "open",
+      vaultKeyPolicy: "open",
+    },
+    biometricGating: {
+      rootKeyCreation: false,
+      operationalKeyRotation: false,
+      scopeExpansion: false,
+      egressExpansion: false,
+      agentCreation: false,
+      adminReadElevation: false,
+    },
+    ws: {
+      port: 8393,
+      host: "127.0.0.1",
+    },
+    http: {
+      enabled: false,
+      port: 8081,
+      host: "127.0.0.1",
+    },
+    admin: {
+      authMode: "admin-key",
+      socketPath: undefined,
+    },
+    credentials: {
+      defaultTtlSeconds: 3600,
+      maxConcurrentPerOperator: 3,
+      actionExpirySeconds: 300,
+    },
+    logging: {
+      level: "info",
+      auditLogPath: undefined,
+    },
+  };
 }
 
 function createHarness<T>(
@@ -43,57 +93,77 @@ function createHarness<T>(
         options: { configPath?: string | undefined },
         run: (
           adminClient: AdminClient,
+          context: DaemonCommandContext,
         ) => Promise<Result<TResult, SignetError>>,
       ): Promise<Result<TResult, SignetError>> {
         withDaemonCalls.push(options);
-        return run(client);
+        return run(client, {} as DaemonCommandContext);
       },
       async loadConfig() {
-        return Result.ok({
-          signet: {
-            env: "dev",
-            identityMode: "per-group",
-            dataDir: undefined,
-          },
-          defaults: {
-            profileName: options?.profileNameDefault,
-          },
-          keys: {
-            rootKeyPolicy: "biometric",
-            operationalKeyPolicy: "open",
-            vaultKeyPolicy: "open",
-          },
-          biometricGating: {
-            rootKeyCreation: false,
-            operationalKeyRotation: false,
-            scopeExpansion: false,
-            egressExpansion: false,
-            agentCreation: false,
-            adminReadElevation: false,
-          },
-          ws: {
-            port: 8393,
-            host: "127.0.0.1",
-          },
-          http: {
-            enabled: false,
-            port: 8081,
-            host: "127.0.0.1",
-          },
-          admin: {
-            authMode: "admin-key",
-            socketPath: undefined,
-          },
-          credentials: {
-            defaultTtlSeconds: 3600,
-            maxConcurrentPerOperator: 3,
-            actionExpirySeconds: 300,
-          },
-          logging: {
-            level: "info",
-            auditLogPath: undefined,
-          },
-        });
+        return Result.ok(stubConfig(options?.profileNameDefault));
+      },
+      writeStdout(message: string) {
+        stdout.push(message);
+      },
+      writeStderr(message: string) {
+        stderr.push(message);
+      },
+      exit(code: number) {
+        exitCode = code;
+      },
+    },
+    requestCalls,
+    withDaemonCalls,
+    stdout,
+    stderr,
+    get exitCode() {
+      return exitCode;
+    },
+  };
+}
+
+function createMixedHarness(
+  responses: readonly Result<unknown, SignetError>[],
+  options?: {
+    readonly profileNameDefault?: string | undefined;
+  },
+) {
+  const requestCalls: RequestCall[] = [];
+  const withDaemonCalls: Array<{ configPath?: string | undefined }> = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let exitCode: number | undefined;
+  const queuedResponses = [...responses];
+
+  const client: AdminClient = {
+    async connect() {
+      return Result.ok(undefined);
+    },
+    async request<T>(method: string, params?: Record<string, unknown>) {
+      requestCalls.push({ method, params });
+      const next = queuedResponses.shift();
+      if (next === undefined) {
+        throw new Error(`No queued response left for ${method}`);
+      }
+      return next as Result<T, SignetError>;
+    },
+    async close() {},
+  };
+
+  return {
+    deps: {
+      async withDaemonClient<TResult>(
+        opts: { configPath?: string | undefined },
+        run: (
+          adminClient: AdminClient,
+          context: DaemonCommandContext,
+        ) => Promise<Result<TResult, SignetError>>,
+      ): Promise<Result<TResult, SignetError>> {
+        withDaemonCalls.push(opts);
+        return run(client, {} as DaemonCommandContext);
+      },
+      async loadConfig() {
+        return Result.ok(stubConfig(options?.profileNameDefault));
       },
       writeStdout(message: string) {
         stdout.push(message);
@@ -126,49 +196,7 @@ function createErrorHarness(error: SignetError) {
         return Result.err(error);
       },
       async loadConfig() {
-        return Result.ok({
-          signet: {
-            env: "dev",
-            identityMode: "per-group",
-            dataDir: undefined,
-          },
-          defaults: {},
-          keys: {
-            rootKeyPolicy: "biometric",
-            operationalKeyPolicy: "open",
-            vaultKeyPolicy: "open",
-          },
-          biometricGating: {
-            rootKeyCreation: false,
-            operationalKeyRotation: false,
-            scopeExpansion: false,
-            egressExpansion: false,
-            agentCreation: false,
-            adminReadElevation: false,
-          },
-          ws: {
-            port: 8393,
-            host: "127.0.0.1",
-          },
-          http: {
-            enabled: false,
-            port: 8081,
-            host: "127.0.0.1",
-          },
-          admin: {
-            authMode: "admin-key",
-            socketPath: undefined,
-          },
-          credentials: {
-            defaultTtlSeconds: 3600,
-            maxConcurrentPerOperator: 3,
-            actionExpirySeconds: 300,
-          },
-          logging: {
-            level: "info",
-            auditLogPath: undefined,
-          },
-        });
+        return Result.ok(stubConfig());
       },
       writeStdout(message: string) {
         stdout.push(message);
@@ -290,6 +318,27 @@ describe("xs chat join", () => {
       },
     ]);
   });
+
+  test("skips default profile name when --op is provided", async () => {
+    const harness = createHarness(
+      { groupId: "g1" },
+      { profileNameDefault: "DefaultProfile" },
+    );
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "join",
+      "https://popup.convos.org/v2?i=test",
+      "--op",
+      "op_agent1",
+    ]);
+
+    expect(harness.requestCalls).toHaveLength(1);
+    expect(harness.requestCalls[0]?.method).toBe("chat.join");
+    expect(harness.requestCalls[0]?.params).not.toHaveProperty("profileName");
+  });
 });
 
 describe("xs chat invite", () => {
@@ -396,6 +445,60 @@ describe("xs chat create", () => {
     ]);
     expect(harness.stdout.join("")).toContain("inviteUrl:");
   });
+
+  test("converts invite failure to a non-fatal warning preserving chatId", async () => {
+    const harness = createMixedHarness([
+      Result.ok({ chatId: "conv_new", name: "Test" }),
+      Result.ok({ profileApplied: true }),
+      Result.err(
+        InternalError.create("invite service unavailable") as SignetError,
+      ),
+    ]);
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "create",
+      "--name",
+      "Test",
+      "--invite",
+      "--profile-name",
+      "Codex",
+      "--format",
+      "link",
+    ]);
+
+    expect(harness.requestCalls).toHaveLength(3);
+    expect(harness.requestCalls[0]?.method).toBe("chat.create");
+    expect(harness.requestCalls[1]?.method).toBe("chat.update-profile");
+    expect(harness.requestCalls[2]?.method).toBe("chat.invite");
+    expect(harness.stdout.join("")).toContain("conv_new");
+    expect(harness.stderr.join("")).toContain("warning: invite failed");
+    expect(harness.exitCode).toBeUndefined();
+  });
+
+  test("skips default profile name when --op is provided", async () => {
+    const harness = createHarness(
+      { chatId: "conv_new", name: "Op Chat" },
+      { profileNameDefault: "DefaultProfile" },
+    );
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "create",
+      "--name",
+      "Op Chat",
+      "--op",
+      "op_agent1",
+    ]);
+
+    expect(harness.requestCalls).toHaveLength(1);
+    expect(harness.requestCalls[0]?.method).toBe("chat.create");
+    expect(harness.requestCalls[0]?.params).not.toHaveProperty("profileName");
+  });
 });
 
 describe("xs chat update-profile", () => {
@@ -454,6 +557,27 @@ describe("xs chat update-profile", () => {
         },
       },
     ]);
+  });
+
+  test("skips default profile name when --op is provided", async () => {
+    const harness = createHarness(
+      { profileApplied: true },
+      { profileNameDefault: "DefaultProfile" },
+    );
+    const command = createChatCommands(harness.deps);
+
+    await command.parseAsync([
+      "node",
+      "chat",
+      "update-profile",
+      "conv_abc",
+      "--op",
+      "op_agent1",
+    ]);
+
+    expect(harness.requestCalls).toHaveLength(1);
+    expect(harness.requestCalls[0]?.method).toBe("chat.update-profile");
+    expect(harness.requestCalls[0]?.params).not.toHaveProperty("profileName");
   });
 });
 

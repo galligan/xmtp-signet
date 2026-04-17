@@ -67,6 +67,74 @@ describe("init posture presets", () => {
     expect(config.credentials.maxConcurrentPerOperator).toBe(1);
   });
 
+  test("loadConfig with envOverrides: {} ignores process env vars", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-init-presets-"));
+    tempDirs.push(dir);
+    const configPath = join(dir, "config.toml");
+
+    const config = applyInitPreset(CliConfigSchema.parse({}), "recommended");
+    await writeConfig(configPath, config);
+
+    const original = process.env["XMTP_SIGNET_ENV"];
+    try {
+      process.env["XMTP_SIGNET_ENV"] = "production";
+
+      const withEmpty = await loadConfig({ configPath, envOverrides: {} });
+      expect(withEmpty.isOk()).toBe(true);
+      if (!withEmpty.isOk()) return;
+      expect(withEmpty.value.signet.env).toBe("dev");
+
+      const withDefault = await loadConfig({ configPath });
+      expect(withDefault.isOk()).toBe(true);
+      if (!withDefault.isOk()) return;
+      expect(withDefault.value.signet.env).toBe("production");
+    } finally {
+      if (original === undefined) {
+        delete process.env["XMTP_SIGNET_ENV"];
+      } else {
+        process.env["XMTP_SIGNET_ENV"] = original;
+      }
+    }
+  });
+
+  test("config round-trip with envOverrides: {} does not bake in env vars", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-init-presets-"));
+    tempDirs.push(dir);
+    const configPath = join(dir, "config.toml");
+
+    const original = process.env["XMTP_SIGNET_ENV"];
+    try {
+      process.env["XMTP_SIGNET_ENV"] = "production";
+
+      const loaded = await loadConfig({ configPath, envOverrides: {} });
+      expect(loaded.isOk()).toBe(true);
+      if (!loaded.isOk()) return;
+
+      const config = applyInitPreset(loaded.value, "recommended");
+      await writeConfig(configPath, config);
+
+      delete process.env["XMTP_SIGNET_ENV"];
+
+      const reloaded = await loadConfig({ configPath });
+      expect(reloaded.isOk()).toBe(true);
+      if (!reloaded.isOk()) return;
+      expect(reloaded.value.signet.env).toBe("dev");
+    } finally {
+      if (original === undefined) {
+        delete process.env["XMTP_SIGNET_ENV"];
+      } else {
+        process.env["XMTP_SIGNET_ENV"] = original;
+      }
+    }
+  });
+
+  test("rejects unknown preset names with a validation error", () => {
+    const result = resolveInitPreset("yolo");
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+    expect(result.error.category).toBe("validation");
+  });
+
   test("persists preset configs as parseable TOML", async () => {
     const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-init-presets-"));
     tempDirs.push(dir);
