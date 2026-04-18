@@ -25,6 +25,8 @@ older planning notes.
 - [architecture/index.md](./architecture/index.md) — architecture doc map
 - [architecture/runtime.md](./architecture/runtime.md) — package tiers,
   transport/runtime seams, event model, and auth surfaces
+- [architecture/adapters.md](./architecture/adapters.md) — adapter workspace
+  boundary, registry model, and built-in vs external harness integrations
 - [architecture/onboarding-schemes.md](./architecture/onboarding-schemes.md) —
   current onboarding abstraction, Convos compatibility guardrails, and runtime
   wiring

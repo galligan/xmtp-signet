@@ -7,6 +7,8 @@ seams live.
 
 - [runtime.md](./runtime.md) — package tiers, handler contract, event model,
   auth surfaces, and the live CLI/runtime composition
+- [adapters.md](./adapters.md) — adapter workspace boundary, registry model,
+  and built-in vs external harness integrations
 - [onboarding-schemes.md](./onboarding-schemes.md) — current onboarding
   abstraction, Convos integration, and compatibility guardrails
 
