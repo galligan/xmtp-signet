@@ -35,7 +35,8 @@ This moves agents from opaque trust to inspectable trust.
 | **Projection**               | Four-stage filtering pipeline that determines what a harness sees                 |
 | **Reveal**                   | Explicit mechanism for surfacing hidden content (5 granularities)                 |
 
-See [docs/concepts.md](docs/concepts.md) for the full model.
+See [docs/concepts.md](docs/concepts.md) for the full model, and
+[docs/index.md](docs/index.md) for the current documentation map.
 
 ## Architecture
 
@@ -59,8 +60,8 @@ See [docs/concepts.md](docs/concepts.md) for the full model.
 Dependencies flow downward only. Domain logic is transport agnostic: handlers
 receive typed input and return `Result<T, E>`, never throw.
 
-See [docs/architecture.md](docs/architecture.md) for the runtime, transport,
-event model, and connection lifecycle details.
+See [docs/architecture/runtime.md](docs/architecture/runtime.md) for the
+runtime, transport, event model, and connection lifecycle details.
 
 ## Packages
 
@@ -159,24 +160,26 @@ Convos profile name. That means common flows like `xs chat join <invite>` and
 `xs chat create --invite` can publish a human-facing profile without requiring
 extra `--profile-name` ceremony every time.
 
-See [docs/development.md](docs/development.md) for the development workflow and
-package layout.
+See [docs/configuration.md](docs/configuration.md) for config paths, preset
+behavior, and runtime fields, and [docs/development.md](docs/development.md)
+for the development workflow and package layout.
 
 ## CLI commands
 
-| Group                 | Commands                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------- |
-| top-level             | `init`, `status`, `reset`, `logs`, `lookup`, `search`, `consent`                              |
-| `daemon`              | `start`, `stop`, `status`                                                                     |
-| `operator`            | `create`, `list`, `info`, `rename`, `rm`                                                      |
-| `cred`                | `issue`, `list`, `info`, `revoke`, `update`                                                   |
-| `chat`                | `create`, `list`, `info`, `update`, `sync`, `join`, `invite`, `update-profile`, `leave`, `rm` |
-| `chat ... member`     | `list`, `add`, `rm`, `promote`, `demote`                                                      |
-| `msg`                 | `send`, `reply`, `react`, `read`, `list`, `info`                                              |
-| `policy`              | `create`, `list`, `info`, `update`, `rm`                                                      |
-| `seal` _(deferred)_   | `list`, `info`, `verify`, `history`                                                           |
-| `wallet` _(deferred)_ | `list`, `info`, `provider set`, `provider list`                                               |
-| `key` _(deferred)_    | `init`, `rotate`, `list`, `info`                                                              |
+| Group         | Commands                                                                                      |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| top-level     | `init`, `status`, `reset`, `logs`, `lookup`, `search`, `consent`                              |
+| `daemon`      | `start`, `stop`, `status`                                                                     |
+| `operator`    | `create`, `list`, `info`, `rename`, `rm`                                                      |
+| `cred`        | `issue`, `list`, `info`, `revoke`, `update`                                                   |
+| `inbox`       | `create`, `list`, `info`, `rm`, `link`, `unlink`                                              |
+| `chat`        | `create`, `list`, `info`, `update`, `sync`, `join`, `invite`, `update-profile`, `leave`, `rm` |
+| `chat member` | `list`, `add`, `rm`, `promote`, `demote`                                                      |
+| `msg`         | `send`, `reply`, `react`, `read`, `list`, `info`                                              |
+| `policy`      | `create`, `list`, `info`, `update`, `rm`                                                      |
+| `seal`        | `list`, `info`, `verify`, `history`                                                           |
+| `wallet`      | `create`, `list`, `info`, `provider`                                                          |
+| `key`         | `init`, `rotate`, `list`, `info`, `export-public`                                             |
 
 ## What's working
 
@@ -197,20 +200,26 @@ package layout.
 - MCP transport with credential-scoped tool surfaces and reveal workflows
 - TypeScript harness SDK with typed events and automatic reconnection
 - CLI daemon with admin socket and HTTP admin API
+- Managed inbox, lookup, search, and consent CLI surfaces
 - Multi-check verifier pipeline (source, build, signing, chain, schema)
 - Group-visible liveness signals via `xmtp.org/agentLiveness:1.0`
 - Real XMTP connectivity, group creation, invites, and membership management
+- Onboarding scheme abstraction with byte-compatible Convos invite, join, and
+  profile flows
 - End-to-end tracer bullets validated on XMTP devnet
 
 ## Documentation
 
-| Document                                     | Covers                                                                 |
-| -------------------------------------------- | ---------------------------------------------------------------------- |
-| [docs/concepts.md](docs/concepts.md)         | Identity model, permissions, scopes, seals, projection, reveals        |
-| [docs/architecture.md](docs/architecture.md) | Package tiers, handler contract, event model, connection lifecycle     |
-| [docs/security.md](docs/security.md)         | Key hierarchy, vault, threat model, access matrix, privilege elevation |
-| [docs/development.md](docs/development.md)   | Setup, conventions, testing, CLI usage                                 |
-| [CLAUDE.md](CLAUDE.md)                       | Agent-specific repo guidance                                           |
+| Document                                                 | Covers                                                                 |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [docs/index.md](docs/index.md)                           | Current documentation map and links into public and internal docs      |
+| [docs/concepts.md](docs/concepts.md)                     | Identity model, permissions, scopes, seals, projection, reveals        |
+| [docs/cli.md](docs/cli.md)                               | Live `xs` command surface and common workflows                         |
+| [docs/configuration.md](docs/configuration.md)           | Config layout, XDG paths, presets, env overrides, status fields        |
+| [docs/architecture/index.md](docs/architecture/index.md) | Runtime, onboarding, and bridge architecture docs                      |
+| [docs/security.md](docs/security.md)                     | Key hierarchy, vault, threat model, access matrix, privilege elevation |
+| [docs/development.md](docs/development.md)               | Setup, conventions, testing, and local docs tooling                    |
+| [CLAUDE.md](CLAUDE.md)                                   | Agent-specific repo guidance                                           |
 
 Design docs:
 

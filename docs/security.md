@@ -3,7 +3,7 @@
 This document describes the key management architecture, vault design, identity
 isolation, access controls, and threat model for xmtp-signet. For the
 conceptual model, see [concepts.md](concepts.md). For package boundaries, see
-[architecture.md](architecture.md).
+[architecture/runtime.md](./architecture/runtime.md).
 
 ## Design principles
 
