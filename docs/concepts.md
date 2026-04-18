@@ -1,8 +1,11 @@
 # Core Concepts
 
 This document describes the conceptual model behind xmtp-signet. For package
-boundaries and handler details, see [architecture.md](architecture.md). For the
-key hierarchy and threat model, see [security.md](security.md).
+boundaries and handler details, see
+[architecture/runtime.md](./architecture/runtime.md). For onboarding invite and
+profile wiring, see
+[architecture/onboarding-schemes.md](./architecture/onboarding-schemes.md). For
+the key hierarchy and threat model, see [security.md](security.md).
 
 ## Signet
 
@@ -53,6 +56,10 @@ In practical terms:
 - **shared mode** means one durable identity can participate in multiple chats
 - restart continuity comes from reopening persisted identity and XMTP state,
   not from keeping a process alive forever
+
+In config and daemon status surfaces, the same isolation choice is represented
+as `identityMode = "per-group" | "shared"`. The docs keep using “per-chat”
+because that is the more human-facing description of the `per-group` mode.
 
 Explicitly deferred from this v1 model:
 

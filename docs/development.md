@@ -17,6 +17,8 @@ bun run bootstrap
 
 Bootstrap installs workspace dependencies, repo hooks, and local CLI tools.
 
+For the current docs map, start with [index.md](./index.md).
+
 ## Project structure
 
 ```text
@@ -112,6 +114,11 @@ If you want to run the entrypoint directly from the repo:
 ```bash
 bun packages/cli/src/bin.ts --help
 ```
+
+For current-state command and config references:
+
+- [cli.md](./cli.md)
+- [configuration.md](./configuration.md)
 
 ## Code conventions
 

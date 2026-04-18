@@ -12,8 +12,9 @@ PRD.
 
 ## Status
 
-Active development. The local PR stack is feature-complete for the v1
-operator/policy/credential/seal model and pending merge to `main`.
+Active development. The v1 runtime model is live on `main`, with the current
+center of gravity in the credential/policy/seal runtime plus the newer
+onboarding and CLI surfaces.
 
 Current center of gravity:
 
@@ -21,7 +22,11 @@ Current center of gravity:
 - permission system: allow/deny scope sets with deny-wins resolution
 - key runtime: local encrypted vault, admin auth, operational rotation,
   OWS-inspired direction
-- CLI: `xs` with direct v1 command groups (`operator`, `cred`, `chat`, `msg`, `policy`)
+- onboarding: internal scheme seam with Convos as the current concrete
+  implementation
+- CLI: `xs` with lifecycle/lookup/search top-level commands plus grouped
+  `daemon`, `operator`, `cred`, `inbox`, `chat`, `msg`, `policy`, `seal`,
+  `wallet`, and `key` surfaces
 
 ## Project structure
 
@@ -32,7 +37,8 @@ Current center of gravity:
 - `.agents/notes/` — working notes and research
 - `.claude/` — local skills, agent configs, memory
 - `.trail/` — handoff notes and working logs
-- `docs/` — public architecture, concepts, and development guides
+- `docs/` — public documentation, including the doc index, architecture tree,
+  CLI/config references, and security guides
 
 ## Commands
 
@@ -189,17 +195,18 @@ The `xs` command groups are:
 - `daemon` — `start`, `stop`, `status`
 - `operator` — `create`, `list`, `info`, `rename`, `rm`
 - `cred` — `issue`, `list`, `info`, `revoke`, `update`
+- `inbox` — `create`, `list`, `info`, `rm`, `link`, `unlink`
 - `chat` — `create`, `list`, `info`, `update`, `sync`, `join`, `invite`,
-  `update-profile`, `leave`, `rm`, plus `members` subgroup (`list`, `add`,
+  `update-profile`, `leave`, `rm`, plus `member` subgroup (`list`, `add`,
   `rm`, `promote`, `demote`)
 - `msg` — `send`, `reply`, `react`, `read`, `list`, `info`
 - `policy` — `create`, `list`, `info`, `update`, `rm`
-- `seal` _(deferred)_ — `list`, `info`, `verify`, `history`
-- `wallet` _(deferred)_ — `list`, `info`, `provider set/list`
-- `key` _(deferred)_ — `init`, `rotate`, `list`, `info`
+- `seal` — `list`, `info`, `verify`, `history`
+- `wallet` — `create`, `list`, `info`, `provider`
+- `key` — `init`, `rotate`, `list`, `info`, `export-public`
 
-Deferred groups (`seal`, `wallet`, `key`) have command structure and help text
-but are not yet daemon-backed. Their actions exit with a deferral message.
+The main deferred piece in the wallet surface is provider management; the
+broader `seal`, `wallet`, and `key` groups are now live command surfaces.
 
 `xs cred ...` is the canonical lifecycle surface for issuing, inspecting,
 listing, and revoking v1 credentials.
