@@ -34,6 +34,11 @@ older planning notes.
   — proposed outbound bridge design layered on top of the canonical event
   stream
 
+## Agent Setup
+
+- [agent-setup/openclaw.md](./agent-setup/openclaw.md) — operator-facing setup
+  guide for the OpenClaw adapter and generated artifact bundle
+
 ## Security
 
 - [security.md](./security.md) — the broader trust boundary, isolation, and
