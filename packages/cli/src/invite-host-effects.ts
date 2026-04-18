@@ -1,12 +1,10 @@
 import { Result } from "better-result";
 import {
-  buildProfileSnapshotFromMessages,
-  encodeProfileSnapshot,
   extractJoinRequestContent,
-  MemberKind,
   type ListMessagesOptions,
-  type ProfileSnapshotContent,
-  resolveProfilesFromMessages,
+  type MemberProfileData,
+  type OnboardingScheme,
+  type ResolvedOnboardingProfile,
   type XmtpDecodedMessage,
   type XmtpGroupInfo,
 } from "@xmtp/signet-core";
@@ -17,7 +15,6 @@ import type {
   ManagedInviteJoinFailure,
 } from "./invite-host-listener.js";
 
-const PROFILE_SNAPSHOT_CONTENT_TYPE = "convos.org/profile_snapshot:1.0";
 const PROFILE_SNAPSHOT_SCAN_OPTIONS = {
   limit: 500,
   direction: "descending",
@@ -44,6 +41,7 @@ export interface InviteHostEffectsDeps {
   readonly getManagedClientForGroup: (
     groupId: string,
   ) => InviteHostEffectsClient | undefined;
+  readonly onboardingScheme: OnboardingScheme;
   readonly resolveLocalChatId?: (groupId: string) => string | undefined;
   readonly now?: () => Date;
 }
@@ -104,58 +102,54 @@ async function appendSnapshotAudit(
 
 function applyAcceptedJoinProfile(
   acceptance: ManagedInviteJoinAcceptance,
-  snapshot: ProfileSnapshotContent,
-): ProfileSnapshotContent {
+  snapshotMembers: readonly MemberProfileData[],
+): readonly MemberProfileData[] {
   const requestedProfile = extractJoinRequestContent(
     acceptance.requestMessage.content,
   )?.profile;
   if (!requestedProfile) {
-    return snapshot;
+    return snapshotMembers;
   }
 
   const requestedMemberKind =
-    requestedProfile.memberKind === "agent" ? MemberKind.Agent : undefined;
+    requestedProfile.memberKind === "agent"
+      ? "agent"
+      : requestedProfile.memberKind === "human"
+        ? "human"
+        : undefined;
   const joinerInboxId = acceptance.join.requesterInboxId.toLowerCase();
 
-  return {
-    profiles: snapshot.profiles.map((profile) => {
-      if (profile.inboxId.toLowerCase() !== joinerInboxId) {
-        return profile;
-      }
+  return snapshotMembers.map((profile) => {
+    if (profile.inboxId.toLowerCase() !== joinerInboxId) {
+      return profile;
+    }
 
-      return {
-        ...profile,
-        ...(requestedProfile.name !== undefined
-          ? { name: requestedProfile.name }
-          : {}),
-        ...(requestedMemberKind !== undefined
-          ? { memberKind: requestedMemberKind }
-          : {}),
-      };
-    }),
-  };
+    return {
+      ...profile,
+      ...(requestedProfile.name !== undefined
+        ? { name: requestedProfile.name }
+        : {}),
+      ...(requestedMemberKind !== undefined
+        ? { memberKind: requestedMemberKind }
+        : {}),
+    };
+  });
 }
 
 function hasMaterializedProfile(
-  profile:
-    | {
-        readonly name?: unknown;
-        readonly encryptedImage?: unknown;
-        readonly memberKind?: unknown;
-        readonly metadata?: unknown;
-      }
-    | undefined,
+  profile: ResolvedOnboardingProfile | undefined,
 ): boolean {
   return (
     profile !== undefined &&
     (profile.name !== undefined ||
-      profile.encryptedImage !== undefined ||
+      profile.imageUrl !== undefined ||
       profile.memberKind !== undefined ||
       profile.metadata !== undefined)
   );
 }
 
 async function loadProfileSnapshotMessages(
+  deps: InviteHostEffectsDeps,
   managed: InviteHostEffectsClient,
   groupId: string,
   memberInboxIds: readonly string[],
@@ -178,7 +172,7 @@ async function loadProfileSnapshotMessages(
 
     collected.push(...messagesResult.value);
 
-    const resolvedProfiles = resolveProfilesFromMessages(
+    const resolvedProfiles = deps.onboardingScheme.resolveProfilesFromHistory(
       collected,
       memberInboxIds,
     );
@@ -260,6 +254,7 @@ export function createInviteHostEffects(deps: InviteHostEffectsDeps): {
       }
 
       const messagesResult = await loadProfileSnapshotMessages(
+        deps,
         managed,
         acceptance.join.groupId,
         groupInfoResult.value.memberInboxIds,
@@ -279,22 +274,27 @@ export function createInviteHostEffects(deps: InviteHostEffectsDeps): {
         return;
       }
 
-      const snapshot = applyAcceptedJoinProfile(
+      const resolvedProfiles = deps.onboardingScheme.resolveProfilesFromHistory(
+        messagesResult.value,
+        groupInfoResult.value.memberInboxIds,
+      );
+      const snapshotMembers = applyAcceptedJoinProfile(
         acceptance,
-        buildProfileSnapshotFromMessages(
-          messagesResult.value,
-          groupInfoResult.value.memberInboxIds,
-          { includeFallbackEntries: true },
+        groupInfoResult.value.memberInboxIds.map(
+          (inboxId) =>
+            resolvedProfiles.get(inboxId.toLowerCase()) ?? {
+              inboxId,
+            },
         ),
       );
-      if (snapshot.profiles.length === 0) {
+      if (snapshotMembers.length === 0) {
         return;
       }
 
       const sendResult = await managed.sendMessage(
         acceptance.join.groupId,
-        encodeProfileSnapshot(snapshot),
-        PROFILE_SNAPSHOT_CONTENT_TYPE,
+        deps.onboardingScheme.encodeProfileSnapshot(snapshotMembers),
+        deps.onboardingScheme.profileSnapshotContentType(),
       );
       if (Result.isError(sendResult)) {
         await appendSnapshotAudit(
@@ -305,7 +305,7 @@ export function createInviteHostEffects(deps: InviteHostEffectsDeps): {
           {
             errorCategory: sendResult.error.category,
             errorMessage: sendResult.error.message,
-            profileCount: snapshot.profiles.length,
+            profileCount: snapshotMembers.length,
             stage: "sendMessage",
           },
         );
@@ -319,7 +319,7 @@ export function createInviteHostEffects(deps: InviteHostEffectsDeps): {
         true,
         {
           messageId: sendResult.value,
-          profileCount: snapshot.profiles.length,
+          profileCount: snapshotMembers.length,
         },
       );
     },

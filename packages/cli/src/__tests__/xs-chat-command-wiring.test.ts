@@ -13,6 +13,9 @@ interface RequestCall {
 
 function stubConfig(profileNameDefault?: string): CliConfig {
   return {
+    onboarding: {
+      scheme: "convos",
+    },
     signet: {
       env: "dev",
       identityMode: "per-group",

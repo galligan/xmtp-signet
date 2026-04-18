@@ -74,6 +74,18 @@ export const HttpServerConfigSchema: z.ZodType<
 
 // -- CLI config --
 
+export type OnboardingSchemeId = "convos";
+
+type OnboardingConfig = {
+  scheme: OnboardingSchemeId;
+};
+
+type OnboardingConfigInput =
+  | {
+      scheme?: OnboardingSchemeId | undefined;
+    }
+  | undefined;
+
 type SignetConfig = {
   env: "local" | "dev" | "production";
   identityMode: "per-group" | "shared";
@@ -90,6 +102,7 @@ type SignetConfigInput =
 
 /** Top-level CLI configuration. Parsed from TOML with env var overrides. */
 export type CliConfig = {
+  onboarding: OnboardingConfig;
   signet: SignetConfig;
   defaults: {
     profileName?: string | undefined;
@@ -118,6 +131,7 @@ export type CliConfig = {
 };
 
 type CliConfigInput = {
+  onboarding?: OnboardingConfigInput;
   signet?: SignetConfigInput;
   defaults?:
     | {
@@ -173,8 +187,22 @@ const SignetConfigSchema: z.ZodType<
   })
   .default({});
 
+const OnboardingConfigSchema: z.ZodType<
+  OnboardingConfig,
+  z.ZodTypeDef,
+  OnboardingConfigInput
+> = z
+  .object({
+    scheme: z
+      .literal("convos")
+      .default("convos")
+      .describe("Onboarding scheme used for invite and profile flows"),
+  })
+  .default({});
+
 const CliConfigBaseSchema = z
   .object({
+    onboarding: OnboardingConfigSchema,
     signet: SignetConfigSchema,
     defaults: z
       .object({

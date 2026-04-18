@@ -117,7 +117,9 @@ export function createLifecycleCommands(
 
       const runtimeResult = await resolvedDeps.createSignetRuntime(
         config,
-        resolvedDeps.createProductionDeps(),
+        resolvedDeps.createProductionDeps({
+          onboardingSchemeId: config.onboarding.scheme,
+        }),
       );
 
       if (Result.isError(runtimeResult)) {

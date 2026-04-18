@@ -214,6 +214,7 @@ describe.skipIf(!process.env["XMTP_NETWORK_TESTS"])(
       expect(typeof output["address"]).toBe("string");
       expect((output["address"] as string).startsWith("0x")).toBe(true);
       expect(output["env"]).toBe("dev");
+      expect(output["onboardingScheme"]).toBe("convos");
       expect(output["label"]).toBe("test-alice");
     });
 

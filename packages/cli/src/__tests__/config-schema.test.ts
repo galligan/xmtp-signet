@@ -8,6 +8,7 @@ describe("CliConfigSchema", () => {
     if (!result.success) return;
 
     const config = result.data;
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.signet.env).toBe("dev");
     expect(config.signet.identityMode).toBe("per-group");
     expect(config.signet.dataDir).toBeUndefined();
@@ -34,8 +35,18 @@ describe("CliConfigSchema", () => {
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
+    expect(result.data.onboarding.scheme).toBe("convos");
     expect(result.data.signet.env).toBe("dev");
     expect(result.data.signet.identityMode).toBe("per-group");
+  });
+
+  test("onboarding section defaults correctly", () => {
+    const result = CliConfigSchema.safeParse({
+      onboarding: {},
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.onboarding.scheme).toBe("convos");
   });
 
   test("accepts a default Convos profile name", () => {

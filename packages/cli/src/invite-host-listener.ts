@@ -1,12 +1,11 @@
 import { Result } from "better-result";
 import {
   extractJoinRequestContent,
-  tryProcessJoinRequest,
-  isJoinRequestContentType,
   type CoreRawEvent,
-  type ListMessagesOptions,
-  type RawMessageEvent,
   type JoinRequestResult,
+  type ListMessagesOptions,
+  type OnboardingScheme,
+  type RawMessageEvent,
   type XmtpDecodedMessage,
 } from "@xmtp/signet-core";
 import type { SignetError } from "@xmtp/signet-schemas";
@@ -72,6 +71,8 @@ export interface ManagedInviteHostListenerDeps {
   readonly getGroupInviteTag: (
     groupId: string,
   ) => Promise<Result<string | undefined, SignetError>>;
+  /** Onboarding scheme used to detect and process invite joins. */
+  readonly onboardingScheme: OnboardingScheme;
   /** Best-effort callback after a join request is accepted. */
   readonly onJoinAccepted?: (
     acceptance: ManagedInviteJoinAcceptance,
@@ -115,11 +116,16 @@ function resolveInviteRequestKey(event: RawMessageEvent): string | null {
 function preferInviteCandidate(
   current: RawMessageEvent | undefined,
   candidate: RawMessageEvent,
+  onboardingScheme: OnboardingScheme,
 ): RawMessageEvent {
   if (!current) return candidate;
 
-  const currentStructured = isJoinRequestContentType(current.contentType);
-  const candidateStructured = isJoinRequestContentType(candidate.contentType);
+  const currentStructured = onboardingScheme.isJoinRequestContentType(
+    current.contentType,
+  );
+  const candidateStructured = onboardingScheme.isJoinRequestContentType(
+    candidate.contentType,
+  );
 
   if (candidateStructured && !currentStructured) {
     return candidate;
@@ -128,10 +134,13 @@ function preferInviteCandidate(
   return current;
 }
 
-function isInviteCandidate(event: CoreRawEvent): event is RawMessageEvent {
+function isInviteCandidate(
+  event: CoreRawEvent,
+  onboardingScheme: OnboardingScheme,
+): event is RawMessageEvent {
   if (event.type !== "raw.message") return false;
   if (event.isHistorical) return false;
-  if (isJoinRequestContentType(event.contentType)) {
+  if (onboardingScheme.isJoinRequestContentType(event.contentType)) {
     return true;
   }
   if (typeof event.content !== "string") return false;
@@ -174,7 +183,9 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
   deps: ManagedInviteHostListenerDeps,
   event: CoreRawEvent,
 ): Promise<ManagedInviteJoinDispatchOutcome> {
-  if (!isInviteCandidate(event)) {
+  const onboardingScheme = deps.onboardingScheme;
+
+  if (!isInviteCandidate(event, onboardingScheme)) {
     return { result: null, shouldRetry: false };
   }
 
@@ -200,7 +211,7 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
       continue;
     }
 
-    const result = await tryProcessJoinRequest(
+    const result = await onboardingScheme.processJoinRequest(
       {
         walletPrivateKeyHex: normalizePrivateKeyHex(keyResult.value),
         creatorInboxId: identity.inboxId,
@@ -208,16 +219,19 @@ export async function dispatchInviteJoinRequestAcrossManagedIdentities(
           managed.addMembers(groupId, inboxIds),
         getGroupInviteTag: deps.getGroupInviteTag,
       },
-      event,
+      {
+        senderInboxId: event.senderInboxId,
+        content: event.content,
+      },
     );
-
-    if (result === null) {
-      return { result: null, shouldRetry };
-    }
     if (Result.isOk(result)) {
       return {
         result: Result.ok({
-          join: result.value,
+          join: {
+            groupId: result.value.groupId,
+            requesterInboxId: result.value.requesterInboxId,
+            inviteTag: result.value.inviteTag,
+          },
           hostIdentityId: identity.id,
           hostInboxId: identity.inboxId,
         }),
@@ -239,6 +253,7 @@ async function listRecentInviteCandidatesAcrossManagedIdentities(
   processedMessageIds: ReadonlySet<string>,
   processedInviteKeys: ReadonlySet<string>,
 ): Promise<InviteRecoveryScanResult> {
+  const onboardingScheme = deps.onboardingScheme;
   const identities = await deps.listIdentities();
   const messages = new Map<string, RawMessageEvent>();
   let shouldRetry = false;
@@ -268,7 +283,7 @@ async function listRecentInviteCandidatesAcrossManagedIdentities(
 
       for (const message of [...listResult.value].reverse()) {
         const event = toRawMessageEvent(message);
-        if (!isInviteCandidate(event)) continue;
+        if (!isInviteCandidate(event, onboardingScheme)) continue;
         if (processedMessageIds.has(event.messageId)) continue;
         const requestKey = resolveInviteRequestKey(event);
         if (requestKey && processedInviteKeys.has(requestKey)) continue;
@@ -277,6 +292,7 @@ async function listRecentInviteCandidatesAcrossManagedIdentities(
           preferInviteCandidate(
             messages.get(requestKey ?? event.messageId),
             event,
+            onboardingScheme,
           ),
         );
       }
@@ -376,6 +392,7 @@ async function processInviteCandidate(
 export function startManagedInviteHostListener(
   deps: ManagedInviteHostListenerDeps,
 ): () => void {
+  const onboardingScheme = deps.onboardingScheme;
   const processedMessageIds = new Set<string>();
   const processedInviteKeys = new Set<string>();
   const inflightMessageIds = new Set<string>();
@@ -469,7 +486,7 @@ export function startManagedInviteHostListener(
   const unsubscribe = deps.subscribe((event) => {
     void (async () => {
       if (event.type === "raw.message") {
-        if (!isInviteCandidate(event)) return;
+        if (!isInviteCandidate(event, onboardingScheme)) return;
         await processInviteCandidate(
           deps,
           event,

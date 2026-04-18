@@ -9,6 +9,7 @@ export type DaemonStatus = {
   uptime: number;
   activeCredentials: number;
   activeConnections: number;
+  onboardingScheme: "convos";
   xmtpEnv: "local" | "dev" | "production";
   identityMode: "per-group" | "shared";
   wsPort: number;
@@ -50,6 +51,9 @@ export const DaemonStatusSchema: z.ZodType<DaemonStatus> = z
       .int()
       .nonnegative()
       .describe("Number of active WebSocket connections"),
+    onboardingScheme: z
+      .enum(["convos"])
+      .describe("Configured onboarding scheme"),
     xmtpEnv: z
       .enum(["local", "dev", "production"])
       .describe("XMTP network environment"),

@@ -546,6 +546,7 @@ export async function createSignetRuntime(
           ? credentialsResult.value.length
           : 0,
         activeConnections: wsServer.connectionCount,
+        onboardingScheme: config.onboarding.scheme,
         xmtpEnv: config.signet.env,
         identityMode: config.signet.identityMode,
         wsPort: boundWsPort,

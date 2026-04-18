@@ -22,6 +22,7 @@ describe("loadConfig", () => {
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
     const config = result.value;
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.signet.env).toBe("dev");
     expect(config.ws.port).toBe(8393);
     expect(config.logging.level).toBe("info");
@@ -31,7 +32,10 @@ describe("loadConfig", () => {
     const tomlPath = join(tempDir, "config.toml");
     await writeFile(
       tomlPath,
-      `[signet]
+      `[onboarding]
+scheme = "convos"
+
+[signet]
 env = "production"
 identityMode = "shared"
 
@@ -51,6 +55,7 @@ defaultTtlSeconds = 7200
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
     const config = result.value;
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.signet.env).toBe("production");
     expect(config.signet.identityMode).toBe("shared");
     expect(config.defaults.profileName).toBe("Codex");
@@ -188,6 +193,7 @@ level = "debug"
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
     const config = result.value;
+    expect(config.onboarding.scheme).toBe("convos");
     expect(config.logging.level).toBe("debug");
     expect(config.signet.env).toBe("dev");
     expect(config.ws.port).toBe(8393);
