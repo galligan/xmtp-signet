@@ -868,6 +868,7 @@ export function createProductionDeps(options?: {
                 managed.client.sendMessage(targetGroupId, content, contentType),
             };
           },
+          onboardingScheme,
           resolveLocalChatId: (groupId) =>
             idMappingStoreRef?.resolve(groupId)?.localId,
         });

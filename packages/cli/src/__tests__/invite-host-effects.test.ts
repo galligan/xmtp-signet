@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { decodeProfileSnapshot } from "@xmtp/signet-core";
+import {
+  createConvosOnboardingScheme,
+  decodeProfileSnapshot,
+} from "@xmtp/signet-core";
 import { InternalError, ValidationError } from "@xmtp/signet-schemas";
 import { createInviteHostEffects } from "../invite-host-effects.js";
 import type {
@@ -8,6 +11,8 @@ import type {
   ManagedInviteJoinFailure,
 } from "../invite-host-listener.js";
 import type { AuditEntry } from "../audit/log.js";
+
+const ONBOARDING_SCHEME = createConvosOnboardingScheme();
 
 function makeAcceptance(): ManagedInviteJoinAcceptance {
   return {
@@ -92,6 +97,7 @@ describe("createInviteHostEffects", () => {
           },
         };
       },
+      onboardingScheme: ONBOARDING_SCHEME,
       resolveLocalChatId: () => "conv_local_1",
       now: () => new Date("2026-04-15T15:00:00.000Z"),
     });
@@ -187,6 +193,7 @@ describe("createInviteHostEffects", () => {
           },
         };
       },
+      onboardingScheme: ONBOARDING_SCHEME,
       now: () => new Date("2026-04-15T15:00:00.000Z"),
     });
 
@@ -281,6 +288,7 @@ describe("createInviteHostEffects", () => {
           },
         };
       },
+      onboardingScheme: ONBOARDING_SCHEME,
       now: () => new Date("2026-04-15T15:00:00.000Z"),
     });
 
@@ -315,6 +323,7 @@ describe("createInviteHostEffects", () => {
           return [];
         },
       },
+      onboardingScheme: ONBOARDING_SCHEME,
       getManagedClientForGroup: () => undefined,
       now: () => new Date("2026-04-15T15:00:00.000Z"),
     });
@@ -346,6 +355,7 @@ describe("createInviteHostEffects", () => {
           return [];
         },
       },
+      onboardingScheme: ONBOARDING_SCHEME,
       getManagedClientForGroup: () => undefined,
       now: () => new Date("2026-04-15T15:00:00.000Z"),
     });
