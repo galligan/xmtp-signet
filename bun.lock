@@ -19,7 +19,10 @@
       "name": "@xmtp/openclaw-adapter",
       "version": "0.0.0",
       "dependencies": {
+        "@xmtp/signet-cli": "workspace:*",
+        "@xmtp/signet-keys": "workspace:*",
         "@xmtp/signet-schemas": "workspace:*",
+        "better-result": "catalog:",
         "commander": "14.0.3",
       },
       "devDependencies": {
@@ -35,7 +38,6 @@
         "xs": "src/bin.ts",
       },
       "dependencies": {
-        "@xmtp/openclaw-adapter": "workspace:*",
         "@xmtp/signet-contracts": "workspace:*",
         "@xmtp/signet-core": "workspace:*",
         "@xmtp/signet-keys": "workspace:*",
