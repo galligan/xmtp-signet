@@ -74,6 +74,16 @@ describe("v1 subcommand groups", () => {
     expect(subs).toContain("rm");
   });
 
+  test("agent group has setup, status, doctor subcommands", () => {
+    const program = createXsProgram();
+    const agent = program.commands.find((c) => c.name() === "agent");
+    expect(agent).toBeDefined();
+    const subs = agent!.commands.map((c) => c.name());
+    expect(subs).toContain("setup");
+    expect(subs).toContain("status");
+    expect(subs).toContain("doctor");
+  });
+
   test("cred group has issue, list, info, revoke, update subcommands", () => {
     const program = createXsProgram();
     const cred = program.commands.find((c) => c.name() === "cred");
