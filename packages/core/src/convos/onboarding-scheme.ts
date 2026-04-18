@@ -135,7 +135,19 @@ function fromConvosMemberKind(
   return undefined;
 }
 
+function assertNoPlainProfileImageUrl(
+  profile: Pick<ProfileData, "imageUrl">,
+): void {
+  if (profile.imageUrl !== undefined) {
+    throw ValidationError.create(
+      "imageUrl",
+      "Convos profile messages require encrypted image metadata; raw image URLs are not supported",
+    );
+  }
+}
+
 function toProfileUpdateContent(profile: ProfileData): ProfileUpdateContent {
+  assertNoPlainProfileImageUrl(profile);
   const memberKind = toConvosMemberKind(profile.memberKind);
   const metadata = toConvosProfileMetadata(profile.metadata);
 
@@ -147,6 +159,7 @@ function toProfileUpdateContent(profile: ProfileData): ProfileUpdateContent {
 }
 
 function toMemberProfileEntry(profile: MemberProfileData): MemberProfileEntry {
+  assertNoPlainProfileImageUrl(profile);
   const memberKind = toConvosMemberKind(profile.memberKind);
   const metadata = toConvosProfileMetadata(profile.metadata);
 
@@ -216,6 +229,9 @@ function toResolvedProfile(
   return {
     inboxId: profile.inboxId,
     ...(profile.name !== undefined ? { name: profile.name } : {}),
+    ...(profile.encryptedImage !== undefined
+      ? { imageUrl: profile.encryptedImage.url }
+      : {}),
     ...(memberKind !== undefined ? { memberKind } : {}),
     ...(metadata !== undefined ? { metadata } : {}),
   };

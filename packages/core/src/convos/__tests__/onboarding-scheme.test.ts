@@ -119,4 +119,58 @@ describe("createConvosOnboardingScheme", () => {
       },
     );
   });
+
+  test("rejects plain image URLs when encoding a profile update", () => {
+    const scheme = createConvosOnboardingScheme();
+
+    expect(() =>
+      scheme.encodeProfileUpdate({
+        name: "Codex",
+        imageUrl: "https://example.com/avatar.png",
+      }),
+    ).toThrow("imageUrl");
+  });
+
+  test("rejects plain image URLs when encoding a profile snapshot", () => {
+    const scheme = createConvosOnboardingScheme();
+
+    expect(() =>
+      scheme.encodeProfileSnapshot([
+        {
+          inboxId: "inbox-a",
+          name: "Codex",
+          imageUrl: "https://example.com/avatar.png",
+        },
+      ]),
+    ).toThrow("imageUrl");
+  });
+
+  test("surfaces encrypted image URLs when resolving profile history", () => {
+    const scheme = createConvosOnboardingScheme();
+
+    const resolved = scheme.resolveProfilesFromHistory([
+      {
+        messageId: "msg-1",
+        groupId: "group-1",
+        senderInboxId: "inbox-a",
+        contentType: scheme.profileUpdateContentType(),
+        content: {
+          name: "Codex",
+          encryptedImage: {
+            url: "https://example.com/avatar.png",
+            salt: new Uint8Array([1, 2, 3]),
+            nonce: new Uint8Array([4, 5, 6]),
+          },
+        },
+        sentAt: "2026-04-18T03:00:00.000Z",
+        threadId: null,
+      },
+    ]);
+
+    expect(resolved.get("inbox-a")).toEqual({
+      inboxId: "inbox-a",
+      name: "Codex",
+      imageUrl: "https://example.com/avatar.png",
+    });
+  });
 });
