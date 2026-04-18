@@ -37,6 +37,7 @@ xmtp-signet/
 |   +-- cli/              # CLI entry point, daemon, admin socket, HTTP admin API
 |   +-- sdk/              # Harness client SDK
 |   +-- integration/      # Cross-package integration tests
++-- adapters/             # First-party harness adapters and reference integrations
 +-- signet-signer/        # Swift CLI for Secure Enclave support (macOS)
 +-- scripts/              # Bootstrap and repo utilities
 +-- docs/                 # Public documentation
@@ -56,6 +57,10 @@ packages/<name>/
 +-- package.json
 +-- tsconfig.json
 ```
+
+First-party adapters under `adapters/` should follow the same workspace shape
+as packages, while keeping harness-specific setup and runtime logic out of the
+core CLI package.
 
 ## Terminology
 

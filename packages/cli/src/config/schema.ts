@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { BiometricGateConfigSchema } from "@xmtp/signet-keys";
+import {
+  AgentAdaptersConfig,
+  type AgentAdaptersConfigType,
+} from "@xmtp/signet-schemas";
 import type {
   BiometricGateConfig,
   BiometricGateConfigInput,
@@ -129,6 +133,9 @@ export type CliConfig = {
     level: "debug" | "info" | "warn" | "error";
     auditLogPath?: string | undefined;
   };
+  agent: {
+    adapters: AgentAdaptersConfigType;
+  };
 };
 
 type CliConfigInput = {
@@ -166,6 +173,11 @@ type CliConfigInput = {
     | {
         level?: "debug" | "info" | "warn" | "error" | undefined;
         auditLogPath?: string | undefined;
+      }
+    | undefined;
+  agent?:
+    | {
+        adapters?: AgentAdaptersConfigType | undefined;
       }
     | undefined;
 };
@@ -278,6 +290,13 @@ const CliConfigBaseSchema = z
           .string()
           .optional()
           .describe("Audit log file path override"),
+      })
+      .default({}),
+    agent: z
+      .object({
+        adapters: AgentAdaptersConfig.describe(
+          "Adapter registry entries for built-in or adopted external adapters",
+        ),
       })
       .default({}),
   })

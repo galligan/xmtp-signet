@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "adapters/*"
   ],
   "type": "module",
   "scripts": {
@@ -13,8 +14,8 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint && bun run docs:check",
-    "format:check": "oxfmt --check packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md AGENTS.md",
-    "format:fix": "oxfmt packages/*/src packages/*/package.json packages/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md AGENTS.md",
+    "format:check": "oxfmt --check packages/*/src packages/*/package.json packages/*/tsconfig.json adapters/*/src adapters/*/package.json adapters/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md AGENTS.md",
+    "format:fix": "oxfmt packages/*/src packages/*/package.json packages/*/tsconfig.json adapters/*/src adapters/*/package.json adapters/*/tsconfig.json apps scripts package.json tsconfig.base.json turbo.json .lefthook.yml README.md CLAUDE.md AGENTS.md",
     "check": "turbo run lint typecheck test && bun run docs:check"
   },
   "dependencies": {
