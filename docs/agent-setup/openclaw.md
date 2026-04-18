@@ -264,6 +264,8 @@ If setup is incomplete, doctor calls out:
 
 - You need to verify the bridge runtime itself
   - The adapter now ships the first read-only bridge slice.
-  - `xs agent status openclaw --json` confirms artifact/runtime readiness.
+  - `xs agent status openclaw --json` confirms the provisioned adapter bundle
+    and bridge prerequisites, but it does not prove a live bridge process is
+    currently connected to signet.
   - Bridge checkpoint files will appear under `checkpoints/` once a runtime
     actually consumes the adapter bundle and starts persisting replay state.
