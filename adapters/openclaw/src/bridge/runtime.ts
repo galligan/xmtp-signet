@@ -55,6 +55,11 @@ export interface OpenClawReadOnlyBridge {
   onError(callback: (error: SignetError) => void): () => void;
 }
 
+/** Injectable seams for bridge runtime tests and persistence handling. */
+export interface OpenClawBridgeRuntimeDeps {
+  readonly checkpointStoreFactory: typeof createOpenClawCheckpointStore;
+}
+
 type BridgeOutcome =
   | {
       retryable: true;
@@ -174,15 +179,22 @@ async function decodeSocketPayload(data: unknown): Promise<string> {
 /** Create the first read-only OpenClaw bridge runtime. */
 export function createOpenClawReadOnlyBridge(
   rawConfig: OpenClawBridgeConfigType,
+  deps: Partial<OpenClawBridgeRuntimeDeps> = {},
 ): OpenClawReadOnlyBridge {
   const config = OpenClawBridgeConfig.parse(rawConfig);
-  const checkpoints = createOpenClawCheckpointStore(config);
+  const resolvedDeps: OpenClawBridgeRuntimeDeps = {
+    checkpointStoreFactory: createOpenClawCheckpointStore,
+    ...deps,
+  };
+  const checkpoints = resolvedDeps.checkpointStoreFactory(config);
   const deliveries = createEnvelopeStream();
   const errorListeners = new Set<(error: SignetError) => void>();
   let bridgeState: OpenClawBridgeState = "idle";
   let ws: WebSocket | null = null;
   let stopped = false;
   let loop: Promise<void> | null = null;
+  let interruptCurrentConnection: ((outcome: BridgeOutcome) => void) | null =
+    null;
   let metricsState: OpenClawBridgeMetrics = {
     connectionAttempts: 0,
     reconnectCount: 0,
@@ -195,6 +207,7 @@ export function createOpenClawReadOnlyBridge(
     checkpointPath: null,
     lastError: null,
   };
+  let fatalCheckpointError: SignetError | null = null;
 
   function emitError(error: SignetError): void {
     metricsState = {
@@ -233,9 +246,11 @@ export function createOpenClawReadOnlyBridge(
         if (settled) {
           return;
         }
+        interruptCurrentConnection = null;
         settled = true;
         resolve(outcome);
       }
+      interruptCurrentConnection = settle;
 
       const authTimeout = setTimeout(() => {
         if (authenticated || settled) {
@@ -290,11 +305,23 @@ export function createOpenClawReadOnlyBridge(
           checkpointPath,
           event: frame.event,
         });
-        currentCheckpoint = {
+        const nextCheckpoint: OpenClawBridgeCheckpointType = {
           credentialId,
           lastSeq: frame.seq,
           updatedAt: new Date().toISOString(),
         };
+        const saveResult = await checkpoints.save(nextCheckpoint);
+        if (saveResult.isErr()) {
+          fatalCheckpointError = saveResult.error;
+          emitError(saveResult.error);
+          ws?.close(
+            WS_CLOSE_CODES.PROTOCOL_ERROR,
+            "Checkpoint persistence failed",
+          );
+          return;
+        }
+
+        currentCheckpoint = nextCheckpoint;
         lastDeliveredSeq = frame.seq;
         metricsState = {
           ...metricsState,
@@ -303,15 +330,9 @@ export function createOpenClawReadOnlyBridge(
           lastEventType: frame.event.type,
           credentialId,
           operatorId,
-          checkpointPath,
+          checkpointPath: saveResult.value,
         };
         deliveries.push(envelope);
-
-        const saveResult = await checkpoints.save(currentCheckpoint);
-        if (saveResult.isErr()) {
-          emitError(saveResult.error);
-          return;
-        }
 
         metricsState = {
           ...metricsState,
@@ -423,6 +444,16 @@ export function createOpenClawReadOnlyBridge(
             return;
           }
 
+          if (fatalCheckpointError !== null) {
+            bridgeState = "closed";
+            settle({
+              retryable: false,
+              lastCheckpoint: currentCheckpoint,
+              error: fatalCheckpointError,
+            });
+            return;
+          }
+
           if (!isRetryableClose(event.code)) {
             const error = AuthError.create(
               event.reason || "Bridge connection closed by signet",
@@ -457,16 +488,18 @@ export function createOpenClawReadOnlyBridge(
   async function runLoop(
     onInitialResult: (result: Result<void, SignetError>) => void,
   ): Promise<void> {
-    const latestCheckpointResult = await checkpoints.loadLatest();
-    if (latestCheckpointResult.isErr()) {
-      emitError(latestCheckpointResult.error);
-      onInitialResult(Result.err(latestCheckpointResult.error));
+    const checkpointResult = await checkpoints.loadForCredential(
+      config.credentialId,
+    );
+    if (checkpointResult.isErr()) {
+      emitError(checkpointResult.error);
+      onInitialResult(Result.err(checkpointResult.error));
       bridgeState = "closed";
       deliveries.complete();
       return;
     }
 
-    let resumeCheckpoint = latestCheckpointResult.value;
+    let resumeCheckpoint = checkpointResult.value;
     let attempt = 0;
     let initialResolved = false;
 
@@ -554,6 +587,11 @@ export function createOpenClawReadOnlyBridge(
 
     async stop() {
       stopped = true;
+      interruptCurrentConnection?.({
+        retryable: false,
+        lastCheckpoint: null,
+        error: ValidationError.create("bridge.state", "Bridge stopped"),
+      });
       if (ws !== null) {
         ws.close(WS_CLOSE_CODES.NORMAL, "Bridge stopping");
       }

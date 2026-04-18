@@ -115,6 +115,7 @@ export function createOpenClawCheckpointStore(
       try {
         const entries = await resolvedDeps.readdir(config.checkpointsDir);
         const checkpoints: OpenClawBridgeCheckpointType[] = [];
+        const issues: string[] = [];
 
         for (const entry of entries) {
           if (!entry.endsWith(".json")) {
@@ -124,7 +125,8 @@ export function createOpenClawCheckpointStore(
             join(config.checkpointsDir, entry),
           );
           if (checkpointResult.isErr()) {
-            return checkpointResult;
+            issues.push(checkpointResult.error.message);
+            continue;
           }
           if (checkpointResult.value !== null) {
             checkpoints.push(checkpointResult.value);
@@ -132,6 +134,17 @@ export function createOpenClawCheckpointStore(
         }
 
         if (checkpoints.length === 0) {
+          if (issues.length > 0) {
+            return Result.err(
+              toBridgeInternalError(
+                "All OpenClaw checkpoint files were unreadable",
+                {
+                  checkpointsDir: config.checkpointsDir,
+                  issues,
+                },
+              ),
+            );
+          }
           return Result.ok(null);
         }
 

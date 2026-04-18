@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Result } from "better-result";
 import { z } from "zod";
 import {
+  CredentialId,
   InternalError,
   ValidationError,
   type SignetError,
@@ -24,6 +25,7 @@ export const OpenClawBridgeDeliveryMode: z.ZodEnum<["local"]> = z.enum([
 /** Parsed bridge runtime configuration for the OpenClaw sidecar. */
 type OpenClawBridgeConfigInput = {
   adapter: string;
+  credentialId: string;
   wsUrl: string;
   token: string;
   checkpointsDir: string;
@@ -43,6 +45,7 @@ type OpenClawBridgeConfigInput = {
 export const OpenClawBridgeConfig: z.ZodType<
   {
     adapter: string;
+    credentialId: string;
     wsUrl: string;
     token: string;
     checkpointsDir: string;
@@ -60,6 +63,7 @@ export const OpenClawBridgeConfig: z.ZodType<
 > = z
   .object({
     adapter: z.literal(OPENCLAW_ADAPTER_NAME),
+    credentialId: CredentialId,
     wsUrl: z
       .string()
       .min(1)
