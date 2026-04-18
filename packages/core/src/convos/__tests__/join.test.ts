@@ -13,6 +13,7 @@ import type {
   SignerProviderLike,
 } from "../../xmtp-client-factory.js";
 import { InviteJoinErrorType } from "../invite-join-error.js";
+import { createConvosOnboardingScheme } from "../onboarding-scheme.js";
 import { joinConversation, type JoinConversationDeps } from "../join.js";
 import { extractProfileUpdateContent } from "../profile-state.js";
 
@@ -65,6 +66,7 @@ const TEST_CREATOR_INBOX_ID =
 const TEST_DB_KEY = new Uint8Array(32).fill(0xab);
 const TEST_SIGNER_KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
+const ONBOARDING_SCHEME = createConvosOnboardingScheme();
 
 function buildTestSlug(): string {
   const payloadBytes = InvitePayloadType.encode(
@@ -199,6 +201,7 @@ function createDeps(overrides?: {
     });
 
   return {
+    onboardingScheme: ONBOARDING_SCHEME,
     identityStore:
       overrides?.identityStore ?? new SqliteIdentityStore(":memory:"),
     clientFactory: createMockFactory(client),
@@ -523,6 +526,7 @@ describe("joinConversation", () => {
 
     const store = new SqliteIdentityStore(":memory:");
     const deps: JoinConversationDeps = {
+      onboardingScheme: ONBOARDING_SCHEME,
       identityStore: store,
       clientFactory: failingFactory,
       signerProviderFactory: () => createMockSignerProvider(),

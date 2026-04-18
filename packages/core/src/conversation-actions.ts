@@ -15,10 +15,9 @@ import type {
   XmtpGroupInfo,
 } from "./xmtp-client-factory.js";
 import type { SignetCoreConfig } from "./config.js";
-import { joinConversation } from "./convos/join.js";
-import { generateConvosInviteUrl } from "./convos/invite-generator.js";
-import { encodeProfileUpdate, MemberKind } from "./convos/profile-messages.js";
+import { joinConversation } from "./schemes/join.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
+import type { OnboardingScheme } from "./schemes/onboarding-scheme.js";
 
 const GroupInfoSchema = z.object({
   chatId: z.string().optional(),
@@ -54,6 +53,8 @@ const ProfileUpdateResultSchema = z.object({
 
 /** Dependencies used to build conversation-related action specs. */
 export interface ConversationActionDeps {
+  /** Onboarding scheme used for invite and profile lifecycle behavior. */
+  readonly onboardingScheme: OnboardingScheme;
   /** Identity store used to resolve conversation creators and viewers. */
   readonly identityStore: SqliteIdentityStore;
   /** Optional operator manager for defaulting human-facing Convos profile names. */
@@ -503,6 +504,7 @@ export function createConversationActions(
 
       const joinResult = await joinConversation(
         {
+          onboardingScheme: deps.onboardingScheme,
           identityStore: deps.identityStore,
           clientFactory: deps.clientFactory,
           signerProviderFactory: deps.signerProviderFactory,
@@ -620,20 +622,23 @@ export function createConversationActions(
         .join("")
         .slice(0, 10);
 
-      const env =
-        deps.config.env === "dev" || deps.config.env === "local"
-          ? (deps.config.env as "dev" | "local")
-          : ("production" as const);
-
-      const urlResult = await generateConvosInviteUrl({
-        conversationId: groupId,
-        creatorInboxId: managed.inboxId,
-        walletPrivateKeyHex,
-        inviteTag,
-        name: input.name ?? groupResult.value.name,
-        description: input.description ?? groupResult.value.description,
-        env,
-      });
+      const urlResult = await deps.onboardingScheme.generate(
+        {
+          groupId,
+        },
+        {
+          creatorInboxId: managed.inboxId,
+          walletPrivateKeyHex,
+        },
+        {
+          tag: inviteTag,
+          name: input.name ?? groupResult.value.name,
+          description: input.description ?? groupResult.value.description,
+        },
+        {
+          env: deps.config.env,
+        },
+      );
 
       if (Result.isError(urlResult)) return urlResult;
 
@@ -643,7 +648,7 @@ export function createConversationActions(
       }
 
       return Result.ok({
-        inviteUrl: urlResult.value,
+        inviteUrl: urlResult.value.url,
         chatId: input.chatId,
         groupId,
         groupName: groupResult.value.name,
@@ -840,11 +845,11 @@ export function createConversationActions(
 
       const updateResult = await managedResult.value.client.sendMessage(
         groupId,
-        encodeProfileUpdate({
+        deps.onboardingScheme.encodeProfileUpdate({
           name: profileSelection.profileName,
-          memberKind: MemberKind.Agent,
+          memberKind: "agent",
         }),
-        "convos.org/profile_update:1.0",
+        deps.onboardingScheme.profileUpdateContentType(),
       );
       if (Result.isError(updateResult)) return updateResult;
 

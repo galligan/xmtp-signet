@@ -12,6 +12,7 @@ import {
   createConversationActions,
   type ConversationActionDeps,
 } from "../conversation-actions.js";
+import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
 
 function stubCtx(): HandlerContext {
   return {
@@ -21,6 +22,7 @@ function stubCtx(): HandlerContext {
 }
 
 describe("conversation action examples", () => {
+  const onboardingScheme = createConvosOnboardingScheme();
   let identityStore: SqliteIdentityStore;
   let idMappings: IdMappingStore;
   let mappingDb: Database;
@@ -47,6 +49,7 @@ describe("conversation action examples", () => {
     );
 
     deps = {
+      onboardingScheme,
       identityStore,
       getManagedClient: (_id: string): ManagedClient | undefined => undefined,
       getGroupInfo: async (groupId: string) =>

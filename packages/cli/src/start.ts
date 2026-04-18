@@ -27,6 +27,7 @@ import {
   SignetCoreConfigSchema,
   createSdkClientFactory,
   createConsentActions,
+  createConvosOnboardingScheme,
   createConversationActions,
   createInboxActions as createInboxActionSpecs,
   createLookupActions,
@@ -703,6 +704,7 @@ export function createProductionDeps(): SignetRuntimeDeps {
       }
 
       const actions = createConversationActions({
+        onboardingScheme: createConvosOnboardingScheme(),
         identityStore: core.identityStore,
         ...(operatorManagerRef ? { operatorManager: operatorManagerRef } : {}),
         getManagedClient: (id) => core.getManagedClient(id),

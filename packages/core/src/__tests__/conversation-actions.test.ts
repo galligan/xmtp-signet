@@ -18,6 +18,7 @@ import {
   type ConversationActionDeps,
 } from "../conversation-actions.js";
 import { generateConvosInviteUrl } from "../convos/invite-generator.js";
+import { createConvosOnboardingScheme } from "../convos/onboarding-scheme.js";
 import { extractProfileUpdateContent } from "../convos/profile-state.js";
 
 /** Minimal handler context for tests. */
@@ -224,6 +225,7 @@ function createOperatorManager(
 }
 
 describe("conversation actions", () => {
+  const onboardingScheme = createConvosOnboardingScheme();
   let identityStore: SqliteIdentityStore;
   let idMappings: IdMappingStore;
   let mappingDb: Database;
@@ -250,6 +252,7 @@ describe("conversation actions", () => {
     operatorManager?: OperatorManager,
   ): void {
     deps = {
+      onboardingScheme,
       identityStore,
       ...(operatorManager ? { operatorManager } : {}),
       getManagedClient: (id) => managedClients.get(id),
@@ -452,6 +455,7 @@ describe("conversation actions", () => {
       };
 
       deps = {
+        onboardingScheme,
         identityStore,
         getManagedClient: (id) => managedClients.get(id),
         getManagedClientForGroup: (groupId) =>
@@ -504,6 +508,7 @@ describe("conversation actions", () => {
       };
 
       deps = {
+        onboardingScheme,
         identityStore,
         operatorManager: createOperatorManager({ op_codex: "Codex" }),
         getManagedClient: (id) => managedClients.get(id),
@@ -554,6 +559,7 @@ describe("conversation actions", () => {
       };
 
       deps = {
+        onboardingScheme,
         identityStore,
         getManagedClient: (id) => managedClients.get(id),
         getManagedClientForGroup: (groupId) =>

@@ -6,6 +6,7 @@ import { InternalError } from "@xmtp/signet-schemas";
 import { createKeyActions, createWalletActions } from "@xmtp/signet-keys";
 import {
   createConsentActions,
+  createConvosOnboardingScheme,
   createConversationActions,
   createInboxActions,
   createMessageActions,
@@ -103,6 +104,7 @@ describe("action surface map", () => {
     }
 
     for (const spec of createConversationActions({
+      onboardingScheme: createConvosOnboardingScheme(),
       identityStore: {} as never,
       getManagedClient: () => undefined,
       getGroupInfo: async () => Result.err(InternalError.create("unused")),

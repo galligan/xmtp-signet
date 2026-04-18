@@ -6,17 +6,17 @@ import type { XmtpClientFactory } from "../xmtp-client-factory.js";
 import type { XmtpEnv, SignetCoreConfig } from "../config.js";
 import type { SignerProviderFactory } from "../identity-registration.js";
 import { registerIdentity } from "../identity-registration.js";
+import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 import {
   extractInviteJoinError,
   getInviteJoinErrorMessage,
   isInviteJoinErrorContentType,
 } from "./invite-join-error.js";
-import { encodeProfileUpdate, MemberKind } from "./profile-messages.js";
-import { parseConvosInviteUrl, verifyConvosInvite } from "./invite-parser.js";
 import type { JoinRequestContent } from "./join-request-content.js";
 
 /** Dependencies injected into the join orchestrator. */
 export interface JoinConversationDeps {
+  readonly onboardingScheme: OnboardingScheme;
   readonly identityStore: SqliteIdentityStore;
   readonly clientFactory: XmtpClientFactory;
   readonly signerProviderFactory: SignerProviderFactory;
@@ -127,18 +127,24 @@ export async function joinConversation(
   inviteUrl: string,
   options?: JoinConversationOptions,
 ): Promise<Result<JoinResult, SignetError>> {
-  const { identityStore, clientFactory, signerProviderFactory, config } = deps;
+  const {
+    onboardingScheme,
+    identityStore,
+    clientFactory,
+    signerProviderFactory,
+    config,
+  } = deps;
   const pollIntervalMs = options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const maxPollAttempts = options?.maxPollAttempts ?? DEFAULT_MAX_POLL_ATTEMPTS;
 
   // Step 1: Parse invite
-  const parseResult = parseConvosInviteUrl(inviteUrl);
+  const parseResult = onboardingScheme.parse(inviteUrl);
   if (!parseResult.isOk()) return parseResult;
 
   const invite = parseResult.value;
 
   // Step 2: Verify signature structure
-  const verifyResult = verifyConvosInvite(invite);
+  const verifyResult = onboardingScheme.verify(invite);
   if (!verifyResult.isOk()) return verifyResult;
 
   // Step 3: Check expiration
@@ -220,7 +226,7 @@ export async function joinConversation(
   const structuredSendResult = await client.sendMessage(
     dmResult.value.dmId,
     joinRequest,
-    "convos.org/join_request:1.0",
+    onboardingScheme.joinRequestContentType(),
   );
   if (!structuredSendResult.isOk()) {
     await identityStore.remove(identityId);
@@ -254,13 +260,13 @@ export async function joinConversation(
       if (group !== undefined) {
         const profileUpdateResult = await client.sendMessage(
           group.groupId,
-          encodeProfileUpdate({
-            memberKind: MemberKind.Agent,
+          onboardingScheme.encodeProfileUpdate({
+            memberKind: "agent",
             ...(options?.profileName !== undefined
               ? { name: options.profileName }
               : {}),
           }),
-          "convos.org/profile_update:1.0",
+          onboardingScheme.profileUpdateContentType(),
         );
 
         return Result.ok({
