@@ -1,0 +1,26 @@
+{
+  "name": "@xmtp/openclaw-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts ./src/bin.ts --outdir ./dist --target bun && tsc --declaration --emitDeclarationOnly --outDir ./dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@xmtp/signet-schemas": "workspace:*",
+    "commander": "14.0.3"
+  },
+  "devDependencies": {
+    "bun-types": "catalog:",
+    "typescript": "catalog:"
+  }
+}

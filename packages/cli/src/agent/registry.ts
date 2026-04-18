@@ -25,6 +25,7 @@ export interface ResolvedAgentAdapterCommand {
   readonly manifest: AdapterManifestType;
   readonly source: "builtin" | "external";
   readonly command: string;
+  readonly args?: readonly string[] | undefined;
   readonly cwd?: string | undefined;
 }
 
@@ -197,6 +198,7 @@ function resolveBuiltinAdapter(
     manifest: builtin.manifest,
     source: "builtin",
     command: builtin.command,
+    ...(builtin.args !== undefined ? { args: builtin.args } : {}),
     ...(builtin.cwd !== undefined ? { cwd: builtin.cwd } : {}),
   });
 }
