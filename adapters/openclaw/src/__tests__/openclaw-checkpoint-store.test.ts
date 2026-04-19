@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createOpenClawCheckpointStore } from "../bridge/index.js";
+import { createOpenClawCheckpointStore } from "../bridge/checkpoint-store.js";
 
 describe("OpenClaw checkpoint store", () => {
   test("loadLatest skips malformed checkpoint files when valid checkpoints remain", async () => {

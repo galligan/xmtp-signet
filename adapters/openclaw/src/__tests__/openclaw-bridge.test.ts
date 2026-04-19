@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { Result } from "better-result";
 import { InternalError, type SignetEvent } from "@xmtp/signet-schemas";
 import { WS_CLOSE_CODES } from "@xmtp/signet-ws";
-import { createOpenClawCheckpointStore } from "../bridge/index.js";
-import { createOpenClawReadOnlyBridge } from "../bridge/index.js";
+import { createOpenClawCheckpointStore } from "../bridge/checkpoint-store.js";
+import { createOpenClawReadOnlyBridge } from "../bridge/runtime.js";
 
 const tempDirs: string[] = [];
 const TEST_CREDENTIAL_ID = "cred_0000000000000001";

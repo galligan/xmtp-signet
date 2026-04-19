@@ -5,7 +5,7 @@ import {
 import {
   OPENCLAW_BRIDGE_PHASE,
   isOpenClawBridgeReady,
-} from "../bridge/index.js";
+} from "../bridge/phase.js";
 import { listOpenClawArtifactFiles } from "../artifacts/index.js";
 import { OPENCLAW_ADAPTER_NAME } from "../config/index.js";
 import {

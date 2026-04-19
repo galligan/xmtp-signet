@@ -28,11 +28,4 @@ export type {
   OpenClawReadOnlyBridge,
 } from "./runtime.js";
 export { createOpenClawReadOnlyBridge } from "./runtime.js";
-
-/** Current bridge phase for the OpenClaw adapter. */
-export const OPENCLAW_BRIDGE_PHASE = "read-only";
-
-/** Whether the first read-only bridge slice is now implemented. */
-export function isOpenClawBridgeReady(): boolean {
-  return true;
-}
+export { OPENCLAW_BRIDGE_PHASE, isOpenClawBridgeReady } from "./phase.js";

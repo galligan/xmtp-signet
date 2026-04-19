@@ -48,12 +48,14 @@ export interface OpenClawCheckpointStoreDeps {
   readonly writeFile: typeof writeFile;
 }
 
-const defaultDeps: OpenClawCheckpointStoreDeps = {
-  mkdir,
-  readFile,
-  readdir,
-  writeFile,
-};
+function createDefaultCheckpointStoreDeps(): OpenClawCheckpointStoreDeps {
+  return {
+    mkdir,
+    readFile,
+    readdir,
+    writeFile,
+  };
+}
 
 function checkpointFilename(credentialId: string): string {
   return `${credentialId.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`;
@@ -70,7 +72,7 @@ export function createOpenClawCheckpointStore(
   deps: Partial<OpenClawCheckpointStoreDeps> = {},
 ): OpenClawCheckpointStore {
   const resolvedDeps: OpenClawCheckpointStoreDeps = {
-    ...defaultDeps,
+    ...createDefaultCheckpointStoreDeps(),
     ...deps,
   };
 

@@ -101,18 +101,20 @@ export interface OpenClawAdapterPathDeps {
   readonly pathExists: (path: string) => Promise<boolean>;
 }
 
-const defaultPathDeps: OpenClawAdapterPathDeps = {
-  loadConfig,
-  resolvePaths,
-  async pathExists(path) {
-    try {
-      await access(path, fsConstants.F_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-};
+function createDefaultPathDeps(): OpenClawAdapterPathDeps {
+  return {
+    loadConfig,
+    resolvePaths,
+    async pathExists(path) {
+      try {
+        await access(path, fsConstants.F_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
 
 /** Resolve the signet-derived filesystem paths used by the OpenClaw adapter. */
 export async function resolveOpenClawAdapterPaths(
@@ -121,7 +123,10 @@ export async function resolveOpenClawAdapterPaths(
   },
   deps: Partial<OpenClawAdapterPathDeps> = {},
 ): Promise<Result<OpenClawAdapterPaths, SignetError>> {
-  const resolvedDeps: OpenClawAdapterPathDeps = { ...defaultPathDeps, ...deps };
+  const resolvedDeps: OpenClawAdapterPathDeps = {
+    ...createDefaultPathDeps(),
+    ...deps,
+  };
   const configResult = await resolvedDeps.loadConfig({
     configPath: options.configPath,
   });
@@ -159,7 +164,10 @@ export async function inspectOpenClawRuntimePresence(
   },
   deps: Partial<OpenClawAdapterPathDeps> = {},
 ): Promise<Result<OpenClawRuntimePresence, SignetError>> {
-  const resolvedDeps: OpenClawAdapterPathDeps = { ...defaultPathDeps, ...deps };
+  const resolvedDeps: OpenClawAdapterPathDeps = {
+    ...createDefaultPathDeps(),
+    ...deps,
+  };
   const pathsResult = await resolveOpenClawAdapterPaths(options, resolvedDeps);
   if (pathsResult.isErr()) {
     return pathsResult;

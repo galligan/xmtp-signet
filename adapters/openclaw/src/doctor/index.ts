@@ -2,7 +2,7 @@ import {
   AdapterStatusResult,
   type AdapterStatusResultType,
 } from "@xmtp/signet-schemas";
-import { OPENCLAW_BRIDGE_PHASE } from "../bridge/index.js";
+import { OPENCLAW_BRIDGE_PHASE } from "../bridge/phase.js";
 import { OPENCLAW_ADAPTER_NAME } from "../config/index.js";
 import {
   inspectOpenClawRuntime,
