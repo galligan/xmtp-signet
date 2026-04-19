@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   AdapterManifest,
@@ -14,16 +15,14 @@ export interface OpenClawAdapterDefinition {
 
 /** Built-in manifest for the OpenClaw adapter. */
 export const OPENCLAW_ADAPTER_MANIFEST: AdapterManifestType =
-  AdapterManifest.parse({
-    name: "openclaw",
-    source: "builtin",
-    supports: ["setup", "status", "doctor"],
-    entrypoints: {
-      setup: "builtin:openclaw:setup",
-      status: "builtin:openclaw:status",
-      doctor: "builtin:openclaw:doctor",
-    },
-  });
+  AdapterManifest.parse(
+    JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../adapter-manifest.json", import.meta.url)),
+        "utf-8",
+      ),
+    ),
+  );
 
 function resolveOpenClawAdapterEntryFile(): string {
   const sourceEntrypoint = fileURLToPath(new URL("./bin.ts", import.meta.url));

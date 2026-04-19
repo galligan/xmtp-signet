@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
+  AdapterManifest,
   type AdapterManifestType,
   type AdapterVerbType,
 } from "@xmtp/signet-schemas";
-import { openclawAdapterDefinition } from "@xmtp/openclaw-adapter";
 
 /** First-party adapter registration known to the CLI. */
 export interface BuiltinAgentAdapterDefinition {
@@ -21,7 +23,27 @@ export type BuiltinAgentAdapterRegistry = Record<
 /**
  * First-party adapter registrations bundled with the repo.
  */
-const OPENCLAW_DEFINITION = openclawAdapterDefinition;
+const OPENCLAW_DEFINITION: BuiltinAgentAdapterDefinition = {
+  manifest: AdapterManifest.parse(
+    JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL(
+            "../../../../adapters/openclaw/adapter-manifest.json",
+            import.meta.url,
+          ),
+        ),
+        "utf-8",
+      ),
+    ),
+  ),
+  command: "bun",
+  args: [
+    fileURLToPath(
+      new URL("../../../../adapters/openclaw/src/bin.ts", import.meta.url),
+    ),
+  ],
+};
 
 const builtinAgentAdapters: BuiltinAgentAdapterRegistry = {
   [OPENCLAW_DEFINITION.manifest.name]: OPENCLAW_DEFINITION,
