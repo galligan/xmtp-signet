@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import type { AdminClient, DaemonStatus } from "@xmtp/signet-cli";
 import {
   AdapterSetupResult,
+  type SignetError,
   type AdapterSetupResultType,
   InternalError,
   ValidationError,
@@ -12,7 +13,6 @@ import {
   type OperatorRecordType,
   type PolicyConfigType,
   type PolicyRecordType,
-  type SignetError,
 } from "@xmtp/signet-schemas";
 import { listOpenClawArtifactFiles } from "../artifacts/index.js";
 import { OPENCLAW_ADAPTER_NAME } from "../config/index.js";
