@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   AdapterManifest,
@@ -23,26 +23,46 @@ export type BuiltinAgentAdapterRegistry = Record<
 /**
  * First-party adapter registrations bundled with the repo.
  */
-const OPENCLAW_DEFINITION: BuiltinAgentAdapterDefinition = {
-  manifest: AdapterManifest.parse(
-    JSON.parse(
-      readFileSync(
-        fileURLToPath(
-          new URL(
-            "../../../../adapters/openclaw/adapter-manifest.json",
-            import.meta.url,
-          ),
-        ),
-        "utf-8",
-      ),
+function resolveOpenClawPath(candidates: readonly string[]): string {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0] ?? "";
+}
+
+const openclawManifestPath = resolveOpenClawPath([
+  fileURLToPath(
+    new URL(
+      "../../../../adapters/openclaw/adapter-manifest.json",
+      import.meta.url,
     ),
   ),
-  command: "bun",
-  args: [
-    fileURLToPath(
-      new URL("../../../../adapters/openclaw/src/bin.ts", import.meta.url),
+  fileURLToPath(
+    new URL(
+      "../../../adapters/openclaw/adapter-manifest.json",
+      import.meta.url,
     ),
-  ],
+  ),
+]);
+
+const openclawBinPath = resolveOpenClawPath([
+  fileURLToPath(
+    new URL("../../../../adapters/openclaw/src/bin.ts", import.meta.url),
+  ),
+  fileURLToPath(
+    new URL("../../../adapters/openclaw/src/bin.ts", import.meta.url),
+  ),
+]);
+
+const OPENCLAW_DEFINITION: BuiltinAgentAdapterDefinition = {
+  manifest: AdapterManifest.parse(
+    JSON.parse(readFileSync(openclawManifestPath, "utf-8")),
+  ),
+  command: "bun",
+  args: [openclawBinPath],
 };
 
 const builtinAgentAdapters: BuiltinAgentAdapterRegistry = {
