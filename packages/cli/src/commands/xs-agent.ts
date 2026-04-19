@@ -9,6 +9,7 @@
 
 import { Command } from "commander";
 import { Result } from "better-result";
+import { resolve as resolvePath } from "node:path";
 import type { AdapterVerbType, SignetError } from "@xmtp/signet-schemas";
 import { loadConfig, defaultConfigPath } from "../config/loader.js";
 import type { CliConfig } from "../config/schema.js";
@@ -102,7 +103,7 @@ function addAgentVerb(
         opts: { config?: string; json?: true },
       ): Promise<void> => {
         const json = opts.json === true;
-        const configPath = opts.config ?? deps.defaultConfigPath();
+        const configPath = resolvePath(opts.config ?? deps.defaultConfigPath());
         const configResult = await deps.loadConfig({ configPath });
         if (configResult.isErr()) {
           writeError(deps, configResult.error, json);

@@ -213,8 +213,8 @@ export async function resolveAgentAdapterCommand(
 ): Promise<Result<ResolvedAgentAdapterCommand, SignetError>> {
   const resolvedDeps: ResolveAgentAdapterDeps = {
     ...defaultDeps,
-    builtinRegistry: deps.builtinRegistry ?? getBuiltinAgentAdapters(),
     ...deps,
+    builtinRegistry: deps.builtinRegistry ?? defaultDeps.builtinRegistry,
   };
   const configuredAdapter = options.config.agent.adapters[options.adapterName];
 
