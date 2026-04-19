@@ -20,6 +20,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@xmtp/openclaw-adapter": "workspace:*",
     "@xmtp/signet-contracts": "workspace:*",
     "@xmtp/signet-core": "workspace:*",
     "@xmtp/signet-keys": "workspace:*",

@@ -24,7 +24,7 @@ describe("openclaw adapter scaffold", () => {
   test("exports process-backed registration metadata", () => {
     expect(openclawAdapterDefinition.command).toBe("bun");
     expect(openclawAdapterDefinition.args.length).toBe(1);
-    expect(openclawAdapterDefinition.args[0]).toContain("bin.js");
+    expect(openclawAdapterDefinition.args[0]).toContain("bin.ts");
   });
 
   test("returns structured stub outputs for setup, status, and doctor", () => {

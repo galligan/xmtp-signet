@@ -1,9 +1,8 @@
-import { fileURLToPath } from "node:url";
 import {
-  AdapterManifest,
   type AdapterManifestType,
   type AdapterVerbType,
 } from "@xmtp/signet-schemas";
+import { openclawAdapterDefinition } from "@xmtp/openclaw-adapter";
 
 /** First-party adapter registration known to the CLI. */
 export interface BuiltinAgentAdapterDefinition {
@@ -21,31 +20,11 @@ export type BuiltinAgentAdapterRegistry = Record<
 
 /**
  * First-party adapter registrations bundled with the repo.
- *
- * The initial registry is intentionally sparse; later branches add OpenClaw as
- * the first concrete built-in adapter.
  */
-const OPENCLAW_MANIFEST: AdapterManifestType = AdapterManifest.parse({
-  name: "openclaw",
-  source: "builtin",
-  supports: ["setup", "status", "doctor"],
-  entrypoints: {
-    setup: "builtin:openclaw:setup",
-    status: "builtin:openclaw:status",
-    doctor: "builtin:openclaw:doctor",
-  },
-});
+const OPENCLAW_DEFINITION = openclawAdapterDefinition;
 
 const builtinAgentAdapters: BuiltinAgentAdapterRegistry = {
-  [OPENCLAW_MANIFEST.name]: {
-    manifest: OPENCLAW_MANIFEST,
-    command: "bun",
-    args: [
-      fileURLToPath(
-        new URL("../../../../adapters/openclaw/src/bin.ts", import.meta.url),
-      ),
-    ],
-  },
+  [OPENCLAW_DEFINITION.manifest.name]: OPENCLAW_DEFINITION,
 };
 
 /** Returns the current built-in adapter registry. */

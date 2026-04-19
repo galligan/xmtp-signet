@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   AdapterManifest,
@@ -24,9 +25,18 @@ export const OPENCLAW_ADAPTER_MANIFEST: AdapterManifestType =
     },
   });
 
+function resolveOpenClawAdapterEntryFile(): string {
+  const sourceEntrypoint = fileURLToPath(new URL("./bin.ts", import.meta.url));
+  if (existsSync(sourceEntrypoint)) {
+    return sourceEntrypoint;
+  }
+
+  return fileURLToPath(new URL("./bin.js", import.meta.url));
+}
+
 /** Process-backed registration exported to the CLI's built-in registry. */
 export const openclawAdapterDefinition: OpenClawAdapterDefinition = {
   manifest: OPENCLAW_ADAPTER_MANIFEST,
   command: "bun",
-  args: [fileURLToPath(new URL("./bin.js", import.meta.url))],
+  args: [resolveOpenClawAdapterEntryFile()],
 };
