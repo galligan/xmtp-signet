@@ -2,7 +2,11 @@
 
 import { Command } from "commander";
 import { Result } from "better-result";
-import { ERROR_CATEGORY_META, type SignetError } from "@xmtp/signet-schemas";
+import {
+  ERROR_CATEGORY_META,
+  InternalError,
+  type SignetError,
+} from "@xmtp/signet-schemas";
 import { runOpenClawDoctor } from "./doctor/index.js";
 import { formatAdapterOutput } from "./output.js";
 import { runOpenClawSetup } from "./setup/index.js";
@@ -90,7 +94,24 @@ export async function runOpenClawAdapterCommand(
   options: OpenClawAdapterOutput,
   io: OpenClawBinIo = defaultIo,
 ): Promise<void> {
-  const resolved = unwrapAdapterOutput(await run());
+  let output: unknown;
+  try {
+    output = await run();
+  } catch (error) {
+    const signetError = InternalError.create(
+      "OpenClaw adapter command failed unexpectedly",
+      {
+        adapter: options.adapter,
+        entrypoint: options.entrypoint,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+    io.stderr(`${formatAdapterError(signetError, options.json)}\n`);
+    io.exit(exitCodeFromCategory(signetError.category));
+    return;
+  }
+
+  const resolved = unwrapAdapterOutput(output);
   if (resolved.ok === false) {
     io.stderr(`${formatAdapterError(resolved.error, options.json)}\n`);
     io.exit(exitCodeFromCategory(resolved.error.category));

@@ -314,14 +314,23 @@ async function writeArtifact(
     readonly contents: string;
     readonly force: boolean;
   },
-): Promise<"created" | "reused"> {
-  const exists = await deps.pathExists(options.path);
-  if (exists && !options.force) {
-    return "reused";
-  }
+): Promise<Result<"created" | "reused", SignetError>> {
+  try {
+    const exists = await deps.pathExists(options.path);
+    if (exists && !options.force) {
+      return Result.ok("reused");
+    }
 
-  await deps.writeFile(options.path, options.contents);
-  return "created";
+    await deps.writeFile(options.path, options.contents);
+    return Result.ok("created");
+  } catch (error) {
+    return Result.err(
+      InternalError.create("Failed to write OpenClaw adapter artifact", {
+        path: options.path,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
 }
 
 async function ensureSetupPrerequisites(
@@ -375,168 +384,185 @@ export async function runOpenClawSetup(
       client,
       context,
     ): Promise<Result<AdapterSetupResultType, SignetError>> => {
-      const statusResult = await ensureSetupPrerequisites(client);
-      if (statusResult.isErr()) {
-        return statusResult;
-      }
-
-      const created: string[] = [];
-      const reused: string[] = [];
-
-      const operatorRecords: Record<string, OperatorRecordType> = {};
-      for (const operatorTemplate of OPERATOR_TEMPLATES) {
-        const result = await ensureOperator(client, operatorTemplate);
-        if (result.isErr()) {
-          return result;
+      try {
+        const statusResult = await ensureSetupPrerequisites(client);
+        if (statusResult.isErr()) {
+          return statusResult;
         }
-        operatorRecords[operatorTemplate.label] = result.value.record;
-        (result.value.wasCreated ? created : reused).push(
-          `operator:${operatorTemplate.label}`,
-        );
-      }
 
-      const policyRecords: Record<string, PolicyRecordType> = {};
-      for (const policyTemplate of POLICY_TEMPLATES) {
-        const result = await ensurePolicy(client, policyTemplate);
-        if (result.isErr()) {
-          return result;
-        }
-        policyRecords[policyTemplate.label] = result.value.record;
-        (result.value.wasCreated ? created : reused).push(
-          `policy:${policyTemplate.label}`,
-        );
-      }
+        const created: string[] = [];
+        const reused: string[] = [];
 
-      const adapterDir = join(context.paths.dataDir, "adapters", "openclaw");
-      const checkpointsDir = join(adapterDir, "checkpoints");
-      await resolvedDeps.mkdir(checkpointsDir, { recursive: true });
-
-      const operatorIds = Object.fromEntries(
-        Object.entries(operatorRecords).map(([label, record]) => [
-          label,
-          record.id,
-        ]),
-      );
-      const policyIds = Object.fromEntries(
-        Object.entries(policyRecords).map(([label, record]) => [
-          label,
-          record.id,
-        ]),
-      );
-
-      const openclawAccount = JSON.stringify(
-        {
-          adapter: OPENCLAW_ADAPTER_NAME,
-          source: "builtin",
-          signet: {
-            configPath: options.configPath,
-            dataDir: context.paths.dataDir,
-            adminSocket: context.paths.adminSocket,
-            wsPort: statusResult.value.wsPort,
-          },
-          operators: operatorIds,
-          policies: policyIds,
-        },
-        null,
-        2,
-      );
-
-      const operatorTemplatesJson = JSON.stringify(
-        Object.fromEntries(
-          OPERATOR_TEMPLATES.map((template) => [
-            template.label,
-            {
-              ...template,
-              operatorId: operatorRecords[template.label]?.id,
-            },
-          ]),
-        ),
-        null,
-        2,
-      );
-
-      const policyTemplatesJson = JSON.stringify(
-        Object.fromEntries(
-          POLICY_TEMPLATES.map((template) => [
-            template.label,
-            {
-              ...template,
-              policyId: policyRecords[template.label]?.id,
-            },
-          ]),
-        ),
-        null,
-        2,
-      );
-
-      const artifactWrites = [
-        {
-          label: "artifact:adapter.toml",
-          path: join(adapterDir, "adapter.toml"),
-          contents: renderAdapterToml({
-            wsPort: statusResult.value.wsPort,
-            operatorIds,
-            policyIds,
-            artifactDir: adapterDir,
-          }),
-        },
-        {
-          label: "artifact:adapter-manifest.toml",
-          path: join(adapterDir, "adapter-manifest.toml"),
-          contents: renderManifestToml(),
-        },
-        {
-          label: "artifact:openclaw-account.json",
-          path: join(adapterDir, "openclaw-account.json"),
-          contents: openclawAccount,
-        },
-        {
-          label: "artifact:operator-templates.json",
-          path: join(adapterDir, "operator-templates.json"),
-          contents: operatorTemplatesJson,
-        },
-        {
-          label: "artifact:policy-templates.json",
-          path: join(adapterDir, "policy-templates.json"),
-          contents: policyTemplatesJson,
-        },
-      ] as const;
-
-      const artifactMap: Record<string, string> = {};
-      for (const artifact of artifactWrites) {
-        const writeResult = await writeArtifact(resolvedDeps, {
-          path: artifact.path,
-          contents: artifact.contents,
-          force: options.force === true,
-        });
-        artifactMap[artifact.label.replace("artifact:", "")] = artifact.path;
-        (writeResult === "created" ? created : reused).push(artifact.label);
-      }
-
-      for (const artifactFile of listOpenClawArtifactFiles()) {
-        if (!(artifactFile in artifactMap)) {
-          return Result.err(
-            InternalError.create("Missing expected adapter artifact mapping", {
-              artifactFile,
-            }),
+        const operatorRecords: Record<string, OperatorRecordType> = {};
+        for (const operatorTemplate of OPERATOR_TEMPLATES) {
+          const result = await ensureOperator(client, operatorTemplate);
+          if (result.isErr()) {
+            return result;
+          }
+          operatorRecords[operatorTemplate.label] = result.value.record;
+          (result.value.wasCreated ? created : reused).push(
+            `operator:${operatorTemplate.label}`,
           );
         }
+
+        const policyRecords: Record<string, PolicyRecordType> = {};
+        for (const policyTemplate of POLICY_TEMPLATES) {
+          const result = await ensurePolicy(client, policyTemplate);
+          if (result.isErr()) {
+            return result;
+          }
+          policyRecords[policyTemplate.label] = result.value.record;
+          (result.value.wasCreated ? created : reused).push(
+            `policy:${policyTemplate.label}`,
+          );
+        }
+
+        const adapterDir = join(context.paths.dataDir, "adapters", "openclaw");
+        const checkpointsDir = join(adapterDir, "checkpoints");
+        await resolvedDeps.mkdir(checkpointsDir, { recursive: true });
+
+        const operatorIds = Object.fromEntries(
+          Object.entries(operatorRecords).map(([label, record]) => [
+            label,
+            record.id,
+          ]),
+        );
+        const policyIds = Object.fromEntries(
+          Object.entries(policyRecords).map(([label, record]) => [
+            label,
+            record.id,
+          ]),
+        );
+
+        const openclawAccount = JSON.stringify(
+          {
+            adapter: OPENCLAW_ADAPTER_NAME,
+            source: "builtin",
+            signet: {
+              configPath: options.configPath,
+              dataDir: context.paths.dataDir,
+              adminSocket: context.paths.adminSocket,
+              wsPort: statusResult.value.wsPort,
+            },
+            operators: operatorIds,
+            policies: policyIds,
+          },
+          null,
+          2,
+        );
+
+        const operatorTemplatesJson = JSON.stringify(
+          Object.fromEntries(
+            OPERATOR_TEMPLATES.map((template) => [
+              template.label,
+              {
+                ...template,
+                operatorId: operatorRecords[template.label]?.id,
+              },
+            ]),
+          ),
+          null,
+          2,
+        );
+
+        const policyTemplatesJson = JSON.stringify(
+          Object.fromEntries(
+            POLICY_TEMPLATES.map((template) => [
+              template.label,
+              {
+                ...template,
+                policyId: policyRecords[template.label]?.id,
+              },
+            ]),
+          ),
+          null,
+          2,
+        );
+
+        const artifactWrites = [
+          {
+            label: "artifact:adapter.toml",
+            path: join(adapterDir, "adapter.toml"),
+            contents: renderAdapterToml({
+              wsPort: statusResult.value.wsPort,
+              operatorIds,
+              policyIds,
+              artifactDir: adapterDir,
+            }),
+          },
+          {
+            label: "artifact:adapter-manifest.toml",
+            path: join(adapterDir, "adapter-manifest.toml"),
+            contents: renderManifestToml(),
+          },
+          {
+            label: "artifact:openclaw-account.json",
+            path: join(adapterDir, "openclaw-account.json"),
+            contents: openclawAccount,
+          },
+          {
+            label: "artifact:operator-templates.json",
+            path: join(adapterDir, "operator-templates.json"),
+            contents: operatorTemplatesJson,
+          },
+          {
+            label: "artifact:policy-templates.json",
+            path: join(adapterDir, "policy-templates.json"),
+            contents: policyTemplatesJson,
+          },
+        ] as const;
+
+        const artifactMap: Record<string, string> = {};
+        for (const artifact of artifactWrites) {
+          const writeResult = await writeArtifact(resolvedDeps, {
+            path: artifact.path,
+            contents: artifact.contents,
+            force: options.force === true,
+          });
+          if (writeResult.isErr()) {
+            return writeResult;
+          }
+          artifactMap[artifact.label.replace("artifact:", "")] = artifact.path;
+          (writeResult.value === "created" ? created : reused).push(
+            artifact.label,
+          );
+        }
+
+        for (const artifactFile of listOpenClawArtifactFiles()) {
+          if (!(artifactFile in artifactMap)) {
+            return Result.err(
+              InternalError.create(
+                "Missing expected adapter artifact mapping",
+                {
+                  artifactFile,
+                },
+              ),
+            );
+          }
+        }
+
+        const result = AdapterSetupResult.parse({
+          adapter: OPENCLAW_ADAPTER_NAME,
+          adapterSource: "builtin",
+          status: "ok",
+          created,
+          reused,
+          artifacts: artifactMap,
+          nextSteps: [
+            "Run `xs agent status openclaw --json` to verify the scaffolded adapter state.",
+            "Wire OpenClaw to the generated adapter config under the signet data directory.",
+          ],
+        });
+
+        return Result.ok(result);
+      } catch (error) {
+        return Result.err(
+          InternalError.create("OpenClaw setup provisioning failed", {
+            configPath: options.configPath,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
       }
-
-      const result = AdapterSetupResult.parse({
-        adapter: OPENCLAW_ADAPTER_NAME,
-        adapterSource: "builtin",
-        status: "ok",
-        created,
-        reused,
-        artifacts: artifactMap,
-        nextSteps: [
-          "Run `xs agent status openclaw --json` to verify the scaffolded adapter state.",
-          "Wire OpenClaw to the generated adapter config under the signet data directory.",
-        ],
-      });
-
-      return Result.ok(result);
     },
   );
 }

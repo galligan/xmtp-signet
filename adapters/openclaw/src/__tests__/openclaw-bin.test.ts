@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
-import { ValidationError } from "@xmtp/signet-schemas";
+import { InternalError, ValidationError } from "@xmtp/signet-schemas";
 import { runOpenClawAdapterCommand, unwrapAdapterOutput } from "../bin.js";
 
 describe("openclaw adapter bin", () => {
@@ -67,7 +67,7 @@ describe("openclaw adapter bin", () => {
         adapter: "openclaw",
         entrypoint: "builtin:openclaw:setup",
         config: "/tmp/signet.toml",
-        json: false,
+        json: true,
       },
       {
         stdout(message) {
@@ -84,6 +84,41 @@ describe("openclaw adapter bin", () => {
 
     expect(stdout).toEqual([]);
     expect(stderr[0]).toContain("ValidationError");
+    expect(exits[0]).toBeGreaterThan(0);
+  });
+
+  test("runOpenClawAdapterCommand wraps thrown exceptions as internal errors", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const exits: number[] = [];
+
+    await runOpenClawAdapterCommand(
+      async () => {
+        throw new Error("disk full");
+      },
+      {
+        adapter: "openclaw",
+        entrypoint: "builtin:openclaw:setup",
+        config: "/tmp/signet.toml",
+        json: true,
+      },
+      {
+        stdout(message) {
+          stdout.push(message);
+        },
+        stderr(message) {
+          stderr.push(message);
+        },
+        exit(code) {
+          exits.push(code);
+        },
+      },
+    );
+
+    expect(stdout).toEqual([]);
+    const error = JSON.parse(stderr[0] ?? "{}");
+    expect(error.error).toBe(InternalError.name);
+    expect(error.context.error).toBe("disk full");
     expect(exits[0]).toBeGreaterThan(0);
   });
 });

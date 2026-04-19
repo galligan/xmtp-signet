@@ -220,4 +220,33 @@ describe("runOpenClawSetup", () => {
     expect(second.value.reused).toContain("policy:openclaw-readonly");
     expect(second.value.reused).toContain("artifact:adapter.toml");
   });
+
+  test("returns Result.err when filesystem provisioning fails", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "openclaw-setup-"));
+    tempDirs.push(dataDir);
+    const harness = createAdminHarness();
+
+    const result = await runOpenClawSetup(
+      { configPath: join(dataDir, "config.toml") },
+      {
+        async withAdminClient(_options, run) {
+          return run(harness.client, {
+            config: stubConfig(dataDir),
+            paths: stubPaths(dataDir),
+          });
+        },
+        async mkdir() {
+          throw new Error("permission denied");
+        },
+      },
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.category).toBe("internal");
+      expect(result.error.message).toContain(
+        "OpenClaw setup provisioning failed",
+      );
+    }
+  });
 });
