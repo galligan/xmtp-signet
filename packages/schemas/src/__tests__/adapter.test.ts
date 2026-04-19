@@ -111,6 +111,14 @@ describe("AgentAdaptersConfig", () => {
 
     expect(result.success).toBe(true);
   });
+
+  test("rejects malformed adapter registry keys", () => {
+    const result = AgentAdaptersConfig.safeParse({
+      OpenClaw: { source: "builtin" },
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("adapter result schemas", () => {

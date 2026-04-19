@@ -131,8 +131,8 @@ export type AgentAdapterConfigType = z.infer<typeof AgentAdapterConfig>;
 
 /** Mapping of adapter names to local registry resolution config. */
 export const AgentAdaptersConfig: z.ZodDefault<
-  z.ZodRecord<z.ZodString, typeof AgentAdapterConfig>
-> = z.record(AgentAdapterConfig).default({});
+  z.ZodRecord<z.ZodType<string>, typeof AgentAdapterConfig>
+> = z.record(AdapterName, AgentAdapterConfig).default({});
 
 /** Inferred mapping of adapter names to adapter config. */
 export type AgentAdaptersConfigType = z.infer<typeof AgentAdaptersConfig>;
