@@ -74,6 +74,7 @@ type BridgeOutcome =
 interface EnvelopeStream extends AsyncIterable<OpenClawBridgeEnvelopeType> {
   push(value: OpenClawBridgeEnvelopeType): void;
   complete(): void;
+  reset(): void;
 }
 
 const NON_RETRYABLE_CODES = new Set<number>([
@@ -118,6 +119,12 @@ function createEnvelopeStream(): EnvelopeStream {
           done: true,
         });
       }
+    },
+
+    reset() {
+      queue.length = 0;
+      done = false;
+      waiter = null;
     },
 
     [Symbol.asyncIterator]() {
@@ -371,9 +378,29 @@ export function createOpenClawReadOnlyBridge(
           if (!authenticated) {
             const authenticatedResult = AuthenticatedFrame.safeParse(payload);
             if (authenticatedResult.success) {
-              authenticated = true;
               clearTimeout(authTimeout);
-              credentialId = authenticatedResult.data.credential.credentialId;
+              const authenticatedCredentialId =
+                authenticatedResult.data.credential.credentialId;
+              if (authenticatedCredentialId !== config.credentialId) {
+                const error = AuthError.create(
+                  "Authenticated credential does not match the configured bridge credential",
+                  {
+                    configuredCredentialId: config.credentialId,
+                    authenticatedCredentialId,
+                  },
+                );
+                emitError(error);
+                socket.close(WS_CLOSE_CODES.AUTH_FAILED, "Credential mismatch");
+                settle({
+                  retryable: false,
+                  lastCheckpoint: currentCheckpoint,
+                  error,
+                });
+                return;
+              }
+
+              authenticated = true;
+              credentialId = authenticatedCredentialId;
               operatorId = authenticatedResult.data.credential.operatorId;
               bridgeState = "connected";
               metricsState = {
@@ -580,8 +607,12 @@ export function createOpenClawReadOnlyBridge(
       }
 
       stopped = false;
+      fatalCheckpointError = null;
+      deliveries.reset();
       return await new Promise<Result<void, SignetError>>((resolve) => {
-        loop = runLoop(resolve);
+        loop = runLoop(resolve).finally(() => {
+          loop = null;
+        });
       });
     },
 
@@ -596,7 +627,6 @@ export function createOpenClawReadOnlyBridge(
         ws.close(WS_CLOSE_CODES.NORMAL, "Bridge stopping");
       }
       await loop;
-      loop = null;
     },
 
     get deliveries() {

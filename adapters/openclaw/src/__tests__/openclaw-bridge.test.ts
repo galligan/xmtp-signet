@@ -31,6 +31,7 @@ interface ReplayFrame {
 
 function createReplayAwareServer(options?: {
   readonly initialFrames?: readonly ReplayFrame[];
+  readonly authenticatedCredentialId?: string;
   readonly closeAfterAuth?: {
     readonly code: number;
     readonly reason: string;
@@ -109,7 +110,8 @@ function createReplayAwareServer(options?: {
             type: "authenticated",
             connectionId: ws.data.connectionId,
             credential: {
-              credentialId: TEST_CREDENTIAL_ID,
+              credentialId:
+                options?.authenticatedCredentialId ?? TEST_CREDENTIAL_ID,
               operatorId: TEST_OPERATOR_ID,
               fingerprint: TEST_FINGERPRINT,
               issuedAt: "2026-04-18T00:00:00.000Z",
@@ -586,6 +588,118 @@ describe("OpenClaw read-only bridge", () => {
     expect(observedErrors).toContain(
       "OpenClaw bridge exhausted reconnect attempts",
     );
+
+    await expectToSettle(bridge.stop(), "bridge.stop");
+    await expectToSettle(server.stop(), "server.stop");
+  });
+
+  test("can restart cleanly after a checkpoint persistence failure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
+    tempDirs.push(root);
+
+    let failCheckpointSave = true;
+    const server = createReplayAwareServer();
+    const bridge = createOpenClawReadOnlyBridge(
+      {
+        adapter: "openclaw",
+        credentialId: TEST_CREDENTIAL_ID,
+        wsUrl: server.url,
+        token: "test-token",
+        checkpointsDir: join(root, "checkpoints"),
+        deliveryMode: "local",
+        reconnect: {
+          enabled: true,
+          maxAttempts: 3,
+          baseDelayMs: 10,
+          maxDelayMs: 20,
+          jitter: false,
+        },
+      },
+      {
+        checkpointStoreFactory(config) {
+          const base = createOpenClawCheckpointStore(config);
+          return {
+            ...base,
+            async save(checkpoint) {
+              if (failCheckpointSave) {
+                return Result.err(InternalError.create("disk full"));
+              }
+              return base.save(checkpoint);
+            },
+          };
+        },
+      },
+    );
+
+    const firstStart = await bridge.start();
+    expect(firstStart.isOk()).toBe(true);
+
+    server.emit({
+      type: "heartbeat",
+      credentialId: TEST_CREDENTIAL_ID,
+      timestamp: "2026-04-18T00:00:00.000Z",
+    });
+
+    await waitFor(() => bridge.state === "closed", "bridge close");
+    expect(bridge.metrics.deliveredCount).toBe(0);
+
+    failCheckpointSave = false;
+    const secondStart = await bridge.start();
+    expect(secondStart.isOk()).toBe(true);
+
+    server.emit({
+      type: "heartbeat",
+      credentialId: TEST_CREDENTIAL_ID,
+      timestamp: "2026-04-18T00:00:01.000Z",
+    });
+
+    const replayedDelivery = await nextDelivery(bridge.deliveries);
+    const freshDelivery = await nextDelivery(bridge.deliveries);
+    expect(replayedDelivery.seq).toBe(1);
+    expect(freshDelivery.seq).toBe(2);
+    expect(bridge.metrics.deliveredCount).toBe(2);
+
+    await expectToSettle(bridge.stop(), "bridge.stop");
+    await expectToSettle(server.stop(), "server.stop");
+  });
+
+  test("fails authentication when signet returns a different credential", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
+    tempDirs.push(root);
+
+    const server = createReplayAwareServer({
+      authenticatedCredentialId: "cred_0000000000000099",
+    });
+    const bridge = createOpenClawReadOnlyBridge({
+      adapter: "openclaw",
+      credentialId: TEST_CREDENTIAL_ID,
+      wsUrl: server.url,
+      token: "test-token",
+      checkpointsDir: join(root, "checkpoints"),
+      deliveryMode: "local",
+      reconnect: {
+        enabled: true,
+        maxAttempts: 3,
+        baseDelayMs: 10,
+        maxDelayMs: 20,
+        jitter: false,
+      },
+    });
+
+    const observedErrors: string[] = [];
+    bridge.onError((error) => {
+      observedErrors.push(error.message);
+    });
+
+    const startResult = await bridge.start();
+    expect(startResult.isErr()).toBe(true);
+    if (startResult.isErr()) {
+      expect(startResult.error.message).toContain(
+        "configured bridge credential",
+      );
+    }
+    expect(observedErrors[0]).toContain("configured bridge credential");
+    expect(bridge.metrics.reconnectCount).toBe(0);
 
     await expectToSettle(bridge.stop(), "bridge.stop");
     await expectToSettle(server.stop(), "server.stop");
