@@ -2,22 +2,9 @@
 
 import { Command } from "commander";
 import { runOpenClawDoctor } from "./doctor/index.js";
+import { formatAdapterOutput } from "./output.js";
 import { runOpenClawSetup } from "./setup/index.js";
 import { runOpenClawStatus } from "./status/index.js";
-
-function formatAdapterOutput(data: unknown, json: boolean): string {
-  if (json) {
-    return JSON.stringify(data, null, 2);
-  }
-
-  if (typeof data === "object" && data !== null && !Array.isArray(data)) {
-    return Object.entries(data as Record<string, unknown>)
-      .map(([key, value]) => `${key}: ${String(value)}`)
-      .join("\n");
-  }
-
-  return String(data);
-}
 
 function addVerb(
   program: Command,
