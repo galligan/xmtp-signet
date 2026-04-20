@@ -58,6 +58,7 @@ export interface OpenClawReadOnlyBridge {
 /** Injectable seams for bridge runtime tests and persistence handling. */
 export interface OpenClawBridgeRuntimeDeps {
   readonly checkpointStoreFactory: typeof createOpenClawCheckpointStore;
+  readonly webSocketFactory: (url: string) => WebSocket;
 }
 
 type BridgeOutcome =
@@ -191,6 +192,7 @@ export function createOpenClawReadOnlyBridge(
   const config = OpenClawBridgeConfig.parse(rawConfig);
   const resolvedDeps: OpenClawBridgeRuntimeDeps = {
     checkpointStoreFactory: createOpenClawCheckpointStore,
+    webSocketFactory: (url) => new WebSocket(url),
     ...deps,
   };
   const checkpoints = resolvedDeps.checkpointStoreFactory(config);
@@ -202,6 +204,7 @@ export function createOpenClawReadOnlyBridge(
   let loop: Promise<void> | null = null;
   let interruptCurrentConnection: ((outcome: BridgeOutcome) => void) | null =
     null;
+  let activeConnectionId = 0;
   let metricsState: OpenClawBridgeMetrics = {
     connectionAttempts: 0,
     reconnectCount: 0,
@@ -239,7 +242,9 @@ export function createOpenClawReadOnlyBridge(
     const resumeSeq = resolveResumeSeq(resumeCheckpoint);
 
     return new Promise((resolve) => {
-      const socket = new WebSocket(config.wsUrl);
+      const connectionId = activeConnectionId + 1;
+      activeConnectionId = connectionId;
+      const socket = resolvedDeps.webSocketFactory(config.wsUrl);
       ws = socket;
       let authenticated = false;
       let settled = false;
@@ -249,18 +254,31 @@ export function createOpenClawReadOnlyBridge(
       let operatorId: string | null = null;
       let frameChain = Promise.resolve();
 
+      function isActiveConnection(): boolean {
+        return activeConnectionId === connectionId && ws === socket;
+      }
+
       function settle(outcome: BridgeOutcome): void {
         if (settled) {
           return;
         }
-        interruptCurrentConnection = null;
         settled = true;
+        if (isActiveConnection()) {
+          interruptCurrentConnection = null;
+          ws = null;
+          activeConnectionId = 0;
+        }
         resolve(outcome);
       }
-      interruptCurrentConnection = settle;
+      interruptCurrentConnection = (outcome) => {
+        if (!isActiveConnection()) {
+          return;
+        }
+        settle(outcome);
+      };
 
       const authTimeout = setTimeout(() => {
-        if (authenticated || settled) {
+        if (authenticated || settled || !isActiveConnection()) {
           return;
         }
         socket.close(WS_CLOSE_CODES.AUTH_TIMEOUT, "Auth timeout");
@@ -348,6 +366,9 @@ export function createOpenClawReadOnlyBridge(
       }
 
       socket.addEventListener("open", () => {
+        if (!isActiveConnection()) {
+          return;
+        }
         bridgeState = "authenticating";
         socket.send(
           JSON.stringify({
@@ -360,6 +381,9 @@ export function createOpenClawReadOnlyBridge(
 
       socket.addEventListener("message", (message) => {
         void (async () => {
+          if (!isActiveConnection()) {
+            return;
+          }
           const rawText = await decodeSocketPayload(message.data);
 
           let payload: unknown;
@@ -378,6 +402,9 @@ export function createOpenClawReadOnlyBridge(
           if (!authenticated) {
             const authenticatedResult = AuthenticatedFrame.safeParse(payload);
             if (authenticatedResult.success) {
+              if (!isActiveConnection()) {
+                return;
+              }
               clearTimeout(authTimeout);
               const authenticatedCredentialId =
                 authenticatedResult.data.credential.credentialId;
@@ -415,6 +442,9 @@ export function createOpenClawReadOnlyBridge(
 
             const authErrorResult = AuthErrorFrame.safeParse(payload);
             if (authErrorResult.success) {
+              if (!isActiveConnection()) {
+                return;
+              }
               clearTimeout(authTimeout);
               const error = AuthError.create(authErrorResult.data.message, {
                 code: authErrorResult.data.code,
@@ -459,7 +489,9 @@ export function createOpenClawReadOnlyBridge(
       socket.addEventListener("close", (event) => {
         clearTimeout(authTimeout);
         void frameChain.finally(() => {
-          ws = null;
+          if (!isActiveConnection()) {
+            return;
+          }
 
           if (stopped) {
             bridgeState = "closed";
@@ -618,13 +650,14 @@ export function createOpenClawReadOnlyBridge(
 
     async stop() {
       stopped = true;
+      const currentSocket = ws;
       interruptCurrentConnection?.({
         retryable: false,
         lastCheckpoint: null,
         error: ValidationError.create("bridge.state", "Bridge stopped"),
       });
-      if (ws !== null) {
-        ws.close(WS_CLOSE_CODES.NORMAL, "Bridge stopping");
+      if (currentSocket !== null) {
+        currentSocket.close(WS_CLOSE_CODES.NORMAL, "Bridge stopping");
       }
       await loop;
     },

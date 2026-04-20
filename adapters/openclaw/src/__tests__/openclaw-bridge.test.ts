@@ -29,6 +29,41 @@ interface ReplayFrame {
   readonly event: SignetEvent;
 }
 
+class FakeWebSocket extends EventTarget {
+  readonly sentFrames: string[] = [];
+  readonly closeCalls: Array<{ code: number; reason: string }> = [];
+
+  send(data: string): void {
+    this.sentFrames.push(data);
+  }
+
+  close(code = 1000, reason = ""): void {
+    this.closeCalls.push({ code, reason });
+  }
+
+  emitOpen(): void {
+    this.dispatchEvent(new Event("open"));
+  }
+
+  emitMessage(payload: unknown): void {
+    this.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify(payload),
+      }),
+    );
+  }
+
+  emitClose(code = 1000, reason = ""): void {
+    this.dispatchEvent(
+      new CloseEvent("close", {
+        code,
+        reason,
+        wasClean: true,
+      }),
+    );
+  }
+}
+
 function createReplayAwareServer(options?: {
   readonly initialFrames?: readonly ReplayFrame[];
   readonly authenticatedCredentialId?: string;
@@ -703,5 +738,108 @@ describe("OpenClaw read-only bridge", () => {
 
     await expectToSettle(bridge.stop(), "bridge.stop");
     await expectToSettle(server.stop(), "server.stop");
+  });
+
+  test("ignores close events from a stale socket after stop and restart", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
+    tempDirs.push(root);
+
+    const sockets: FakeWebSocket[] = [];
+    const bridge = createOpenClawReadOnlyBridge(
+      {
+        adapter: "openclaw",
+        credentialId: TEST_CREDENTIAL_ID,
+        wsUrl: "ws://bridge.test/v1/agent",
+        token: "test-token",
+        checkpointsDir: join(root, "checkpoints"),
+        deliveryMode: "local",
+        reconnect: {
+          enabled: true,
+          maxAttempts: 3,
+          baseDelayMs: 10,
+          maxDelayMs: 20,
+          jitter: false,
+        },
+      },
+      {
+        webSocketFactory() {
+          const socket = new FakeWebSocket();
+          sockets.push(socket);
+          return socket as unknown as WebSocket;
+        },
+      },
+    );
+
+    const firstStart = bridge.start();
+    await waitFor(() => sockets.length === 1, "first socket");
+    const firstSocket = sockets[0]!;
+    firstSocket.emitOpen();
+    firstSocket.emitMessage({
+      type: "authenticated",
+      connectionId: "conn_first",
+      credential: {
+        credentialId: TEST_CREDENTIAL_ID,
+        operatorId: TEST_OPERATOR_ID,
+        fingerprint: TEST_FINGERPRINT,
+        issuedAt: "2026-04-18T00:00:00.000Z",
+        expiresAt: "2026-04-19T00:00:00.000Z",
+      },
+      effectiveScopes: {
+        allow: ["stream-messages"],
+        deny: [],
+      },
+      resumedFromSeq: null,
+    });
+    expect((await firstStart).isOk()).toBe(true);
+
+    await expectToSettle(bridge.stop(), "bridge.stop");
+    expect(firstSocket.closeCalls).toEqual([
+      {
+        code: WS_CLOSE_CODES.NORMAL,
+        reason: "Bridge stopping",
+      },
+    ]);
+
+    const secondStart = bridge.start();
+    await waitFor(() => sockets.length === 2, "second socket");
+    const secondSocket = sockets[1]!;
+    secondSocket.emitOpen();
+    secondSocket.emitMessage({
+      type: "authenticated",
+      connectionId: "conn_second",
+      credential: {
+        credentialId: TEST_CREDENTIAL_ID,
+        operatorId: TEST_OPERATOR_ID,
+        fingerprint: TEST_FINGERPRINT,
+        issuedAt: "2026-04-18T00:00:00.000Z",
+        expiresAt: "2026-04-19T00:00:00.000Z",
+      },
+      effectiveScopes: {
+        allow: ["stream-messages"],
+        deny: [],
+      },
+      resumedFromSeq: null,
+    });
+    expect((await secondStart).isOk()).toBe(true);
+
+    firstSocket.emitClose(WS_CLOSE_CODES.NORMAL, "Bridge stopping");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(bridge.state).toBe("connected");
+
+    secondSocket.emitMessage({
+      seq: 1,
+      event: {
+        type: "heartbeat",
+        credentialId: TEST_CREDENTIAL_ID,
+        timestamp: "2026-04-18T00:00:01.000Z",
+      },
+    });
+
+    const delivery = await nextDelivery(bridge.deliveries);
+    expect(delivery.seq).toBe(1);
+    expect(bridge.metrics.deliveredCount).toBe(1);
+
+    await expectToSettle(bridge.stop(), "second bridge.stop");
+    secondSocket.emitClose(WS_CLOSE_CODES.NORMAL, "Bridge stopping");
   });
 });
