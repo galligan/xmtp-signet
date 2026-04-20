@@ -537,6 +537,56 @@ describe("OpenClaw read-only bridge", () => {
     await expectToSettle(server.stop(), "server.stop");
   });
 
+  test("does not reconnect on expired or policy-change credential closes", async () => {
+    for (const closeCase of [
+      {
+        code: WS_CLOSE_CODES.CREDENTIAL_EXPIRED,
+        reason: "Credential is expired",
+      },
+      {
+        code: WS_CLOSE_CODES.POLICY_CHANGE,
+        reason: "Credential is suspended",
+      },
+    ]) {
+      const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
+      tempDirs.push(root);
+
+      const server = createReplayAwareServer({
+        closeAfterAuth: closeCase,
+      });
+      const bridge = createOpenClawReadOnlyBridge({
+        adapter: "openclaw",
+        credentialId: TEST_CREDENTIAL_ID,
+        wsUrl: server.url,
+        token: "test-token",
+        checkpointsDir: join(root, "checkpoints"),
+        deliveryMode: "local",
+        reconnect: {
+          enabled: true,
+          maxAttempts: 3,
+          baseDelayMs: 10,
+          maxDelayMs: 20,
+          jitter: false,
+        },
+      });
+
+      const observedErrors: string[] = [];
+      bridge.onError((error) => {
+        observedErrors.push(error.message);
+      });
+
+      const startResult = await bridge.start();
+      expect(startResult.isOk()).toBe(true);
+
+      await waitFor(() => bridge.state === "closed", "bridge close");
+      expect(bridge.metrics.reconnectCount).toBe(0);
+      expect(observedErrors).toContain(closeCase.reason);
+
+      await expectToSettle(bridge.stop(), "bridge.stop");
+      await expectToSettle(server.stop(), "server.stop");
+    }
+  });
+
   test("closes cleanly when reconnect is disabled", async () => {
     const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
     tempDirs.push(root);
@@ -625,6 +675,45 @@ describe("OpenClaw read-only bridge", () => {
     );
 
     await expectToSettle(bridge.stop(), "bridge.stop");
+    await expectToSettle(server.stop(), "server.stop");
+  });
+
+  test("stop interrupts reconnect backoff immediately", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
+    tempDirs.push(root);
+
+    const server = createReplayAwareServer({
+      closeAfterAuth: {
+        code: WS_CLOSE_CODES.NORMAL,
+        reason: "transient disconnect",
+      },
+    });
+    const bridge = createOpenClawReadOnlyBridge({
+      adapter: "openclaw",
+      credentialId: TEST_CREDENTIAL_ID,
+      wsUrl: server.url,
+      token: "test-token",
+      checkpointsDir: join(root, "checkpoints"),
+      deliveryMode: "local",
+      reconnect: {
+        enabled: true,
+        maxAttempts: 3,
+        baseDelayMs: 5_000,
+        maxDelayMs: 5_000,
+        jitter: false,
+      },
+    });
+
+    const startResult = await bridge.start();
+    expect(startResult.isOk()).toBe(true);
+
+    await waitFor(() => bridge.state === "reconnecting", "bridge reconnecting");
+
+    const startedAt = Date.now();
+    await expectToSettle(bridge.stop(), "bridge.stop");
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(elapsedMs).toBeLessThan(500);
     await expectToSettle(server.stop(), "server.stop");
   });
 

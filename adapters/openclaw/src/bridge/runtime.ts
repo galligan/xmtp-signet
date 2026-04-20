@@ -81,6 +81,8 @@ interface EnvelopeStream extends AsyncIterable<OpenClawBridgeEnvelopeType> {
 const NON_RETRYABLE_CODES = new Set<number>([
   WS_CLOSE_CODES.AUTH_FAILED,
   WS_CLOSE_CODES.AUTH_TIMEOUT,
+  WS_CLOSE_CODES.CREDENTIAL_EXPIRED,
+  WS_CLOSE_CODES.POLICY_CHANGE,
   WS_CLOSE_CODES.CREDENTIAL_REVOKED,
   WS_CLOSE_CODES.PROTOCOL_ERROR,
 ]);
@@ -162,12 +164,6 @@ function reconnectDelay(
   return capped;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 async function decodeSocketPayload(data: unknown): Promise<string> {
   if (typeof data === "string") {
     return data;
@@ -204,6 +200,7 @@ export function createOpenClawReadOnlyBridge(
   let loop: Promise<void> | null = null;
   let interruptCurrentConnection: ((outcome: BridgeOutcome) => void) | null =
     null;
+  let interruptReconnectSleep: (() => void) | null = null;
   let activeConnectionId = 0;
   let metricsState: OpenClawBridgeMetrics = {
     connectionAttempts: 0,
@@ -620,7 +617,18 @@ export function createOpenClawReadOnlyBridge(
       bridgeState = "reconnecting";
       const delay = reconnectDelay(attempt, config.reconnect);
       attempt += 1;
-      await sleep(delay);
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          interruptReconnectSleep = null;
+          resolve();
+        }, delay);
+
+        interruptReconnectSleep = () => {
+          clearTimeout(timer);
+          interruptReconnectSleep = null;
+          resolve();
+        };
+      });
     }
 
     bridgeState = "closed";
@@ -651,6 +659,7 @@ export function createOpenClawReadOnlyBridge(
     async stop() {
       stopped = true;
       const currentSocket = ws;
+      interruptReconnectSleep?.();
       interruptCurrentConnection?.({
         retryable: false,
         lastCheckpoint: null,
