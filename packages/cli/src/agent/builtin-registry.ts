@@ -57,20 +57,40 @@ const openclawBinPath = resolveOpenClawPath([
   ),
 ]);
 
-const OPENCLAW_DEFINITION: BuiltinAgentAdapterDefinition = {
-  manifest: AdapterManifest.parse(
-    JSON.parse(readFileSync(openclawManifestPath, "utf-8")),
-  ),
-  command: "bun",
-  args: [openclawBinPath],
-};
+let builtinAgentAdapters: BuiltinAgentAdapterRegistry | null = null;
 
-const builtinAgentAdapters: BuiltinAgentAdapterRegistry = {
-  [OPENCLAW_DEFINITION.manifest.name]: OPENCLAW_DEFINITION,
-};
+function loadOpenClawDefinition(): BuiltinAgentAdapterDefinition | null {
+  if (!existsSync(openclawManifestPath) || !existsSync(openclawBinPath)) {
+    return null;
+  }
+
+  try {
+    return {
+      manifest: AdapterManifest.parse(
+        JSON.parse(readFileSync(openclawManifestPath, "utf-8")),
+      ),
+      command: "bun",
+      args: [openclawBinPath],
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** Returns the current built-in adapter registry. */
 export function getBuiltinAgentAdapters(): BuiltinAgentAdapterRegistry {
+  if (builtinAgentAdapters !== null) {
+    return builtinAgentAdapters;
+  }
+
+  const openclawDefinition = loadOpenClawDefinition();
+  builtinAgentAdapters =
+    openclawDefinition === null
+      ? {}
+      : {
+          [openclawDefinition.manifest.name]: openclawDefinition,
+        };
+
   return builtinAgentAdapters;
 }
 
@@ -78,7 +98,7 @@ export function getBuiltinAgentAdapters(): BuiltinAgentAdapterRegistry {
 export function getBuiltinAgentAdapter(
   name: string,
 ): BuiltinAgentAdapterDefinition | undefined {
-  return builtinAgentAdapters[name];
+  return getBuiltinAgentAdapters()[name];
 }
 
 /** Returns true when the built-in adapter manifest declares the given verb. */

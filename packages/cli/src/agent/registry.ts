@@ -37,7 +37,7 @@ export interface ResolveAgentAdapterDeps {
 
 const defaultDeps: ResolveAgentAdapterDeps = {
   readFile,
-  builtinRegistry: getBuiltinAgentAdapters(),
+  builtinRegistry: {},
 };
 
 function resolveAgainstConfigPath(configPath: string, target: string): string {
@@ -216,7 +216,7 @@ export async function resolveAgentAdapterCommand(
   const resolvedDeps: ResolveAgentAdapterDeps = {
     ...defaultDeps,
     ...deps,
-    builtinRegistry: deps.builtinRegistry ?? defaultDeps.builtinRegistry,
+    builtinRegistry: deps.builtinRegistry ?? getBuiltinAgentAdapters(),
   };
   const configuredAdapter = options.config.agent.adapters[options.adapterName];
 
