@@ -717,6 +717,74 @@ describe("OpenClaw read-only bridge", () => {
     await expectToSettle(server.stop(), "server.stop");
   });
 
+  test("stop settles start while checkpoint loading is still pending", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
+    tempDirs.push(root);
+
+    let checkpointLoadStarted = false;
+    let releaseCheckpointLoad: (() => void) | null = null;
+    const checkpointLoadGate = new Promise<void>((resolve) => {
+      releaseCheckpointLoad = resolve;
+    });
+    let webSocketFactoryCalls = 0;
+
+    const bridge = createOpenClawReadOnlyBridge(
+      {
+        adapter: "openclaw",
+        credentialId: TEST_CREDENTIAL_ID,
+        wsUrl: "ws://bridge.test/v1/agent",
+        token: "test-token",
+        checkpointsDir: join(root, "checkpoints"),
+        deliveryMode: "local",
+        reconnect: {
+          enabled: true,
+          maxAttempts: 3,
+          baseDelayMs: 10,
+          maxDelayMs: 20,
+          jitter: false,
+        },
+      },
+      {
+        checkpointStoreFactory(config) {
+          const base = createOpenClawCheckpointStore(config);
+          return {
+            ...base,
+            async loadForCredential(credentialId) {
+              checkpointLoadStarted = true;
+              await checkpointLoadGate;
+              return base.loadForCredential(credentialId);
+            },
+          };
+        },
+        webSocketFactory() {
+          webSocketFactoryCalls += 1;
+          throw new Error(
+            "webSocketFactory should not be called before checkpoint loading finishes",
+          );
+        },
+      },
+    );
+
+    const startPromise = bridge.start();
+    await waitFor(() => checkpointLoadStarted, "checkpoint load started");
+
+    const stopPromise = bridge.stop();
+    releaseCheckpointLoad?.();
+
+    await expectToSettle(startPromise, "bridge.start");
+    const startResult = await startPromise;
+    expect(startResult.isErr()).toBe(true);
+    if (startResult.isErr()) {
+      expect(startResult.error.message).toContain(
+        "stopped before authentication",
+      );
+    }
+
+    await expectToSettle(stopPromise, "bridge.stop");
+    expect(bridge.state).toBe("closed");
+    expect(webSocketFactoryCalls).toBe(0);
+  });
+
   test("can restart cleanly after a checkpoint persistence failure", async () => {
     const root = await mkdtemp(join(tmpdir(), "openclaw-bridge-"));
     tempDirs.push(root);

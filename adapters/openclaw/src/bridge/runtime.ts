@@ -631,6 +631,18 @@ export function createOpenClawReadOnlyBridge(
       });
     }
 
+    if (!initialResolved) {
+      initialResolved = true;
+      onInitialResult(
+        Result.err(
+          ValidationError.create(
+            "bridge.state",
+            "OpenClaw bridge stopped before authentication",
+          ),
+        ),
+      );
+    }
+
     bridgeState = "closed";
     deliveries.complete();
   }
