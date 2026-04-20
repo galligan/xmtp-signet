@@ -62,6 +62,9 @@ defaultTtlSeconds = 3600
 maxConcurrentPerOperator = 3
 actionExpirySeconds = 300
 
+[agent.adapters.openclaw]
+source = "builtin"
+
 [logging]
 level = "info"
 ```
@@ -148,6 +151,34 @@ not explicitly overridden.
 - `actionExpirySeconds`
 
 These defaults are what the init presets tune most aggressively.
+
+### `[agent]`
+
+The `[agent]` table groups harness and adapter configuration. Today that
+surface is centered on the adapter registry used by `xs agent <verb> <harness>`.
+
+### `[agent.adapters.<name>]`
+
+Each adapter entry is keyed by a lowercase slug such as `openclaw`.
+
+- `source = "builtin" | "external"`
+- `manifest` (required for `external`)
+- `command` (required for `external`)
+
+Built-in adapters are shipped with the repo and only need a `source = "builtin"`
+entry when you want to pin or explicitly enable one in config.
+
+External adapters are adopted by manifest plus process command:
+
+```toml
+[agent.adapters.custom-harness]
+source = "external"
+manifest = "./adapters/custom/adapter.toml"
+command = "./bin/custom-harness-adapter"
+```
+
+Relative `manifest` and `command` paths resolve relative to the active
+`config.toml`.
 
 ### `[logging]`
 
