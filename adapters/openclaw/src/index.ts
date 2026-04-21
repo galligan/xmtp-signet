@@ -6,6 +6,26 @@ export { listOpenClawArtifactFiles } from "./artifacts/index.js";
 export {
   OPENCLAW_BRIDGE_PHASE,
   isOpenClawBridgeReady,
+  OpenClawBridgeConfig,
+  OpenClawBridgeDeliveryMode,
+  OpenClawBridgeCheckpoint,
+  OpenClawBridgeEnvelope,
+  createOpenClawCheckpointStore,
+  createOpenClawBridgeEnvelope,
+  createOpenClawReadOnlyBridge,
+  inspectOpenClawRuntimePresence,
+  resolveOpenClawAdapterPaths,
+} from "./bridge/index.js";
+export type {
+  OpenClawAdapterPaths,
+  OpenClawBridgeConfigType,
+  OpenClawBridgeCheckpointType,
+  OpenClawCheckpointStore,
+  OpenClawBridgeEnvelopeType,
+  OpenClawReadOnlyBridge,
+  OpenClawBridgeState,
+  OpenClawBridgeMetrics,
+  OpenClawRuntimePresence,
 } from "./bridge/index.js";
 export { runOpenClawSetup } from "./setup/index.js";
 export { runOpenClawStatus } from "./status/index.js";
