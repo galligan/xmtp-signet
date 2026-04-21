@@ -75,7 +75,11 @@ export async function runResolvedAgentAdapter(
   let process: Bun.Subprocess;
   try {
     process = resolvedDeps.spawn(
-      [adapter.command, ...buildAdapterArgs(adapter, options)],
+      [
+        adapter.command,
+        ...(adapter.args ?? []),
+        ...buildAdapterArgs(adapter, options),
+      ],
       {
         stdout: "pipe",
         stderr: "pipe",

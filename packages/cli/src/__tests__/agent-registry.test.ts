@@ -225,7 +225,7 @@ describe("resolveAgentAdapterCommand", () => {
   test("returns not_found when no built-in or adopted adapter is available", async () => {
     const { configPath } = await makeConfigDir();
     const result = await resolveAgentAdapterCommand({
-      adapterName: "openclaw",
+      adapterName: "unknown-harness",
       verb: "setup",
       config: stubConfig(),
       configPath,
@@ -235,6 +235,8 @@ describe("resolveAgentAdapterCommand", () => {
     if (result.isOk()) return;
 
     expect(result.error.category).toBe("not_found");
-    expect(result.error.message).toContain("adapter 'openclaw' not found");
+    expect(result.error.message).toContain(
+      "adapter 'unknown-harness' not found",
+    );
   });
 });

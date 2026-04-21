@@ -1,0 +1,10 @@
+{
+  "name": "openclaw",
+  "source": "builtin",
+  "supports": ["setup", "status", "doctor"],
+  "entrypoints": {
+    "setup": "builtin:openclaw:setup",
+    "status": "builtin:openclaw:status",
+    "doctor": "builtin:openclaw:doctor"
+  }
+}

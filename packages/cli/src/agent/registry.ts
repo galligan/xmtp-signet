@@ -25,6 +25,7 @@ export interface ResolvedAgentAdapterCommand {
   readonly manifest: AdapterManifestType;
   readonly source: "builtin" | "external";
   readonly command: string;
+  readonly args?: readonly string[] | undefined;
   readonly cwd?: string | undefined;
 }
 
@@ -36,7 +37,7 @@ export interface ResolveAgentAdapterDeps {
 
 const defaultDeps: ResolveAgentAdapterDeps = {
   readFile,
-  builtinRegistry: getBuiltinAgentAdapters(),
+  builtinRegistry: {},
 };
 
 function resolveAgainstConfigPath(configPath: string, target: string): string {
@@ -197,6 +198,7 @@ function resolveBuiltinAdapter(
     manifest: builtin.manifest,
     source: "builtin",
     command: builtin.command,
+    ...(builtin.args !== undefined ? { args: builtin.args } : {}),
     ...(builtin.cwd !== undefined ? { cwd: builtin.cwd } : {}),
   });
 }
@@ -214,7 +216,7 @@ export async function resolveAgentAdapterCommand(
   const resolvedDeps: ResolveAgentAdapterDeps = {
     ...defaultDeps,
     ...deps,
-    builtinRegistry: deps.builtinRegistry ?? defaultDeps.builtinRegistry,
+    builtinRegistry: deps.builtinRegistry ?? getBuiltinAgentAdapters(),
   };
   const configuredAdapter = options.config.agent.adapters[options.adapterName];
 

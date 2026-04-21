@@ -15,6 +15,18 @@
         "typescript": "catalog:",
       },
     },
+    "adapters/openclaw": {
+      "name": "@xmtp/openclaw-adapter",
+      "version": "0.0.0",
+      "dependencies": {
+        "@xmtp/signet-schemas": "workspace:*",
+        "commander": "14.0.3",
+      },
+      "devDependencies": {
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/cli": {
       "name": "@xmtp/signet-cli",
       "version": "0.1.0",
@@ -23,6 +35,7 @@
         "xs": "src/bin.ts",
       },
       "dependencies": {
+        "@xmtp/openclaw-adapter": "workspace:*",
         "@xmtp/signet-contracts": "workspace:*",
         "@xmtp/signet-core": "workspace:*",
         "@xmtp/signet-keys": "workspace:*",
@@ -349,6 +362,8 @@
     "@xmtp/node-bindings": ["@xmtp/node-bindings@1.10.0", "", {}, "sha512-US/YvMP7RL1DkNeiZ75ZjEyvMwLIrEPn12dBj5h7lAesM2N5snwnstJ2NNk3LpW3kCNDdzwhe/G0ZSb0PhwNeg=="],
 
     "@xmtp/node-sdk": ["@xmtp/node-sdk@6.0.0", "", { "dependencies": { "@xmtp/content-type-primitives": "3.0.0", "@xmtp/node-bindings": "1.10.0" } }, "sha512-UMClg1+WkC3pfeHffJoZMYzhqsUa2wZpSJtIrpvBqUD+n1VYVQTfhTqGyaavVIPgITxjHBi/uMS/K18E4qDbPA=="],
+
+    "@xmtp/openclaw-adapter": ["@xmtp/openclaw-adapter@workspace:adapters/openclaw"],
 
     "@xmtp/signet-cli": ["@xmtp/signet-cli@workspace:packages/cli"],
 
