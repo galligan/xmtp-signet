@@ -39,6 +39,7 @@ function buildAdapterArgs(
     readonly verb: AdapterVerbType;
     readonly configPath: string;
     readonly json: boolean;
+    readonly extraArgs?: readonly string[] | undefined;
   },
 ): string[] {
   const entrypoint = adapter.manifest.entrypoints[options.verb];
@@ -57,6 +58,7 @@ function buildAdapterArgs(
     "--config",
     options.configPath,
     ...(options.json ? ["--json"] : []),
+    ...(options.extraArgs ?? []),
   ];
 }
 
@@ -67,6 +69,7 @@ export async function runResolvedAgentAdapter(
     readonly verb: AdapterVerbType;
     readonly configPath: string;
     readonly json: boolean;
+    readonly extraArgs?: readonly string[] | undefined;
   },
   deps: Partial<RunResolvedAgentAdapterDeps> = {},
 ): Promise<Result<AgentProcessResult, SignetError>> {

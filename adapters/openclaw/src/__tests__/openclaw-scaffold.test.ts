@@ -3,7 +3,6 @@ import {
   OPENCLAW_ADAPTER_MANIFEST,
   openclawAdapterDefinition,
   runOpenClawDoctor,
-  runOpenClawSetup,
   runOpenClawStatus,
 } from "../index.js";
 
@@ -27,9 +26,7 @@ describe("openclaw adapter scaffold", () => {
     expect(openclawAdapterDefinition.args[0]).toContain("bin.ts");
   });
 
-  test("returns structured stub outputs for setup, status, and doctor", () => {
-    expect(runOpenClawSetup().adapter).toBe("openclaw");
-    expect(runOpenClawSetup().status).toBe("missing");
+  test("returns structured outputs for status and doctor", () => {
     expect(runOpenClawStatus().details["phase"]).toBe("scaffold");
     expect(runOpenClawDoctor().details["phase"]).toBe("scaffold");
   });
