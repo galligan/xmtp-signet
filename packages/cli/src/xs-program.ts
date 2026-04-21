@@ -9,6 +9,7 @@
 import { Command } from "commander";
 import { createLifecycleCommands } from "./commands/lifecycle.js";
 import { createIdentityInitCommand } from "./commands/identity.js";
+import { createAgentCommands } from "./commands/xs-agent.js";
 import { createOperatorCommands } from "./commands/xs-operator.js";
 import { createCredentialCommands } from "./commands/xs-credential.js";
 import { createChatCommands } from "./commands/xs-chat.js";
@@ -83,6 +84,10 @@ export function createXsProgram(): Command {
   // --- operator ---
 
   program.addCommand(createOperatorCommands());
+
+  // --- agent ---
+
+  program.addCommand(createAgentCommands());
 
   // --- cred ---
 

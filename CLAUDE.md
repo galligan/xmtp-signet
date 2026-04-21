@@ -197,6 +197,7 @@ The `xs` command groups are:
 - `operator` — `create`, `list`, `info`, `rename`, `rm`
 - `cred` — `issue`, `list`, `info`, `revoke`, `update`
 - `inbox` — `create`, `list`, `info`, `rm`, `link`, `unlink`
+- `agent` — `setup`, `status`, `doctor`
 - `chat` — `create`, `list`, `info`, `update`, `sync`, `join`, `invite`,
   `update-profile`, `leave`, `rm`, plus `member` subgroup (`list`, `add`,
   `rm`, `promote`, `demote`)
