@@ -197,6 +197,35 @@ level = "debug"
     expect(config.logging.level).toBe("debug");
     expect(config.signet.env).toBe("dev");
     expect(config.ws.port).toBe(8393);
+    expect(config.agent.adapters).toEqual({});
+  });
+
+  test("adapter registry TOML parses correctly", async () => {
+    const tomlPath = join(tempDir, "adapter-config.toml");
+    await writeFile(
+      tomlPath,
+      `[agent.adapters.openclaw]
+source = "builtin"
+
+[agent.adapters.custom-harness]
+source = "external"
+manifest = "/tmp/custom-adapter.toml"
+command = "/usr/local/bin/custom-adapter"
+`,
+    );
+
+    const result = await loadConfig({ configPath: tomlPath });
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.agent.adapters).toEqual({
+      openclaw: { source: "builtin" },
+      "custom-harness": {
+        source: "external",
+        manifest: "/tmp/custom-adapter.toml",
+        command: "/usr/local/bin/custom-adapter",
+      },
+    });
   });
 
   test("unknown legacy TOML section is rejected", async () => {

@@ -70,6 +70,34 @@ export {
   type OperatorRecordType,
 } from "./operator.js";
 
+// Adapters
+export {
+  AdapterName,
+  type AdapterNameType,
+  AdapterSource,
+  type AdapterSourceType,
+  AdapterVerb,
+  type AdapterVerbType,
+  AdapterEntrypoints,
+  type AdapterEntrypointsType,
+  AdapterManifest,
+  type AdapterManifestType,
+  BuiltinAdapterConfig,
+  type BuiltinAdapterConfigType,
+  ExternalAdapterConfig,
+  type ExternalAdapterConfigType,
+  AgentAdapterConfig,
+  type AgentAdapterConfigType,
+  AgentAdaptersConfig,
+  type AgentAdaptersConfigType,
+  AdapterCommandStatus,
+  type AdapterCommandStatusType,
+  AdapterSetupResult,
+  type AdapterSetupResultType,
+  AdapterStatusResult,
+  type AdapterStatusResultType,
+} from "./adapter.js";
+
 // Policies
 export {
   PolicyConfig,

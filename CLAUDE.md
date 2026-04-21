@@ -31,6 +31,7 @@ Current center of gravity:
 ## Project structure
 
 - `packages/` — libraries, source in `src/`, tests in `src/__tests__/`
+- `adapters/` — harness adapters and bridge runtimes layered on top of signet
 - `signet-signer/` — Swift CLI for Secure Enclave key operations
 - `.agents/docs/` — PRD and long-form docs
 - `.agents/plans/` — v1 plans, execution docs, design decisions

@@ -27,6 +27,7 @@ describe("CliConfigSchema", () => {
     expect(config.credentials.actionExpirySeconds).toBe(300);
     expect(config.logging.level).toBe("info");
     expect(config.logging.auditLogPath).toBeUndefined();
+    expect(config.agent.adapters).toEqual({});
   });
 
   test("signet section defaults correctly", () => {
@@ -169,6 +170,46 @@ describe("CliConfigSchema", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.admin.socketPath).toBe("/tmp/custom.sock");
+  });
+
+  test("accepts built-in adapter registry entries", () => {
+    const result = CliConfigSchema.safeParse({
+      agent: {
+        adapters: {
+          openclaw: { source: "builtin" },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("accepts external adapter registry entries", () => {
+    const result = CliConfigSchema.safeParse({
+      agent: {
+        adapters: {
+          "custom-harness": {
+            source: "external",
+            manifest: "/tmp/custom-adapter.toml",
+            command: "/usr/local/bin/custom-adapter",
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("rejects incomplete external adapter registry entries", () => {
+    const result = CliConfigSchema.safeParse({
+      agent: {
+        adapters: {
+          "custom-harness": {
+            source: "external",
+            manifest: "/tmp/custom-adapter.toml",
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
   });
 });
 
