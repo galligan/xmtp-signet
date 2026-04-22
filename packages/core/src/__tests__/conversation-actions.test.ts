@@ -339,6 +339,7 @@ describe("conversation actions", () => {
       client,
       groupIds: new Set(),
     };
+    await identityStore.setInboxId(identity.id, client.inboxId);
     managedClients.set(identity.id, managed);
     return managed;
   }
@@ -398,6 +399,32 @@ describe("conversation actions", () => {
       if (Result.isOk(result)) {
         const val = result.value as { memberCount: number };
         expect(val.memberCount).toBe(1);
+      }
+    });
+
+    test("creates a group when creator is selected by inbox ID", async () => {
+      const managed = await seedIdentity("agent-2");
+      setupDeps();
+
+      const actions = createConversationActions(deps);
+      const createAction = actions.find((a) => a.id === "chat.create");
+
+      const result = await createAction!.handler(
+        {
+          memberInboxIds: ["inbox-peer-1"],
+          creatorIdentityLabel: managed.inboxId,
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        const val = result.value as {
+          creatorInboxId: string;
+          memberCount: number;
+        };
+        expect(val.creatorInboxId).toBe(managed.inboxId);
+        expect(val.memberCount).toBe(2);
       }
     });
 

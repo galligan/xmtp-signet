@@ -6,6 +6,7 @@ import type { SignetError } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
 import type { ConsentEntityType, ConsentState } from "./xmtp-client-factory.js";
+import { resolveIdentitySelector } from "./identity-selector.js";
 
 /** Zod schema for consent entity type. */
 const ConsentEntityTypeSchema = z.enum(["inbox_id", "group_id"]);
@@ -25,40 +26,6 @@ export interface ConsentActionDeps {
   ) => ManagedClient | undefined;
 }
 
-/**
- * Resolve an identity by label, or fall back to the first identity
- * in the store when no label is provided.
- */
-async function resolveIdentity(
-  identityStore: SqliteIdentityStore,
-  label: string | undefined,
-): Promise<
-  Result<{ identityId: string; inboxId: string | null }, SignetError>
-> {
-  if (label) {
-    const identity = await identityStore.getByLabel(label);
-    if (!identity) {
-      return Result.err(NotFoundError.create("identity", label) as SignetError);
-    }
-    return Result.ok({
-      identityId: identity.id,
-      inboxId: identity.inboxId,
-    });
-  }
-
-  const identities = await identityStore.list();
-  const first = identities[0];
-  if (!first) {
-    return Result.err(
-      NotFoundError.create("identity", "(none)") as SignetError,
-    );
-  }
-  return Result.ok({
-    identityId: first.id,
-    inboxId: first.inboxId,
-  });
-}
-
 /** Resolve a managed client, preferring group ownership when applicable. */
 async function resolveManagedClient(
   deps: ConsentActionDeps,
@@ -67,7 +34,10 @@ async function resolveManagedClient(
   entity: string,
 ): Promise<Result<ManagedClient, SignetError>> {
   if (identityLabel) {
-    const resolved = await resolveIdentity(deps.identityStore, identityLabel);
+    const resolved = await resolveIdentitySelector(
+      deps.identityStore,
+      identityLabel,
+    );
     if (Result.isError(resolved)) return resolved;
 
     const managed = deps.getManagedClient(resolved.value.identityId);
@@ -90,7 +60,7 @@ async function resolveManagedClient(
     }
   }
 
-  const resolved = await resolveIdentity(deps.identityStore, undefined);
+  const resolved = await resolveIdentitySelector(deps.identityStore, undefined);
   if (Result.isError(resolved)) return resolved;
 
   const managed = deps.getManagedClient(resolved.value.identityId);
