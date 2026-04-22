@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { encodeReadReceipt, encodeText } from "@xmtp/node-sdk";
+import { encodeText } from "@xmtp/node-sdk";
 import type { SignetError } from "@xmtp/signet-schemas";
 import {
   InternalError,
@@ -106,7 +106,7 @@ function isReplyContent(content: unknown): content is {
 
 function isReactionContent(content: unknown): content is {
   reference: string;
-  referenceInboxId: string;
+  referenceInboxId?: string;
   action: "added" | "removed";
   content: string;
   schema: "unicode" | "shortcode" | "custom";
@@ -120,7 +120,8 @@ function isReactionContent(content: unknown): content is {
   const schema = record["schema"];
   return (
     typeof record["reference"] === "string" &&
-    typeof record["referenceInboxId"] === "string" &&
+    (record["referenceInboxId"] === undefined ||
+      typeof record["referenceInboxId"] === "string") &&
     typeof record["content"] === "string" &&
     (action === "added" || action === "removed") &&
     (schema === "unicode" || schema === "shortcode" || schema === "custom")
@@ -208,17 +209,10 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
               ),
             );
           }
-          if (typeof group.sendReply !== "function") {
-            return Result.err(
-              InternalError.create("SDK group does not support reply content", {
-                groupId,
-              }),
-            );
-          }
 
           return wrapSdkCall(
             async () =>
-              group.sendReply!({
+              group.sendReply({
                 reference: content.reference,
                 ...(content.referenceInboxId
                   ? { referenceInboxId: content.referenceInboxId }
@@ -237,31 +231,13 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
             return Result.err(
               ValidationError.create(
                 "content",
-                "Reaction messages require reference, referenceInboxId, action, content, and schema fields",
+                "Reaction messages require reference, action, content, and schema fields",
               ),
             );
           }
 
           return wrapSdkCall(
-            async () =>
-              group.send({
-                type: {
-                  authorityId: "xmtp.org",
-                  typeId: "reaction",
-                  versionMajor: 1,
-                  versionMinor: 0,
-                },
-                parameters: {},
-                content: new TextEncoder().encode(
-                  JSON.stringify({
-                    action: content.action,
-                    reference: content.reference,
-                    referenceInboxId: content.referenceInboxId,
-                    schema: content.schema,
-                    content: content.content,
-                  }),
-                ),
-              }),
+            async () => group.sendReaction(content),
             "sendMessage",
           );
         }
@@ -271,7 +247,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
           contentType === "xmtp.org/readReceipt:1.0"
         ) {
           return wrapSdkCall(
-            async () => group.send(encodeReadReceipt({})),
+            async () => group.sendReadReceipt(),
             "sendMessage",
           );
         }

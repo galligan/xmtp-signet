@@ -55,12 +55,18 @@ function resolveMessageId(
   return networkId ?? messageId;
 }
 
-function resolveReferencedMessage(
+function resolveMessageReference(
   client: ManagedClient["client"],
   idMappings: IdMappingStore | undefined,
   chatId: string,
   messageId: string,
-): Result<XmtpDecodedMessage, SignetError> {
+): Result<
+  {
+    messageId: string;
+    senderInboxId?: string;
+  },
+  SignetError
+> {
   const resolvedMessageId = resolveMessageId(idMappings, messageId);
   const lookupResult = client.getMessageById(resolvedMessageId);
   if (Result.isError(lookupResult)) {
@@ -69,9 +75,9 @@ function resolveReferencedMessage(
 
   const message = lookupResult.value;
   if (!message) {
-    return Result.err(
-      NotFoundError.create("message", messageId) as SignetError,
-    );
+    return Result.ok({
+      messageId: resolvedMessageId,
+    });
   }
 
   const expectedGroupId = resolveGroupId(idMappings, chatId);
@@ -81,7 +87,10 @@ function resolveReferencedMessage(
     );
   }
 
-  return Result.ok(message);
+  return Result.ok({
+    messageId: message.messageId,
+    senderInboxId: message.senderInboxId,
+  });
 }
 
 /**
@@ -479,7 +488,7 @@ export function createMessageActions(
       }
 
       const groupId = resolveGroupId(deps.idMappings, input.chatId);
-      const referenceMessage = resolveReferencedMessage(
+      const referenceMessage = resolveMessageReference(
         managed.client,
         deps.idMappings,
         input.chatId,
@@ -492,7 +501,9 @@ export function createMessageActions(
         {
           text: input.text,
           reference: referenceMessage.value.messageId,
-          referenceInboxId: referenceMessage.value.senderInboxId,
+          ...(referenceMessage.value.senderInboxId
+            ? { referenceInboxId: referenceMessage.value.senderInboxId }
+            : {}),
         },
         "reply",
       );
@@ -552,7 +563,7 @@ export function createMessageActions(
       }
 
       const groupId = resolveGroupId(deps.idMappings, input.chatId);
-      const referenceMessage = resolveReferencedMessage(
+      const referenceMessage = resolveMessageReference(
         managed.client,
         deps.idMappings,
         input.chatId,
@@ -564,7 +575,9 @@ export function createMessageActions(
         groupId,
         {
           reference: referenceMessage.value.messageId,
-          referenceInboxId: referenceMessage.value.senderInboxId,
+          ...(referenceMessage.value.senderInboxId
+            ? { referenceInboxId: referenceMessage.value.senderInboxId }
+            : {}),
           action: "added",
           content: input.reaction,
           schema: "unicode",

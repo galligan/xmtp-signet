@@ -877,6 +877,42 @@ describe("message actions", () => {
         referenceInboxId: "inbox-a",
       });
     });
+
+    test("allows replies when the referenced message is not cached locally", async () => {
+      const managed = await seedIdentity("replier", {
+        sentMessageId: "msg-reply-3",
+      });
+      setupDeps();
+
+      const actions = createMessageActions(deps);
+      const replyAction = actions.find((a) => a.id === "message.reply");
+
+      const result = await replyAction!.handler(
+        {
+          chatId: "g1",
+          messageId: "msg-remote-only",
+          text: "Reply without cache",
+          identityLabel: "replier",
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+
+      const sendCalls = (
+        managed.client as unknown as {
+          _sendCalls: {
+            groupId: string;
+            content: unknown;
+            contentType?: string;
+          }[];
+        }
+      )._sendCalls;
+      expect(sendCalls[0]!.content).toEqual({
+        text: "Reply without cache",
+        reference: "msg-remote-only",
+      });
+    });
   });
 
   describe("message.react", () => {
@@ -969,6 +1005,44 @@ describe("message actions", () => {
         referenceInboxId: "inbox-a",
         action: "added",
         content: "🎉",
+        schema: "unicode",
+      });
+    });
+
+    test("allows reactions when the referenced message is not cached locally", async () => {
+      const managed = await seedIdentity("reactor", {
+        sentMessageId: "msg-react-3",
+      });
+      setupDeps();
+
+      const actions = createMessageActions(deps);
+      const reactAction = actions.find((a) => a.id === "message.react");
+
+      const result = await reactAction!.handler(
+        {
+          chatId: "g1",
+          messageId: "msg-remote-only",
+          reaction: "👍",
+          identityLabel: "reactor",
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+
+      const sendCalls = (
+        managed.client as unknown as {
+          _sendCalls: {
+            groupId: string;
+            content: unknown;
+            contentType?: string;
+          }[];
+        }
+      )._sendCalls;
+      expect(sendCalls[0]!.content).toEqual({
+        reference: "msg-remote-only",
+        action: "added",
+        content: "👍",
         schema: "unicode",
       });
     });

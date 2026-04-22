@@ -80,6 +80,8 @@ export function createMockGroup(
     sync: async () => {},
     sendText: async (_text: string) => `msg-${Date.now()}`,
     send: async (_encoded: unknown) => `msg-${Date.now()}`,
+    sendReaction: async (_reaction) => `msg-${Date.now()}`,
+    sendReadReceipt: async () => `msg-${Date.now()}`,
     sendReply: async (_reply) => `msg-${Date.now()}`,
     addMembers: async (_inboxIds: string[]) => {},
     removeMembers: async (_inboxIds: string[]) => {},

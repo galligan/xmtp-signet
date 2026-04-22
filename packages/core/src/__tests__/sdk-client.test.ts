@@ -146,11 +146,11 @@ describe("createSdkClient", () => {
       }
     });
 
-    test("encodes reaction content before sending", async () => {
-      let capturedPayload: unknown = null;
+    test("uses the SDK reaction helper", async () => {
+      let capturedReaction: unknown = null;
       const group = createMockGroup({ id: "g1" });
-      group.send = async (encoded: unknown) => {
-        capturedPayload = encoded;
+      group.sendReaction = async (reaction) => {
+        capturedReaction = reaction;
         return "msg-id-reaction";
       };
       const native = createMockSdkNativeClient({ groups: [group] });
@@ -172,19 +172,20 @@ describe("createSdkClient", () => {
       if (result.isOk()) {
         expect(result.value).toBe("msg-id-reaction");
       }
-      expect(capturedPayload).not.toEqual({
+      expect(capturedReaction).toEqual({
         reference: "msg-aaa",
+        referenceInboxId: "inbox-original",
         action: "added",
         content: "👍",
         schema: "unicode",
       });
     });
 
-    test("encodes read receipts before sending", async () => {
-      let capturedPayload: unknown = null;
+    test("uses the SDK read-receipt helper", async () => {
+      let readReceiptCalled = false;
       const group = createMockGroup({ id: "g1" });
-      group.send = async (encoded: unknown) => {
-        capturedPayload = encoded;
+      group.sendReadReceipt = async () => {
+        readReceiptCalled = true;
         return "msg-id-read-receipt";
       };
       const native = createMockSdkNativeClient({ groups: [group] });
@@ -196,7 +197,7 @@ describe("createSdkClient", () => {
       if (result.isOk()) {
         expect(result.value).toBe("msg-id-read-receipt");
       }
-      expect(capturedPayload).not.toEqual({});
+      expect(readReceiptCalled).toBe(true);
     });
   });
 
