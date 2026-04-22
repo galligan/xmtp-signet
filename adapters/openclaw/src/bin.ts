@@ -7,10 +7,7 @@ import {
   InternalError,
   type SignetError,
 } from "@xmtp/signet-schemas";
-import { runOpenClawDoctor } from "./doctor/index.js";
 import { formatAdapterOutput } from "./output.js";
-import { runOpenClawSetup } from "./setup/index.js";
-import { runOpenClawStatus } from "./status/index.js";
 function exitCodeFromCategory(category: SignetError["category"]): number {
   const meta = ERROR_CATEGORY_META[category];
   return meta?.exitCode ?? ERROR_CATEGORY_META.internal.exitCode;
@@ -170,16 +167,22 @@ const program = new Command()
   .description("Process-backed OpenClaw adapter for xmtp-signet");
 
 addVerb(program, "setup", (opts) =>
-  runOpenClawSetup({
-    configPath: opts.config,
-    force: opts.force,
-  }),
+  import("./setup/index.js").then(({ runOpenClawSetup }) =>
+    runOpenClawSetup({
+      configPath: opts.config,
+      force: opts.force,
+    }),
+  ),
 );
 addVerb(program, "status", (opts) =>
-  runOpenClawStatus({ configPath: opts.config }),
+  import("./status/index.js").then(({ runOpenClawStatus }) =>
+    runOpenClawStatus({ configPath: opts.config }),
+  ),
 );
 addVerb(program, "doctor", (opts) =>
-  runOpenClawDoctor({ configPath: opts.config }),
+  import("./doctor/index.js").then(({ runOpenClawDoctor }) =>
+    runOpenClawDoctor({ configPath: opts.config }),
+  ),
 );
 
 if (import.meta.main) {

@@ -2,7 +2,10 @@ import { access, mkdir, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { join } from "node:path";
 import { Result } from "better-result";
-import type { AdminClient, DaemonStatus } from "@xmtp/signet-cli";
+import type {
+  AdminClient,
+  DaemonStatus,
+} from "@xmtp/signet-cli/adapter-support";
 import {
   AdapterSetupResult,
   type SignetError,

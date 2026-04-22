@@ -3,7 +3,11 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Result } from "better-result";
-import type { AdminClient, CliConfig, ResolvedPaths } from "@xmtp/signet-cli";
+import type {
+  AdminClient,
+  CliConfig,
+  ResolvedPaths,
+} from "@xmtp/signet-cli/adapter-support";
 import type {
   OperatorRecordType,
   PolicyRecordType,
