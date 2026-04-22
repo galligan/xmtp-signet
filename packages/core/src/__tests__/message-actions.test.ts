@@ -783,6 +783,7 @@ describe("message actions", () => {
     test("sends reply content type with reference", async () => {
       const managed = await seedIdentity("replier", {
         sentMessageId: "msg-reply-1",
+        messages: sampleMessages,
       });
       setupDeps();
 
@@ -827,12 +828,14 @@ describe("message actions", () => {
       expect(sendCalls[0]!.content).toEqual({
         text: "Reply text",
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
       });
     });
 
     test("resolves msg_ local ID to network ID in reference", async () => {
       const managed = await seedIdentity("replier", {
         sentMessageId: "msg-reply-2",
+        messages: sampleMessages,
       });
       idMappings.set("msg-aaa", "msg_0123456789abcdef", "message");
       setupDeps();
@@ -871,6 +874,7 @@ describe("message actions", () => {
       expect(sendCalls[0]!.content).toEqual({
         text: "Reply text",
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
       });
     });
   });
@@ -879,6 +883,7 @@ describe("message actions", () => {
     test("sends reaction content type with reference", async () => {
       const managed = await seedIdentity("reactor", {
         sentMessageId: "msg-react-1",
+        messages: sampleMessages,
       });
       setupDeps();
 
@@ -922,6 +927,7 @@ describe("message actions", () => {
       expect(sendCalls[0]!.contentType).toBe("reaction");
       expect(sendCalls[0]!.content).toEqual({
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
         action: "added",
         content: "👍",
         schema: "unicode",
@@ -931,6 +937,7 @@ describe("message actions", () => {
     test("resolves msg_ local ID to network ID in reference", async () => {
       const managed = await seedIdentity("reactor", {
         sentMessageId: "msg-react-2",
+        messages: sampleMessages,
       });
       idMappings.set("msg-aaa", "msg_0123456789abcdef", "message");
       setupDeps();
@@ -959,6 +966,7 @@ describe("message actions", () => {
       )._sendCalls;
       expect(sendCalls[0]!.content).toEqual({
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
         action: "added",
         content: "🎉",
         schema: "unicode",

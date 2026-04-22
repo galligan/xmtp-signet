@@ -109,6 +109,95 @@ describe("createSdkClient", () => {
       }
       expect(capturedPayload).toBe(customEncoded);
     });
+
+    test("encodes reply content with the SDK reply helper", async () => {
+      let capturedReply: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.sendReply = async (reply) => {
+        capturedReply = reply;
+        return "msg-id-reply";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.sendMessage(
+        "g1",
+        {
+          reference: "msg-aaa",
+          referenceInboxId: "inbox-original",
+          text: "Reply text",
+        },
+        "reply",
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-reply");
+      }
+      expect(capturedReply).toMatchObject({
+        reference: "msg-aaa",
+        referenceInboxId: "inbox-original",
+      });
+      expect(capturedReply).not.toBeNull();
+      if (capturedReply && typeof capturedReply === "object") {
+        expect((capturedReply as { content?: unknown }).content).not.toBe(
+          "Reply text",
+        );
+      }
+    });
+
+    test("encodes reaction content before sending", async () => {
+      let capturedPayload: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.send = async (encoded: unknown) => {
+        capturedPayload = encoded;
+        return "msg-id-reaction";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.sendMessage(
+        "g1",
+        {
+          reference: "msg-aaa",
+          referenceInboxId: "inbox-original",
+          action: "added",
+          content: "👍",
+          schema: "unicode",
+        },
+        "reaction",
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-reaction");
+      }
+      expect(capturedPayload).not.toEqual({
+        reference: "msg-aaa",
+        action: "added",
+        content: "👍",
+        schema: "unicode",
+      });
+    });
+
+    test("encodes read receipts before sending", async () => {
+      let capturedPayload: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.send = async (encoded: unknown) => {
+        capturedPayload = encoded;
+        return "msg-id-read-receipt";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.sendMessage("g1", {}, "readReceipt");
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-read-receipt");
+      }
+      expect(capturedPayload).not.toEqual({});
+    });
   });
 
   describe("syncAll", () => {

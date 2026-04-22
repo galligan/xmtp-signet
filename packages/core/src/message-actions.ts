@@ -55,6 +55,35 @@ function resolveMessageId(
   return networkId ?? messageId;
 }
 
+function resolveReferencedMessage(
+  client: ManagedClient["client"],
+  idMappings: IdMappingStore | undefined,
+  chatId: string,
+  messageId: string,
+): Result<XmtpDecodedMessage, SignetError> {
+  const resolvedMessageId = resolveMessageId(idMappings, messageId);
+  const lookupResult = client.getMessageById(resolvedMessageId);
+  if (Result.isError(lookupResult)) {
+    return lookupResult;
+  }
+
+  const message = lookupResult.value;
+  if (!message) {
+    return Result.err(
+      NotFoundError.create("message", messageId) as SignetError,
+    );
+  }
+
+  const expectedGroupId = resolveGroupId(idMappings, chatId);
+  if (message.groupId !== expectedGroupId) {
+    return Result.err(
+      NotFoundError.create("message", messageId) as SignetError,
+    );
+  }
+
+  return Result.ok(message);
+}
+
 /**
  * Compute effective scopes from credential config allow/deny.
  * Deny always wins.
@@ -450,10 +479,21 @@ export function createMessageActions(
       }
 
       const groupId = resolveGroupId(deps.idMappings, input.chatId);
-      const resolvedMsgId = resolveMessageId(deps.idMappings, input.messageId);
+      const referenceMessage = resolveReferencedMessage(
+        managed.client,
+        deps.idMappings,
+        input.chatId,
+        input.messageId,
+      );
+      if (Result.isError(referenceMessage)) return referenceMessage;
+
       const sendResult = await managed.client.sendMessage(
         groupId,
-        { text: input.text, reference: resolvedMsgId },
+        {
+          text: input.text,
+          reference: referenceMessage.value.messageId,
+          referenceInboxId: referenceMessage.value.senderInboxId,
+        },
         "reply",
       );
       if (Result.isError(sendResult)) return sendResult;
@@ -512,11 +552,19 @@ export function createMessageActions(
       }
 
       const groupId = resolveGroupId(deps.idMappings, input.chatId);
-      const resolvedMsgId = resolveMessageId(deps.idMappings, input.messageId);
+      const referenceMessage = resolveReferencedMessage(
+        managed.client,
+        deps.idMappings,
+        input.chatId,
+        input.messageId,
+      );
+      if (Result.isError(referenceMessage)) return referenceMessage;
+
       const sendResult = await managed.client.sendMessage(
         groupId,
         {
-          reference: resolvedMsgId,
+          reference: referenceMessage.value.messageId,
+          referenceInboxId: referenceMessage.value.senderInboxId,
           action: "added",
           content: input.reaction,
           schema: "unicode",

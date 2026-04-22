@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { encodeReadReceipt, encodeText } from "@xmtp/node-sdk";
 import type { SignetError } from "@xmtp/signet-schemas";
 import {
   InternalError,
@@ -85,6 +86,47 @@ function resolveTextContent(content: unknown): string {
   return JSON.stringify(content);
 }
 
+function isReplyContent(content: unknown): content is {
+  reference: string;
+  text: string;
+  referenceInboxId?: string;
+} {
+  if (typeof content !== "object" || content === null) {
+    return false;
+  }
+
+  const record = content as Record<string, unknown>;
+  return (
+    typeof record["reference"] === "string" &&
+    typeof record["text"] === "string" &&
+    (record["referenceInboxId"] === undefined ||
+      typeof record["referenceInboxId"] === "string")
+  );
+}
+
+function isReactionContent(content: unknown): content is {
+  reference: string;
+  referenceInboxId: string;
+  action: "added" | "removed";
+  content: string;
+  schema: "unicode" | "shortcode" | "custom";
+} {
+  if (typeof content !== "object" || content === null) {
+    return false;
+  }
+
+  const record = content as Record<string, unknown>;
+  const action = record["action"];
+  const schema = record["schema"];
+  return (
+    typeof record["reference"] === "string" &&
+    typeof record["referenceInboxId"] === "string" &&
+    typeof record["content"] === "string" &&
+    (action === "added" || action === "removed") &&
+    (schema === "unicode" || schema === "shortcode" || schema === "custom")
+  );
+}
+
 /** Map our consent entity types to SDK enum string equivalents. */
 function toSdkConsentEntityType(
   entityType: ConsentEntityType,
@@ -156,6 +198,84 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
         ) {
           return wrapSdkCall(async () => group.send(content), "sendMessage");
         }
+
+        if (contentType === "reply" || contentType === "xmtp.org/reply:1.0") {
+          if (!isReplyContent(content)) {
+            return Result.err(
+              ValidationError.create(
+                "content",
+                "Reply messages require text and reference fields",
+              ),
+            );
+          }
+          if (typeof group.sendReply !== "function") {
+            return Result.err(
+              InternalError.create("SDK group does not support reply content", {
+                groupId,
+              }),
+            );
+          }
+
+          return wrapSdkCall(
+            async () =>
+              group.sendReply!({
+                reference: content.reference,
+                ...(content.referenceInboxId
+                  ? { referenceInboxId: content.referenceInboxId }
+                  : {}),
+                content: encodeText(content.text),
+              }),
+            "sendMessage",
+          );
+        }
+
+        if (
+          contentType === "reaction" ||
+          contentType === "xmtp.org/reaction:1.0"
+        ) {
+          if (!isReactionContent(content)) {
+            return Result.err(
+              ValidationError.create(
+                "content",
+                "Reaction messages require reference, referenceInboxId, action, content, and schema fields",
+              ),
+            );
+          }
+
+          return wrapSdkCall(
+            async () =>
+              group.send({
+                type: {
+                  authorityId: "xmtp.org",
+                  typeId: "reaction",
+                  versionMajor: 1,
+                  versionMinor: 0,
+                },
+                parameters: {},
+                content: new TextEncoder().encode(
+                  JSON.stringify({
+                    action: content.action,
+                    reference: content.reference,
+                    referenceInboxId: content.referenceInboxId,
+                    schema: content.schema,
+                    content: content.content,
+                  }),
+                ),
+              }),
+            "sendMessage",
+          );
+        }
+
+        if (
+          contentType === "readReceipt" ||
+          contentType === "xmtp.org/readReceipt:1.0"
+        ) {
+          return wrapSdkCall(
+            async () => group.send(encodeReadReceipt({})),
+            "sendMessage",
+          );
+        }
+
         // Parse "authority/type:major.minor" format
         const slashIdx = contentType.indexOf("/");
         const colonIdx = contentType.indexOf(":");
