@@ -75,6 +75,29 @@ export class SqliteIdentityStore {
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_label ON identities(label)",
       );
     }
+
+    const duplicateInbox = this.#db
+      .prepare(
+        `
+          SELECT inbox_id
+          FROM identities
+          WHERE inbox_id IS NOT NULL
+          GROUP BY inbox_id
+          HAVING COUNT(*) > 1
+          LIMIT 1
+        `,
+      )
+      .get() as { inbox_id: string } | null;
+
+    if (duplicateInbox === null) {
+      this.#db.run(
+        `
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_inbox_id
+          ON identities(inbox_id)
+          WHERE inbox_id IS NOT NULL
+        `,
+      );
+    }
   }
 
   /** Create a new identity with fresh key material. */
@@ -135,7 +158,9 @@ export class SqliteIdentityStore {
   /** Look up an identity by its XMTP inbox ID. */
   async getByInboxId(inboxId: string): Promise<AgentIdentity | null> {
     const row = this.#db
-      .prepare("SELECT * FROM identities WHERE inbox_id = ?")
+      .prepare(
+        "SELECT * FROM identities WHERE inbox_id = ? ORDER BY created_at ASC LIMIT 1",
+      )
       .get(inboxId) as IdentityRow | null;
     return row ? rowToIdentity(row) : null;
   }
@@ -152,15 +177,25 @@ export class SqliteIdentityStore {
   async setInboxId(
     id: string,
     inboxId: string,
-  ): Promise<Result<AgentIdentity, NotFoundError>> {
+  ): Promise<Result<AgentIdentity, NotFoundError | InternalError>> {
     const existing = await this.getById(id);
     if (existing === null) {
       return Result.err(NotFoundError.create("identity", id));
     }
 
-    this.#db
-      .prepare("UPDATE identities SET inbox_id = ? WHERE id = ?")
-      .run(inboxId, id);
+    try {
+      this.#db
+        .prepare("UPDATE identities SET inbox_id = ? WHERE id = ?")
+        .run(inboxId, id);
+    } catch (cause) {
+      return Result.err(
+        InternalError.create("Failed to persist inbox ID", {
+          identityId: id,
+          inboxId,
+          cause: String(cause),
+        }),
+      );
+    }
 
     return Result.ok({
       ...existing,

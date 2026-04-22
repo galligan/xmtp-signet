@@ -1,4 +1,5 @@
 import { describe, expect, test, beforeEach } from "bun:test";
+import { Result } from "better-result";
 import { SqliteIdentityStore } from "../identity-store.js";
 
 let store: SqliteIdentityStore;
@@ -111,6 +112,22 @@ describe("SqliteIdentityStore", () => {
       expect(result.isErr()).toBe(true);
       if (!result.isErr()) return;
       expect(result.error._tag).toBe("NotFoundError");
+    });
+
+    test("rejects duplicate non-null inbox IDs", async () => {
+      const first = await store.create("group-1");
+      const second = await store.create("group-2");
+      expect(first.isOk()).toBe(true);
+      expect(second.isOk()).toBe(true);
+      if (!first.isOk() || !second.isOk()) return;
+
+      const initial = await store.setInboxId(first.value.id, "inbox-1");
+      expect(initial.isOk()).toBe(true);
+
+      const duplicate = await store.setInboxId(second.value.id, "inbox-1");
+      expect(Result.isError(duplicate)).toBe(true);
+      if (!Result.isError(duplicate)) return;
+      expect(duplicate.error._tag).toBe("InternalError");
     });
   });
 

@@ -29,19 +29,22 @@ export async function resolveIdentitySelector(
   identityStore: SqliteIdentityStore,
   selector: string | undefined,
 ): Promise<Result<ResolvedIdentitySelection, SignetError>> {
-  if (selector !== undefined) {
-    const byLabel = await identityStore.getByLabel(selector);
+  const normalizedSelector =
+    selector !== undefined && selector.length > 0 ? selector : undefined;
+
+  if (normalizedSelector !== undefined) {
+    const byLabel = await identityStore.getByLabel(normalizedSelector);
     if (byLabel !== null) {
       return Result.ok(toResolvedIdentity(byLabel));
     }
 
-    const byInboxId = await identityStore.getByInboxId(selector);
+    const byInboxId = await identityStore.getByInboxId(normalizedSelector);
     if (byInboxId !== null) {
       return Result.ok(toResolvedIdentity(byInboxId));
     }
 
     return Result.err(
-      NotFoundError.create("identity", selector) as SignetError,
+      NotFoundError.create("identity", normalizedSelector) as SignetError,
     );
   }
 
