@@ -53,19 +53,22 @@ describe("daemonizeCurrentProcess", () => {
     expect(child.killCalls).toBe(1);
   });
 
-  test("preserves the child failure category when startup exits early", async () => {
+  test("preserves the child stderr message verbatim for validation exits", async () => {
     const child = createFakeChild();
     const resultPromise = daemonizeCurrentProcess({
       timeoutMs: 100,
       spawnProcess: (() => child) as never,
     });
 
+    const stderrMessage =
+      "Validation failed on 'config': missing required field";
     child.stderr.write(
       JSON.stringify({
         error: "Config load failed",
-        message: "Validation failed on 'config': missing required field",
+        message: stderrMessage,
       }),
     );
+    // Exit code 1 maps to the `validation` category via ERROR_CATEGORY_META.
     child.exitCode = 1;
     child.emit("exit", 1);
 
@@ -74,8 +77,48 @@ describe("daemonizeCurrentProcess", () => {
     if (!result.isErr()) return;
 
     expect(result.error.category).toBe("validation");
-    expect(result.error.message).toContain("Validation failed on 'config'");
+    // The child's already-formatted diagnostic must survive verbatim — not
+    // be double-wrapped as
+    // `Validation failed on 'daemon.start': Validation failed on 'config': ...`.
+    expect(result.error.message).toBe(stderrMessage);
+    expect(result.error.message).not.toContain("daemon.start");
+    const context = (result.error as { context?: Record<string, unknown> })
+      .context;
+    expect(context).toBeDefined();
+    expect(context?.field).toBe("daemon.start");
+    expect(context?.reason).toBe(stderrMessage);
+    expect(context?.exitCode).toBe(1);
+    expect(context?.stderr).toContain(stderrMessage);
     expect(child.killCalls).toBe(0);
+  });
+
+  test("preserves the child stderr message and context for cancelled exits", async () => {
+    const child = createFakeChild();
+    const resultPromise = daemonizeCurrentProcess({
+      timeoutMs: 100,
+      spawnProcess: (() => child) as never,
+    });
+
+    const stderrMessage = "Daemon startup cancelled by SIGINT";
+    child.stderr.write(JSON.stringify({ message: stderrMessage }));
+    // Exit code 130 maps to the `cancelled` category via ERROR_CATEGORY_META.
+    child.exitCode = 130;
+    child.emit("exit", 130);
+
+    const result = await resultPromise;
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+
+    expect(result.error.category).toBe("cancelled");
+    expect(result.error.message).toBe(stderrMessage);
+    // CancelledError.create() drops context — the direct constructor must
+    // preserve the parsed exitCode/stderr/stdout extras like every other
+    // branch in errorFromChildExit.
+    const context = (result.error as { context?: Record<string, unknown> })
+      .context;
+    expect(context).toBeDefined();
+    expect(context?.exitCode).toBe(130);
+    expect(context?.stderr).toContain(stderrMessage);
   });
 
   test("preserves the child stderr message verbatim for not_found exits", async () => {

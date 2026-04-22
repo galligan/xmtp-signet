@@ -12,6 +12,7 @@ import { createSignetRuntime } from "../runtime.js";
 import { createProductionDeps } from "../start.js";
 import { setupSignalHandlers } from "../daemon/signals.js";
 import { daemonizeCurrentProcess } from "../daemon/background-start.js";
+import { redirectChildStdioToLogFile } from "../daemon/child-log.js";
 import {
   createWithDaemonClient,
   type WithDaemonClient,
@@ -223,6 +224,17 @@ export function createLifecycleCommands(
           { json },
         ),
       );
+
+      if (daemonChild) {
+        // The parent (`daemonizeCurrentProcess`) destroys its read end of
+        // our stdout/stderr pipes as soon as it parses the startup JSON
+        // line above. Any subsequent write from this detached daemon —
+        // most notably `console.error` from `daemon/signals.ts` during a
+        // SIGTERM/SIGINT shutdown — would EPIPE and silently crash the
+        // process. Redirect both streams to a log file in the data dir
+        // before that race can happen.
+        redirectChildStdioToLogFile(paths.dataDir);
+      }
     });
 
   const stop = new Command("stop")

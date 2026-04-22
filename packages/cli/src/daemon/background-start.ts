@@ -89,7 +89,16 @@ function errorFromChildExit(
 
   switch (category) {
     case "validation":
-      return ValidationError.create("daemon.start", message, extra);
+      // Use the direct constructor so the child's stderr message survives
+      // verbatim. ValidationError.create() formats as
+      // `Validation failed on '<field>': <reason>`, which double-wraps any
+      // already-formatted child diagnostic (e.g. nested "Validation failed
+      // on 'config': ...").
+      return new ValidationError(message, {
+        field: "daemon.start",
+        reason: message,
+        ...extra,
+      });
     case "not_found":
       // Use the direct constructor so the child's stderr message survives
       // verbatim. NotFoundError.create() formats as
@@ -116,7 +125,11 @@ function errorFromChildExit(
         ...extra,
       });
     case "cancelled":
-      return CancelledError.create(message);
+      // Use the direct constructor so the parsed `extra` (exitCode, stderr,
+      // stdout) is preserved on the error context. CancelledError.create()
+      // accepts only a message and would silently drop the diagnostic
+      // payload that every other branch in this switch propagates.
+      return new CancelledError(message, extra);
     case "network":
       return NetworkError.create("daemon.start", message, extra);
     case "internal":
