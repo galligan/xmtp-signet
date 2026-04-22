@@ -75,7 +75,7 @@ export function createMockXmtpClient(options?: {
     createGroup: async (memberInboxIds, opts) =>
       Result.ok({
         groupId: `group-${Date.now()}`,
-        name: opts?.name ?? "",
+        name: opts?.groupName ?? opts?.name ?? "",
         description: "",
         imageUrl: undefined,
         memberInboxIds: [inboxId, ...memberInboxIds],

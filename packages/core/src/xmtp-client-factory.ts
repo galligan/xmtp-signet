@@ -43,7 +43,7 @@ export interface XmtpClient {
   /** Create a new group conversation with the given members. */
   createGroup(
     memberInboxIds: readonly string[],
-    options?: { name?: string },
+    options?: { name?: string; groupName?: string },
   ): Promise<Result<XmtpGroupInfo, SignetError>>;
 
   /** Add members to a group by inbox ID. */

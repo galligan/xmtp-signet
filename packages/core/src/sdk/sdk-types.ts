@@ -125,7 +125,7 @@ export interface SdkConversationsShape {
   createDm(inboxId: string): Promise<SdkGroupShape>;
   createGroup(
     inboxIds: string[],
-    options?: { name?: string },
+    options?: { name?: string; groupName?: string },
   ): Promise<SdkGroupShape>;
   sync(): Promise<void>;
   syncAll(consentStates?: unknown[]): Promise<{ numConversations: number }>;

@@ -81,7 +81,7 @@ function createMockClient(options?: {
       if (createdGroup) return Result.ok(createdGroup);
       return Result.ok({
         groupId: "new-group-1",
-        name: opts?.name ?? "",
+        name: opts?.groupName ?? opts?.name ?? "",
         description: "",
         imageUrl: undefined,
         memberInboxIds: [inboxId, ...memberInboxIds],
