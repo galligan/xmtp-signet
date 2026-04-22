@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "better-result";
+import { ValidationError } from "@xmtp/signet-schemas";
 import type { SignetError } from "@xmtp/signet-schemas";
 import type { Command } from "commander";
 import type { AdminClient } from "../admin/client.js";
@@ -273,6 +274,62 @@ describe("daemon-backed CLI command wiring", () => {
     expect(exits).toEqual([0]);
     const parsed = JSON.parse(stdout.join("")) as { ws: string };
     expect(parsed.ws).toBe("ws://127.0.0.1:4242");
+  });
+
+  test("start --daemon preserves the daemonizer error category in the parent exit code", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const exits: number[] = [];
+
+    const command = findCommand(
+      createLifecycleCommands({
+        async daemonizeCurrentProcess() {
+          return Result.err(
+            ValidationError.create("config", "missing required field"),
+          );
+        },
+        async loadConfig() {
+          throw new Error("loadConfig should not run in the parent daemonizer");
+        },
+        resolvePaths() {
+          throw new Error(
+            "resolvePaths should not run in the parent daemonizer",
+          );
+        },
+        async createSignetRuntime() {
+          throw new Error(
+            "createSignetRuntime should not run in the parent daemonizer",
+          );
+        },
+        createProductionDeps() {
+          throw new Error(
+            "createProductionDeps should not run in the parent daemonizer",
+          );
+        },
+        setupSignalHandlers() {
+          throw new Error("setupSignalHandlers should not run on failure");
+        },
+        async withDaemonClient() {
+          throw new Error("withDaemonClient should not be used in start");
+        },
+        writeStdout(message: string) {
+          stdout.push(message);
+        },
+        writeStderr(message: string) {
+          stderr.push(message);
+        },
+        exit(code: number) {
+          exits.push(code);
+        },
+      }),
+      "start",
+    );
+
+    await command.parseAsync(["node", "start", "--daemon", "--json"]);
+
+    expect(stdout).toEqual([]);
+    expect(stderr.join("")).toContain("Validation failed on 'config'");
+    expect(exits).toEqual([1]);
   });
 
   test("start reports the bound ws port from runtime status instead of the config port", async () => {

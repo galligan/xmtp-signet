@@ -1,8 +1,18 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import { Result } from "better-result";
-import { InternalError } from "@xmtp/signet-schemas";
-import type { SignetError } from "@xmtp/signet-schemas";
+import {
+  AuthError,
+  CancelledError,
+  ERROR_CATEGORY_META,
+  InternalError,
+  NetworkError,
+  NotFoundError,
+  PermissionError,
+  TimeoutError,
+  ValidationError,
+} from "@xmtp/signet-schemas";
+import type { ErrorCategory, SignetError } from "@xmtp/signet-schemas";
 
 /** Startup payload emitted by `daemon start --json`. */
 export interface BackgroundDaemonStartPayload {
@@ -13,6 +23,8 @@ export interface BackgroundDaemonStartPayload {
   readonly env: string;
   readonly dataDir: string;
 }
+
+type SpawnProcess = typeof spawn;
 
 function currentProcessArgv(): string[] {
   if (
@@ -25,12 +37,84 @@ function currentProcessArgv(): string[] {
   return [...process.argv];
 }
 
+function parseErrorMessage(stderrBuffer: string): string | null {
+  const trimmed = stderrBuffer.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      message?: unknown;
+      error?: unknown;
+    };
+    if (typeof parsed.message === "string" && parsed.message.length > 0) {
+      return parsed.message;
+    }
+    if (typeof parsed.error === "string" && parsed.error.length > 0) {
+      return parsed.error;
+    }
+  } catch {
+    // Fall through to the raw stderr payload.
+  }
+
+  return trimmed;
+}
+
+function categoryFromExitCode(code: number | null): ErrorCategory {
+  if (code !== null) {
+    for (const [category, meta] of Object.entries(ERROR_CATEGORY_META)) {
+      if (meta.exitCode === code) {
+        return category as ErrorCategory;
+      }
+    }
+  }
+  return "internal";
+}
+
+function errorFromChildExit(
+  code: number | null,
+  stderrBuffer: string,
+  stdoutBuffer: string,
+): SignetError {
+  const category = categoryFromExitCode(code);
+  const message =
+    parseErrorMessage(stderrBuffer) ??
+    "Daemon process exited before reporting startup";
+  const extra = {
+    exitCode: code,
+    stderr: stderrBuffer.trim() || undefined,
+    stdout: stdoutBuffer.trim() || undefined,
+  };
+
+  switch (category) {
+    case "validation":
+      return ValidationError.create("daemon.start", message, extra);
+    case "not_found":
+      return NotFoundError.create("daemon.start", message);
+    case "permission":
+      return PermissionError.create(message, extra);
+    case "auth":
+      return AuthError.create(message, extra);
+    case "timeout":
+      return TimeoutError.create("daemon.start", 15_000);
+    case "cancelled":
+      return CancelledError.create(message);
+    case "network":
+      return NetworkError.create("daemon.start", message, extra);
+    case "internal":
+    default:
+      return InternalError.create(message, extra);
+  }
+}
+
 /**
  * Respawns the current CLI as a detached child process and waits for the
  * child's first JSON startup line before returning to the parent.
  */
 export async function daemonizeCurrentProcess(options?: {
   timeoutMs?: number;
+  spawnProcess?: SpawnProcess;
 }): Promise<Result<BackgroundDaemonStartPayload, SignetError>> {
   const argv = currentProcessArgv();
   if (argv.length === 0) {
@@ -47,19 +131,17 @@ export async function daemonizeCurrentProcess(options?: {
   }
 
   return await new Promise((resolve) => {
-    const child: ChildProcessByStdio<null, Readable, Readable> = spawn(
-      command,
-      childArgs,
-      {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          XMTP_SIGNET_DAEMON_CHILD: "1",
-        },
-        detached: true,
-        stdio: ["ignore", "pipe", "pipe"],
+    const child: ChildProcessByStdio<null, Readable, Readable> = (
+      options?.spawnProcess ?? spawn
+    )(command, childArgs, {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        XMTP_SIGNET_DAEMON_CHILD: "1",
       },
-    );
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     child.unref();
 
     let stdoutBuffer = "";
@@ -72,6 +154,15 @@ export async function daemonizeCurrentProcess(options?: {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      const childHasExited =
+        child.exitCode !== null || child.signalCode !== null;
+      if (Result.isError(result) && !childHasExited) {
+        try {
+          child.kill();
+        } catch {
+          // Best effort: the child may already have exited.
+        }
+      }
       child.stdout?.destroy();
       child.stderr?.destroy();
       resolve(result);
@@ -107,28 +198,15 @@ export async function daemonizeCurrentProcess(options?: {
       if (settled) return;
       parseStartupPayload();
       if (settled) return;
-      finish(
-        Result.err(
-          InternalError.create(
-            "Daemon process exited before reporting startup",
-            {
-              exitCode: code,
-              stderr: stderrBuffer.trim() || undefined,
-            },
-          ),
-        ),
-      );
+      finish(Result.err(errorFromChildExit(code, stderrBuffer, stdoutBuffer)));
     });
 
     const timer = setTimeout(() => {
       finish(
         Result.err(
-          InternalError.create("Timed out waiting for daemon startup", {
-            stdout: stdoutBuffer.trim() || undefined,
-            stderr: stderrBuffer.trim() || undefined,
-          }),
+          TimeoutError.create("daemon.start", options?.timeoutMs ?? 15_000),
         ),
       );
-    }, options?.timeoutMs ?? 5_000);
+    }, options?.timeoutMs ?? 15_000);
   });
 }
