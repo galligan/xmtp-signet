@@ -91,13 +91,30 @@ function errorFromChildExit(
     case "validation":
       return ValidationError.create("daemon.start", message, extra);
     case "not_found":
-      return NotFoundError.create("daemon.start", message);
+      // Use the direct constructor so the child's stderr message survives
+      // verbatim. NotFoundError.create() formats as
+      // `<resourceType> '<resourceId>' not found`, which would garble the
+      // already-descriptive child diagnostic.
+      return new NotFoundError(message, {
+        resourceType: "daemon.start",
+        resourceId: "unknown",
+        ...extra,
+      });
     case "permission":
       return PermissionError.create(message, extra);
     case "auth":
       return AuthError.create(message, extra);
     case "timeout":
-      return TimeoutError.create("daemon.start", 15_000);
+      // Use the direct constructor so the child's stderr message survives
+      // verbatim. TimeoutError.create() would discard the parsed message and
+      // hardcode a timeout value we did not actually observe; `timeoutMs: 0`
+      // signals "no real timeout value parsed from the child" rather than
+      // fabricating one.
+      return new TimeoutError(message, {
+        operation: "daemon.start",
+        timeoutMs: 0,
+        ...extra,
+      });
     case "cancelled":
       return CancelledError.create(message);
     case "network":

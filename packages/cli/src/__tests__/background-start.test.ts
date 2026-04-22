@@ -77,4 +77,65 @@ describe("daemonizeCurrentProcess", () => {
     expect(result.error.message).toContain("Validation failed on 'config'");
     expect(child.killCalls).toBe(0);
   });
+
+  test("preserves the child stderr message verbatim for not_found exits", async () => {
+    const child = createFakeChild();
+    const resultPromise = daemonizeCurrentProcess({
+      timeoutMs: 100,
+      spawnProcess: (() => child) as never,
+    });
+
+    const stderrMessage = "Config file not found at /tmp/config.toml";
+    child.stderr.write(JSON.stringify({ message: stderrMessage }));
+    // Exit code 2 maps to the `not_found` category via ERROR_CATEGORY_META.
+    child.exitCode = 2;
+    child.emit("exit", 2);
+
+    const result = await resultPromise;
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+
+    expect(result.error.category).toBe("not_found");
+    // The child's actual diagnostic must be the message verbatim — no
+    // double "not found" wrapping or quoting from NotFoundError.create.
+    expect(result.error.message).toBe(stderrMessage);
+    expect(result.error.message).not.toContain("'");
+    const context = (result.error as { context?: Record<string, unknown> })
+      .context;
+    expect(context).toBeDefined();
+    expect(context?.exitCode).toBe(2);
+    expect(context?.stderr).toContain(stderrMessage);
+  });
+
+  test("preserves the child stderr message verbatim for timeout exits", async () => {
+    const child = createFakeChild();
+    const resultPromise = daemonizeCurrentProcess({
+      timeoutMs: 100,
+      spawnProcess: (() => child) as never,
+    });
+
+    const stderrMessage =
+      "XMTP network handshake exceeded 30000ms while connecting";
+    child.stderr.write(JSON.stringify({ message: stderrMessage }));
+    // Exit code 5 maps to the `timeout` category via ERROR_CATEGORY_META.
+    child.exitCode = 5;
+    child.emit("exit", 5);
+
+    const result = await resultPromise;
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+
+    expect(result.error.category).toBe("timeout");
+    // The child's actual diagnostic must survive verbatim — not be replaced
+    // by the synthetic "Operation 'daemon.start' timed out after 15000ms".
+    expect(result.error.message).toBe(stderrMessage);
+    expect(result.error.message).not.toContain("15000ms");
+    const context = (result.error as { context?: Record<string, unknown> })
+      .context;
+    expect(context).toBeDefined();
+    expect(context?.exitCode).toBe(5);
+    expect(context?.stderr).toContain(stderrMessage);
+    // No real timeout was parsed from the child — sentinel signals that.
+    expect(context?.timeoutMs).toBe(0);
+  });
 });
