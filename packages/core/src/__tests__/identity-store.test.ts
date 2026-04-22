@@ -1,4 +1,8 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
+import { Database } from "bun:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Result } from "better-result";
 import { SqliteIdentityStore } from "../identity-store.js";
 
@@ -128,6 +132,74 @@ describe("SqliteIdentityStore", () => {
       expect(Result.isError(duplicate)).toBe(true);
       if (!Result.isError(duplicate)) return;
       expect(duplicate.error._tag).toBe("InternalError");
+    });
+  });
+
+  describe("migration", () => {
+    let tempDir: string;
+    let dbPath: string;
+
+    beforeEach(() => {
+      tempDir = mkdtempSync(join(tmpdir(), "signet-identity-migration-"));
+      dbPath = join(tempDir, "identities.db");
+    });
+
+    afterEach(() => {
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    test("warns and skips unique index when pre-existing duplicate inbox_ids exist", () => {
+      // Seed the database with duplicate inbox_id rows before migration runs.
+      const seed = new Database(dbPath);
+      seed.run(`
+        CREATE TABLE identities (
+          id TEXT PRIMARY KEY,
+          inbox_id TEXT,
+          group_id TEXT UNIQUE,
+          label TEXT UNIQUE,
+          created_at TEXT NOT NULL
+        )
+      `);
+      const insert = seed.prepare(
+        "INSERT INTO identities (id, inbox_id, group_id, label, created_at) VALUES (?, ?, ?, ?, ?)",
+      );
+      insert.run("inbox_a", "dup-inbox", "group-a", "label-a", "2025-01-01");
+      insert.run("inbox_b", "dup-inbox", "group-b", "label-b", "2025-01-02");
+      seed.close();
+
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const migratedStore = new SqliteIdentityStore(dbPath);
+        try {
+          expect(warnSpy).toHaveBeenCalledTimes(1);
+          const [message, payload] = warnSpy.mock.calls[0] ?? [];
+          expect(String(message)).toContain("inbox_id");
+          expect(String(message)).toContain("skipped");
+          expect(String(message)).toContain("Clean up duplicates");
+          expect(payload).toMatchObject({
+            duplicateInboxIdCount: 1,
+            indexSkipped: "idx_identities_inbox_id",
+          });
+        } finally {
+          migratedStore.close();
+        }
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    test("does not warn when no duplicate inbox_ids exist", () => {
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const freshStore = new SqliteIdentityStore(dbPath);
+        try {
+          expect(warnSpy).not.toHaveBeenCalled();
+        } finally {
+          freshStore.close();
+        }
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 
