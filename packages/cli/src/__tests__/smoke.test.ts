@@ -187,9 +187,12 @@ describe("Phase 2B smoke tests", () => {
     const configPath = join(dir, "signet.toml");
     const dataDir = join(dir, "bounded-data");
 
-    const result = await runCli(["init", "--config", configPath, "--json"], {
-      XMTP_SIGNET_DATA_DIR: dataDir,
-    });
+    const result = await runCli(
+      ["init", "--config", configPath, "--env", "local", "--json"],
+      {
+        XMTP_SIGNET_DATA_DIR: dataDir,
+      },
+    );
 
     expect(result.exitCode).toBe(0);
 
