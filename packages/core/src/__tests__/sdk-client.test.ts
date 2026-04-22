@@ -140,7 +140,23 @@ describe("createSdkClient", () => {
       });
       expect(capturedReply).not.toBeNull();
       if (capturedReply && typeof capturedReply === "object") {
-        expect((capturedReply as { content?: unknown }).content).not.toBe(
+        const replyContent = (capturedReply as { content?: unknown }).content;
+        expect(replyContent).not.toBe("Reply text");
+        // Mirror @xmtp/node-bindings encodeText shape: xmtp.org/text:1.0,
+        // UTF-8 encoded body. Locally constructed to keep sdk-client.ts
+        // free of @xmtp/node-sdk runtime imports.
+        expect(replyContent).toMatchObject({
+          type: {
+            authorityId: "xmtp.org",
+            typeId: "text",
+            versionMajor: 1,
+            versionMinor: 0,
+          },
+          parameters: { encoding: "UTF-8" },
+        });
+        const encodedBytes = (replyContent as { content?: unknown }).content;
+        expect(encodedBytes).toBeInstanceOf(Uint8Array);
+        expect(new TextDecoder().decode(encodedBytes as Uint8Array)).toBe(
           "Reply text",
         );
       }

@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { encodeText } from "@xmtp/node-sdk";
 import type { SignetError } from "@xmtp/signet-schemas";
 import {
   InternalError,
@@ -30,6 +29,7 @@ import { createConvosOnboardingScheme } from "../schemes/default-onboarding-sche
 import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 import type {
   SdkClientShape,
+  SdkContentTypeIdShape,
   SdkGroupShape,
   SdkConsentEntityType,
   SdkConsentState,
@@ -65,6 +65,33 @@ async function getGroup(
     return Result.err(NotFoundError.create("group", groupId));
   }
   return Result.ok(result.value);
+}
+
+/**
+ * Build an EncodedContent payload for the `xmtp.org/text:1.0` content type.
+ *
+ * Mirrors `encodeText` from `@xmtp/node-bindings` (re-exported by
+ * `@xmtp/node-sdk`) without taking a runtime dependency on the SDK,
+ * preserving this module's structural-typing-only boundary against the
+ * SDK. The shape is fixed by the XMTP text content-type spec
+ * (authority `xmtp.org`, type `text`, version `1.0`, UTF-8 encoded body)
+ * and matches the existing generic encoded-content construction below.
+ */
+function encodeTextContent(text: string): {
+  type: SdkContentTypeIdShape;
+  parameters: Record<string, string>;
+  content: Uint8Array;
+} {
+  return {
+    type: {
+      authorityId: "xmtp.org",
+      typeId: "text",
+      versionMajor: 1,
+      versionMinor: 0,
+    },
+    parameters: { encoding: "UTF-8" },
+    content: new TextEncoder().encode(text),
+  };
 }
 
 /**
@@ -217,7 +244,7 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
                 ...(content.referenceInboxId
                   ? { referenceInboxId: content.referenceInboxId }
                   : {}),
-                content: encodeText(content.text),
+                content: encodeTextContent(content.text),
               }),
             "sendMessage",
           );
