@@ -1,10 +1,15 @@
 /**
- * Structural types mirroring @xmtp/node-sdk v6.0.0 shapes.
+ * Structural types mirroring @xmtp/node-sdk v6.0.0 (which re-exports
+ * core option/record shapes from @xmtp/node-bindings v1.10.0).
  *
  * These allow the signet to interact with SDK objects without importing
  * the real SDK, which requires native bindings. Both production code
  * (for structural typing against real SDK objects) and tests (for mock
  * construction) use these interfaces.
+ *
+ * When bumping @xmtp/node-sdk, re-verify these shapes against the
+ * installed bindings (e.g. CreateGroupOptions.groupName lives in
+ * node_modules/@xmtp/node-bindings/dist/index.d.ts).
  */
 
 /** Mirrors @xmtp/node-sdk Identifier */
