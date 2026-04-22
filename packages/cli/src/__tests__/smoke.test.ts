@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
@@ -72,17 +72,22 @@ async function makeWorkspace(): Promise<{
 
 async function runCli(
   args: string[],
+  envOverrides?: Record<string, string>,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawn(["bun", "packages/cli/src/bin.ts", ...args], {
+  const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", ...args], {
     cwd: repoRoot,
     stdout: "pipe",
     stderr: "pipe",
+    env: {
+      ...process.env,
+      ...envOverrides,
+    },
   });
 
   const [exitCode, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
   ]);
 
   return { exitCode, stdout, stderr };
@@ -175,6 +180,33 @@ async function nextMessage(ws: WebSocket, timeoutMs = 5000): Promise<unknown> {
 }
 
 describe("Phase 2B smoke tests", () => {
+  test("init honors XMTP_SIGNET_DATA_DIR for the bootstrap session without baking it into config", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "xmtp-signet-init-env-"));
+    tempDirs.push(dir);
+
+    const configPath = join(dir, "signet.toml");
+    const dataDir = join(dir, "bounded-data");
+
+    const result = await runCli(["init", "--config", configPath, "--json"], {
+      XMTP_SIGNET_DATA_DIR: dataDir,
+    });
+
+    expect(result.exitCode).toBe(0);
+
+    const parsed = JSON.parse(result.stdout) as {
+      initialized: boolean;
+      dataDir: string;
+      configPath: string;
+    };
+    expect(parsed.initialized).toBe(true);
+    expect(parsed.dataDir).toBe(dataDir);
+    expect(parsed.configPath).toBe(configPath);
+    expect(existsSync(dataDir)).toBe(true);
+
+    const writtenConfig = await readFile(configPath, "utf8");
+    expect(writtenConfig).not.toContain(dataDir);
+  });
+
   test("start boots from an empty directory without creating admin credentials", async () => {
     const workspace = await makeWorkspace();
     const daemon = startDaemon([

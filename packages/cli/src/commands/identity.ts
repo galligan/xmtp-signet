@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { createKeyManager } from "@xmtp/signet-keys";
 import type { KeyManager } from "@xmtp/signet-keys";
 import { loadConfig, defaultConfigPath } from "../config/loader.js";
+import type { CliConfig } from "../config/schema.js";
 import {
   applyInitPreset,
   describeInitPreset,
@@ -150,7 +151,8 @@ export function createIdentityInitCommand(): Command {
       if (configWritten) {
         await writeConfig(configPath, config);
       }
-      const paths = resolvePaths(config);
+      const runtimeConfig = applyInitRuntimeEnvOverrides(config);
+      const paths = resolvePaths(runtimeConfig);
 
       mkdirSync(paths.dataDir, { recursive: true });
 
@@ -265,6 +267,25 @@ function resolveEnv(
     process.exit(1);
   }
   return raw as XmtpEnvLiteral;
+}
+
+/**
+ * Applies runtime-only init overrides that should affect the bootstrap
+ * session without being written back into config.toml.
+ */
+function applyInitRuntimeEnvOverrides(config: CliConfig): CliConfig {
+  const dataDir = process.env["XMTP_SIGNET_DATA_DIR"];
+  if (dataDir === undefined || dataDir.length === 0) {
+    return config;
+  }
+
+  return {
+    ...config,
+    signet: {
+      ...config.signet,
+      dataDir,
+    },
+  };
 }
 
 /**
