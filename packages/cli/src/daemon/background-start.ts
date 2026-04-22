@@ -131,7 +131,15 @@ function errorFromChildExit(
       // payload that every other branch in this switch propagates.
       return new CancelledError(message, extra);
     case "network":
-      return NetworkError.create("daemon.start", message, extra);
+      // Use the direct constructor so the child's stderr message survives
+      // verbatim. NetworkError.create() formats as
+      // `Network error reaching '<endpoint>': <reason>`, which double-wraps
+      // any already-formatted child diagnostic (e.g. nested
+      // "Network error reaching 'xmtp': connection refused").
+      return new NetworkError(message, {
+        endpoint: "daemon.start",
+        ...extra,
+      });
     case "internal":
     default:
       return InternalError.create(message, extra);

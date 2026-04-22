@@ -150,6 +150,37 @@ describe("daemonizeCurrentProcess", () => {
     expect(context?.stderr).toContain(stderrMessage);
   });
 
+  test("preserves the child stderr message verbatim for network exits", async () => {
+    const child = createFakeChild();
+    const resultPromise = daemonizeCurrentProcess({
+      timeoutMs: 100,
+      spawnProcess: (() => child) as never,
+    });
+
+    const stderrMessage = "Network error reaching 'xmtp': connection refused";
+    child.stderr.write(JSON.stringify({ message: stderrMessage }));
+    // Exit code 6 maps to the `network` category via ERROR_CATEGORY_META.
+    child.exitCode = 6;
+    child.emit("exit", 6);
+
+    const result = await resultPromise;
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+
+    expect(result.error.category).toBe("network");
+    // The child's already-formatted diagnostic must survive verbatim — not
+    // be double-wrapped as
+    // `Network error reaching 'daemon.start': Network error reaching 'xmtp': ...`.
+    expect(result.error.message).toBe(stderrMessage);
+    expect(result.error.message).not.toContain("daemon.start");
+    const context = (result.error as { context?: Record<string, unknown> })
+      .context;
+    expect(context).toBeDefined();
+    expect(context?.endpoint).toBe("daemon.start");
+    expect(context?.exitCode).toBe(6);
+    expect(context?.stderr).toContain(stderrMessage);
+  });
+
   test("preserves the child stderr message verbatim for timeout exits", async () => {
     const child = createFakeChild();
     const resultPromise = daemonizeCurrentProcess({
