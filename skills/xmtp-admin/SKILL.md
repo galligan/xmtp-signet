@@ -94,11 +94,11 @@ Keys are per-operator. `xs key init` is not redundant with `xs init` —
 provisions key material for a specific operator profile.
 
 ```bash
-xs key init --op op_...                   # create key material for an operator
-xs key rotate --op op_...                 # operational rotation, chain preserved
+xs key init --operator op_...             # create key material for an operator
+xs key rotate                             # operational rotation, chain preserved
 xs key list
-xs key info --op op_...
-xs key export-public --op op_...          # safe: public material only
+xs key info <key-id-or-identity-id>
+xs key export-public [identity-id]        # safe: public material only; defaults to first
 ```
 
 Key material lives in the local encrypted vault. The Swift `signet-signer`
@@ -116,11 +116,12 @@ Managed wallets back operator identities.
 xs wallet create --label ops-wallet
 xs wallet list
 xs wallet info wallet_...
-xs wallet provider         # provider management — currently the deferred piece
+xs wallet provider list    # deferred: provider management stub
+xs wallet provider set <name> --path <path>   # deferred
 ```
 
-`wallet provider` is the one surface that isn't fully live. Everything else
-in `wallet` and `key` is.
+`xs wallet provider ...` is the one surface that isn't fully live.
+Everything else in `wallet` and `key` is.
 
 ## Operators
 
@@ -138,7 +139,7 @@ Scope choices:
   isolation)
 - `shared` — one context across multiple chats
 
-Role levels (set at creation or via update where supported):
+Role levels (set at `create` time via `--role`, defaults to `operator`):
 
 - `operator` — can only act within its own credentials
 - `admin` — can manage operators and resources it created
@@ -152,11 +153,11 @@ Policies are reusable allow/deny bundles over the 30 permission scopes
 `observation`, `egress`).
 
 ```bash
-xs policy create --name "helper" --allow send,reply,react
+xs policy create --label "helper" --allow send,reply,react
 xs policy list
 xs policy info  policy_...
 xs policy update policy_... --deny forward-to-provider
-xs policy rm policy_...
+xs policy rm policy_... --force
 ```
 
 Design rule of thumb:
@@ -178,25 +179,25 @@ operator + chat scope + effective permission set (policy + inline
 overrides) + content-type allowlist + TTL + status.
 
 ```bash
-# Issue
+# Issue — --ttl is seconds (integer). 86400 == 24h.
 xs cred issue \
   --op op_a7f3 \
   --chat conv_9e2d1a4b8c3f7e60 \
   --policy policy_helper \
   --allow send,reply \
-  --ttl 24h
+  --ttl 86400
 
 # Inspect
 xs cred list
 xs cred list --op op_a7f3
 xs cred info cred_b2c1
 
-# Adjust (in place where possible)
+# Adjust scopes or policy in place
 xs cred update cred_b2c1 --deny forward-to-provider
-xs cred update cred_b2c1 --extend 12h
+xs cred update cred_b2c1 --policy policy_restricted
 
-# Revoke
-xs cred revoke cred_b2c1 --reason "project ended"
+# Revoke (dry-run by default; pass --force to execute)
+xs cred revoke cred_b2c1 --force
 ```
 
 ### When an update reconnects the harness vs when it doesn't
@@ -204,9 +205,10 @@ xs cred revoke cred_b2c1 --reason "project ended"
 Not every credential change requires reconnection.
 
 - **In place, no reconnect** — narrowing scopes, adjusting the content-
-  type allowlist, extending a reveal
+  type allowlist, extending an existing reveal
 - **Reauthorization required** — expanding scopes, adding egress
-  permissions, granting group management
+  permissions, granting group management (issue a new credential and
+  revoke the old one)
 
 On reauth the signet emits `credential.reauthorization_required` and
 terminates the connection. The harness should re-auth with a fresh token.
@@ -226,8 +228,8 @@ Inboxes are the daemon-backed mailbox surface for operators.
 xs inbox create --label qa-inbox
 xs inbox list
 xs inbox info inbox_...
-xs inbox link   inbox_... --operator op_...
-xs inbox unlink inbox_... --operator op_...
+xs inbox link   inbox_... --op op_...
+xs inbox unlink inbox_...
 xs inbox rm     inbox_...
 ```
 
@@ -240,8 +242,8 @@ Link is how you attach an inbox to an operator for ongoing use.
 admin-side verification flows:
 
 ```bash
-xs seal verify seal_...         # Ed25519 signature + chain integrity
-xs seal history --chat conv_... # full chain with deltas, including revocations
+xs seal verify seal_...                       # Ed25519 signature + chain integrity
+xs seal history cred_... --chat conv_...      # full chain for a credential in a chat
 ```
 
 Verification checks:
@@ -288,18 +290,18 @@ xs daemon status
 
 # 2. Provision an operator profile
 xs operator create --label "helper" --scope per-chat
-xs key init --op op_helper
-xs key export-public --op op_helper   # share with chat participants if needed
+xs key init --operator op_helper
+xs key export-public op_helper        # share with chat participants if needed
 
 # 3. Define (or reuse) a policy
-xs policy create --name "helper" --allow send,reply,react
+xs policy create --label "helper" --allow send,reply,react
 
-# 4. Attach an inbox
+# 4. Attach an inbox (or create one linked in a single step via `--op`)
 xs inbox create --label helper-inbox
-xs inbox link inbox_helper --operator op_helper
+xs inbox link inbox_helper --op op_helper
 
-# 5. Issue a credential for the chat
-xs cred issue --op op_helper --chat conv_... --policy policy_helper --ttl 24h
+# 5. Issue a credential for the chat (ttl in seconds — 86400 == 24h)
+xs cred issue --op op_helper --chat conv_... --policy policy_helper --ttl 86400
 
 # 6. Hand the credential token to the harness; it connects via WebSocket
 ```
@@ -307,23 +309,27 @@ xs cred issue --op op_helper --chat conv_... --policy policy_helper --ttl 24h
 ### Rotate an operator's key without breaking continuity
 
 ```bash
-xs key rotate --op op_...             # operational rotation, seal chain preserved
-xs seal history --chat conv_...       # confirm the new seal was stamped
+xs key rotate                                 # operational rotation, seal chain preserved
+xs seal history cred_... --chat conv_...      # confirm the new seal was stamped
 ```
 
 ### End a credential
 
 ```bash
-xs cred revoke cred_... --reason "project ended"
-xs seal history --chat conv_...       # revocation seal is now on-chain
+xs cred revoke cred_... --force
+xs seal history cred_... --chat conv_...      # revocation seal is now on-chain
 ```
 
 ### Expand scopes mid-run
 
+Expanding scopes is reauthorization-gated — issue a new credential and
+revoke the old one rather than mutating in place:
+
 ```bash
-xs cred update cred_... --allow forward-to-provider
-# Expect a credential.reauthorization_required event — harness must
-# reconnect with a fresh token.
+xs cred issue --op op_... --chat conv_... --policy policy_expanded --ttl 86400
+xs cred revoke cred_old --force
+# Harness receives credential.reauthorization_required on the old cred
+# and reconnects with the new token.
 ```
 
 ## Safety posture

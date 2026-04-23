@@ -137,17 +137,19 @@ When a flag or subcommand here isn't enough, `xs <group> --help` and
 ### Messages
 
 ```bash
-xs msg send   --chat conv_... --as op_... --text "hello"
-xs msg reply  --chat conv_... --as op_... --to msg_... --text "ack"
-xs msg react  --chat conv_... --as op_... --to msg_... --emoji "👍"
-xs msg read   --chat conv_... --as op_... --to msg_...   # read receipt
-xs msg list   --from conv_...
-xs msg info   msg_...
+xs msg send  "hello"  --to conv_...     [--as inbox_...] [--op op_...]
+xs msg reply "ack"    --chat conv_... --to msg_...   [--as inbox_...]
+xs msg react "👍"     --chat conv_... --to msg_...   [--as inbox_...]
+xs msg read           --chat conv_...                [--as inbox_...]
+xs msg list           --from conv_...
+xs msg info  msg_...  --chat conv_...
 ```
 
-`--as` selects the operator context. The daemon resolves the operator's
-active credential and enforces scope + content-type + confirmation checks
-before the message ever hits the network.
+Message text / emoji is a positional argument. `--as` selects the inbox
+to act as (inbox ID or label); `--op` on `send` is the operator override.
+The daemon resolves the operator's active credential and enforces scope
++ content-type + confirmation checks before the message ever hits the
+network.
 
 ### Inbox
 
@@ -308,8 +310,9 @@ Stage 3: Visibility       — visible / revealed / historical / hidden?
 Stage 4: Content project  — pass through or redact to null
 ```
 
-Six internal visibility states: `visible`, `historical`, `revealed`,
-`redacted`, `hidden`, `dropped`. The harness only sees the first four.
+Five internal visibility states: `visible`, `historical`, `revealed`,
+`redacted`, `hidden`. The harness only sees the first four — `hidden`
+stays internal to the daemon.
 
 ### Content-type allowlists
 
