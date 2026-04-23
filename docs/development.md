@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/xmtp/xmtp-signet.git
+git clone https://github.com/galligan/xmtp-signet.git
 cd xmtp-signet
 bun run bootstrap
 ```

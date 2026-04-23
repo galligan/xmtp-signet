@@ -35,9 +35,28 @@ creating operators, issuing and revoking credentials, managing keys and
 wallets, defining policies), use the `xmtp-admin` skill. This skill covers
 the day-to-day *use* of an already-configured signet.
 
-If `xs` is not installed yet, stop here and hand off to `xmtp-admin` first.
-That skill now includes the clone/bootstrap path and the one-shot installer
-path for getting a signet checkout onto a machine.
+## First check: is `xs` available?
+
+Before using this skill, check whether `xs` is already available:
+
+```bash
+if command -v xs >/dev/null 2>&1; then
+  xs --help >/dev/null
+else
+  echo "xs is not installed yet"
+fi
+```
+
+If `xs` is not installed yet:
+
+- preferred public installer: `curl -fsSL https://xmtp.fyi/install.sh | bash`
+- repo-backed fallback:
+  `curl -fsSL https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh | bash`
+- if you already have a local clone, use the repo entrypoint directly:
+  `bun packages/cli/src/bin.ts --help`
+
+Then hand off to `xmtp-admin` for `xs init`, daemon startup, operator setup,
+credential issuance, and adapter provisioning.
 
 ## OpenClaw adapter
 

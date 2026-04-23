@@ -41,7 +41,7 @@ an `xmtp-signet` checkout and a runnable CLI.
 ### Canonical path: clone and bootstrap
 
 ```bash
-git clone https://github.com/xmtp/xmtp-signet.git
+git clone https://github.com/galligan/xmtp-signet.git
 cd xmtp-signet
 bun run bootstrap
 bun packages/cli/src/bin.ts --help
@@ -57,13 +57,19 @@ alias xs='bun packages/cli/src/bin.ts'
 ### Convenience path: one-shot installer
 
 ```bash
+curl -fsSL https://xmtp.fyi/install.sh | bash
+```
+
+Repo-backed fallback:
+
+```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/xmtp/xmtp-signet/main/scripts/install.sh \
+  https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh \
   | bash
 ```
 
 That installer clones the repo, runs `bun run bootstrap`, and writes `xs`
-wrappers into `~/.local/bin`.
+wrappers into an XDG-aware bin directory.
 
 If `xs` is still not found in a new shell, add this to your shell profile:
 

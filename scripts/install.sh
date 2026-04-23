@@ -2,12 +2,51 @@
 
 set -euo pipefail
 
-REPO_URL="${XMTP_SIGNET_REPO:-https://github.com/xmtp/xmtp-signet.git}"
+UNAME="$(uname -s)"
+DEFAULT_REPO_URL="https://github.com/galligan/xmtp-signet.git"
 REF="${XMTP_SIGNET_REF:-main}"
-INSTALL_DIR="${XMTP_SIGNET_INSTALL_DIR:-$HOME/.local/share/xmtp-signet}"
-BIN_DIR="${XMTP_SIGNET_BIN_DIR:-$HOME/.local/bin}"
 LINK_BIN=1
 UPDATE=0
+
+default_install_dir() {
+  if [[ -n "${XDG_DATA_HOME:-}" ]]; then
+    printf '%s/xmtp-signet\n' "$XDG_DATA_HOME"
+    return
+  fi
+
+  case "$UNAME" in
+    Darwin)
+      printf '%s/Library/Application Support/xmtp-signet\n' "$HOME"
+      ;;
+    *)
+      printf '%s/.local/share/xmtp-signet\n' "$HOME"
+      ;;
+  esac
+}
+
+default_bin_dir() {
+  if [[ -n "${XDG_BIN_HOME:-}" ]]; then
+    printf '%s\n' "$XDG_BIN_HOME"
+    return
+  fi
+
+  case "$UNAME" in
+    Darwin)
+      if [[ -d "$HOME/bin" && ! -d "$HOME/.local/bin" ]]; then
+        printf '%s/bin\n' "$HOME"
+      else
+        printf '%s/.local/bin\n' "$HOME"
+      fi
+      ;;
+    *)
+      printf '%s/.local/bin\n' "$HOME"
+      ;;
+  esac
+}
+
+REPO_URL="${XMTP_SIGNET_REPO:-$DEFAULT_REPO_URL}"
+INSTALL_DIR="${XMTP_SIGNET_INSTALL_DIR:-$(default_install_dir)}"
+BIN_DIR="${XMTP_SIGNET_BIN_DIR:-$(default_bin_dir)}"
 
 usage() {
   cat <<'EOF'
@@ -17,8 +56,8 @@ Usage:
   install.sh [options]
 
 Options:
-  --dir <path>       Install checkout path (default: ~/.local/share/xmtp-signet)
-  --bin-dir <path>   Wrapper install path (default: ~/.local/bin)
+  --dir <path>       Install checkout path (default: XDG-aware per-platform path)
+  --bin-dir <path>   Wrapper install path (default: XDG-aware per-platform path)
   --repo <url>       Git repository to clone (default: official GitHub repo)
   --ref <name>       Git branch, tag, or ref to clone (default: main)
   --update           Fetch and fast-forward an existing checkout before bootstrap
@@ -30,7 +69,12 @@ Environment overrides:
   XMTP_SIGNET_BIN_DIR
   XMTP_SIGNET_REPO
   XMTP_SIGNET_REF
+  XDG_DATA_HOME
+  XDG_BIN_HOME
 EOF
+  printf '\nDefault paths:\n'
+  printf '  checkout -> %s\n' "$INSTALL_DIR"
+  printf '  wrappers -> %s\n' "$BIN_DIR"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -165,6 +209,7 @@ echo "Next steps:"
 echo "  xs --help"
 echo "  xs init --env dev --label owner"
 echo "  xs daemon start"
+echo "  xs agent setup openclaw   # if this machine is for OpenClaw"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*)

@@ -17,7 +17,7 @@ This is the canonical development path and the most transparent way to get
 started.
 
 ```bash
-git clone https://github.com/xmtp/xmtp-signet.git
+git clone https://github.com/galligan/xmtp-signet.git
 cd xmtp-signet
 bun run bootstrap
 ```
@@ -33,12 +33,17 @@ installer script below or create your own alias/wrapper.
 
 ### One-shot installer
 
-If you want a stable installer URL, this repo also ships a GitHub-friendly
-bootstrap script. It still expects `git` and `bun` to be installed first:
+If you want a stable installer URL, the preferred public path is:
+
+```bash
+curl -fsSL https://xmtp.fyi/install.sh | bash
+```
+
+That host should proxy the script from this repo. The repo-backed fallback is:
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/xmtp/xmtp-signet/main/scripts/install.sh \
+  https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh \
   | bash
 ```
 
@@ -52,7 +57,7 @@ Safer inspect-first variant:
 
 ```bash
 curl -fsSL \
-  https://raw.githubusercontent.com/xmtp/xmtp-signet/main/scripts/install.sh \
+  https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh \
   -o /tmp/xmtp-signet-install.sh
 less /tmp/xmtp-signet-install.sh
 bash /tmp/xmtp-signet-install.sh
@@ -69,6 +74,8 @@ This script is designed so you can later publish it behind a stable redirect or
 proxy such as `https://xmtp.fyi/install.sh` without changing the script itself.
 The minimal hosting setup is just a tiny Vercel or Cloudflare project that
 redirects or proxies `/install.sh` to this script's raw GitHub URL.
+It is XDG-aware on Linux and uses macOS-friendly fallbacks for the checkout
+path as well.
 
 ## Install the skills
 
@@ -206,7 +213,7 @@ runtime, transport, event model, and connection lifecycle details.
 
 ```bash
 # Clone and bootstrap
-git clone https://github.com/xmtp/xmtp-signet.git
+git clone https://github.com/galligan/xmtp-signet.git
 cd xmtp-signet
 bun run bootstrap
 
