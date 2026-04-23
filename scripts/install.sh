@@ -222,8 +222,9 @@ write_wrapper() {
   cat > "$wrapper_path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$INSTALL_DIR"
-exec "$BUN_CMD" packages/cli/src/bin.ts "\$@"
+# Run the CLI by absolute path so the user's CWD is preserved — relative
+# --config / file arguments resolve against the caller's directory.
+exec "$BUN_CMD" "$INSTALL_DIR/packages/cli/src/bin.ts" "\$@"
 EOF
   chmod +x "$wrapper_path"
 }
