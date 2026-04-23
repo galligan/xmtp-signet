@@ -70,10 +70,26 @@ bash /tmp/xmtp-signet-install.sh
 
 Useful installer flags:
 
-- `--dir <path>` to choose the checkout path
+- `--binary` download a prebuilt binary from the latest GitHub Release instead
+  of cloning and bootstrapping. Supported on macOS arm64, Linux x64, and
+  Linux arm64. Skips `bun` / `git` requirements on the user's machine. Other
+  platforms fall back to the source path with a clear message.
+- `--release <tag>` pin the binary install to a specific release tag
+  (defaults to `latest`). Only meaningful with `--binary`.
+- `--dir <path>` to choose the checkout (or binary install) path
 - `--bin-dir <path>` to choose where the wrappers are written
-- `--ref <branch-or-tag>` to pin what gets cloned
-- `--update` to fast-forward an existing checkout before bootstrapping
+- `--ref <branch-or-tag>` to pin what gets cloned (source mode only)
+- `--update` to refresh an existing install before re-running
+
+The fastest path for a new machine or agent:
+
+```bash
+curl -fsSL https://xmtp.fyi/install.sh | bash -s -- --binary
+```
+
+Binary tarballs live at
+`https://github.com/galligan/xmtp-signet/releases/latest/download/xs-<target>.tar.gz`,
+each with an adjacent `.sha256` the installer verifies before extracting.
 
 This script is designed so you can later publish it behind a stable redirect or
 proxy such as `https://xmtp.fyi/install.sh` without changing the script itself.

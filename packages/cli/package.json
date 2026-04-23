@@ -21,9 +21,11 @@
   },
   "scripts": {
     "build": "bun build ./src/index.ts ./src/adapter-support.ts --outdir ./dist --target bun && tsc --declaration --emitDeclarationOnly --outDir ./dist",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
     "lint": "oxlint .",
-    "test": "bun test"
+    "test": "bun test",
+    "build:binary": "bun run scripts/build-binary.ts",
+    "build:binary:all": "bun run scripts/build-binary.ts --target bun-darwin-arm64 && bun run scripts/build-binary.ts --target bun-linux-x64 && bun run scripts/build-binary.ts --target bun-linux-arm64"
   },
   "dependencies": {
     "@xmtp/signet-contracts": "workspace:*",

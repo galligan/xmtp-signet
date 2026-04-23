@@ -7,6 +7,7 @@
  */
 
 import { Command } from "commander";
+import { formatVersion } from "./build-info.js";
 import { createLifecycleCommands } from "./commands/lifecycle.js";
 import { createIdentityInitCommand } from "./commands/identity.js";
 import { createAgentCommands } from "./commands/xs-agent.js";
@@ -54,7 +55,7 @@ function requireCommand(
 export function createXsProgram(): Command {
   const program = new Command()
     .name("xs")
-    .version("0.1.0")
+    .version(formatVersion())
     .description("XMTP Signet CLI");
 
   // --- Top-level commands ---
