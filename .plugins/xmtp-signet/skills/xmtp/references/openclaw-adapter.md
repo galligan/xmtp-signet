@@ -20,6 +20,9 @@ run an OpenClaw-managed agent against XMTP, the shape is:
 - **`docs/agent-setup/openclaw.md`**
   - use for the full operator-facing bootstrap guide and artifact layout
 
+If `xs` is missing on the machine, stop and install the signet first through
+the `xmtp-admin` skill before trying to provision the OpenClaw adapter.
+
 ## Happy path
 
 If the signet is already initialized and the daemon is running, the setup

@@ -33,6 +33,44 @@ credential/seal, projection pipeline, event types, harness lifecycle) and
 for day-to-day agent use (messaging, inspecting, harness connection), use
 the `xmtp` skill. This skill focuses on the *privileged* half of the CLI.
 
+## If `xs` is not installed yet
+
+Before you can provision operators, credentials, or adapters, the machine needs
+an `xmtp-signet` checkout and a runnable CLI.
+
+### Canonical path: clone and bootstrap
+
+```bash
+git clone https://github.com/xmtp/xmtp-signet.git
+cd xmtp-signet
+bun run bootstrap
+bun packages/cli/src/bin.ts --help
+```
+
+From a plain clone, the repo entrypoint is the reliable path. If you want
+`xs` as a shell command, create an alias for the current session:
+
+```bash
+alias xs='bun packages/cli/src/bin.ts'
+```
+
+### Convenience path: one-shot installer
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/xmtp/xmtp-signet/main/scripts/install.sh \
+  | bash
+```
+
+That installer clones the repo, runs `bun run bootstrap`, and writes `xs`
+wrappers into `~/.local/bin`.
+
+If `xs` is still not found in a new shell, add this to your shell profile:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ## Trust boundary at a glance
 
 ```text

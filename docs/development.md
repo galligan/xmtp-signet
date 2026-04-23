@@ -15,7 +15,10 @@ cd xmtp-signet
 bun run bootstrap
 ```
 
-Bootstrap installs workspace dependencies, repo hooks, and local CLI tools.
+Bootstrap installs workspace dependencies and repo hooks so the repo-local CLI
+entrypoint can run cleanly.
+For a wrapper-style install that creates `xs` under `~/.local/bin`, use
+`scripts/install.sh` instead.
 
 For the current docs map, start with [index.md](./index.md).
 
@@ -104,20 +107,21 @@ bun run lint
 
 ### CLI
 
-After bootstrap, the local CLI is available as `xs`:
-
-```bash
-xs --help
-xs daemon start
-xs status --json
-xs cred issue --op alice-bot --chat conv_9e2d1a4b8c3f7e60 --allow send,reply
-xs cred info cred_b2c1
-```
-
-If you want to run the entrypoint directly from the repo:
+After bootstrap, run the CLI from the repo entrypoint:
 
 ```bash
 bun packages/cli/src/bin.ts --help
+bun packages/cli/src/bin.ts daemon start
+bun packages/cli/src/bin.ts status --json
+bun packages/cli/src/bin.ts cred issue --op alice-bot --chat conv_9e2d1a4b8c3f7e60 --allow send,reply
+bun packages/cli/src/bin.ts cred info cred_b2c1
+```
+
+If you prefer `xs` while working from a clone, create a shell alias or run the
+installer script so it writes a wrapper into `~/.local/bin`:
+
+```bash
+alias xs='bun packages/cli/src/bin.ts'
 ```
 
 For current-state command and config references:

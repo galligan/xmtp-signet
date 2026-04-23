@@ -6,11 +6,75 @@ touch raw credentials, raw databases, or the XMTP SDK directly. They connect
 through a controlled interface with scoped credentials, policy-based permission
 sets, and public seals that disclose what an agent can do.
 
+## Install the signet
+
+If the machine does not already have a runnable `xs`, there are two supported
+paths:
+
+### Clone and bootstrap
+
+This is the canonical development path and the most transparent way to get
+started.
+
+```bash
+git clone https://github.com/xmtp/xmtp-signet.git
+cd xmtp-signet
+bun run bootstrap
+```
+
+From a plain clone, run the CLI via the repo entrypoint:
+
+```bash
+bun packages/cli/src/bin.ts --help
+```
+
+If you want `xs` as a shell command after a clone-based install, use the
+installer script below or create your own alias/wrapper.
+
+### One-shot installer
+
+If you want a stable installer URL, this repo also ships a GitHub-friendly
+bootstrap script. It still expects `git` and `bun` to be installed first:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/xmtp/xmtp-signet/main/scripts/install.sh \
+  | bash
+```
+
+That script:
+
+- clones `xmtp-signet` into `~/.local/share/xmtp-signet`
+- runs `bun run bootstrap`
+- installs `xs` and `xmtp-signet` wrappers into `~/.local/bin`
+
+Safer inspect-first variant:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/xmtp/xmtp-signet/main/scripts/install.sh \
+  -o /tmp/xmtp-signet-install.sh
+less /tmp/xmtp-signet-install.sh
+bash /tmp/xmtp-signet-install.sh
+```
+
+Useful installer flags:
+
+- `--dir <path>` to choose the checkout path
+- `--bin-dir <path>` to choose where the wrappers are written
+- `--ref <branch-or-tag>` to pin what gets cloned
+- `--update` to fast-forward an existing checkout before bootstrapping
+
+This script is designed so you can later publish it behind a stable redirect or
+proxy such as `https://xmtp.fyi/install.sh` without changing the script itself.
+The minimal hosting setup is just a tiny Vercel or Cloudflare project that
+redirects or proxies `/install.sh` to this script's raw GitHub URL.
+
 ## Install the skills
 
 If you mainly want to use the signet from an agent harness, the fastest path is
-to install the packaged skills first. This repo currently ships two bundled
-skills:
+to install the packaged skills first. If `xs` is not installed yet, start with
+the signet install flow above. This repo currently ships two bundled skills:
 
 - `xmtp` for day-to-day signet use
 - `xmtp-admin` for privileged setup, provisioning, and policy work
@@ -145,6 +209,10 @@ runtime, transport, event model, and connection lifecycle details.
 git clone https://github.com/xmtp/xmtp-signet.git
 cd xmtp-signet
 bun run bootstrap
+
+# Use the repo entrypoint directly, or alias it for this shell session
+bun packages/cli/src/bin.ts --help
+alias xs='bun packages/cli/src/bin.ts'
 
 # Build and verify
 bun run build

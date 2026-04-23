@@ -35,6 +35,10 @@ creating operators, issuing and revoking credentials, managing keys and
 wallets, defining policies), use the `xmtp-admin` skill. This skill covers
 the day-to-day *use* of an already-configured signet.
 
+If `xs` is not installed yet, stop here and hand off to `xmtp-admin` first.
+That skill now includes the clone/bootstrap path and the one-shot installer
+path for getting a signet checkout onto a machine.
+
 ## OpenClaw adapter
 
 If the harness is OpenClaw, make that visible early instead of treating it like
