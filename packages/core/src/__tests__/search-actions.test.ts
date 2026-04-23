@@ -238,6 +238,33 @@ describe("createSearchActions", () => {
       expect(value.matches).toHaveLength(2);
     });
 
+    test("resolves the acting identity from inbox ID", async () => {
+      await seedIdentity();
+
+      const msgs: Record<string, XmtpDecodedMessage[]> = {
+        "group-1": [makeMessage("group-1", "alpha match")],
+      };
+      const groups = [makeGroup("group-1", "Group A")];
+      const client = createMockClient({ messages: msgs, groups });
+      const deps = buildDeps(client);
+      const actions = createSearchActions(deps);
+
+      const spec = actions.find((a) => a.id === "search.messages");
+      const result = await spec!.handler!(
+        {
+          query: "alpha",
+          chatId: "group-1",
+          identityLabel: "mock-inbox-1",
+        },
+        stubCtx(),
+      );
+      expect(Result.isOk(result)).toBe(true);
+      const value = (result as { value: { matches: unknown[]; total: number } })
+        .value;
+      expect(value.matches).toHaveLength(1);
+      expect(value.total).toBe(1);
+    });
+
     test("case-insensitive matching", async () => {
       await seedIdentity();
 

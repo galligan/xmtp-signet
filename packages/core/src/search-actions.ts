@@ -15,6 +15,7 @@ import type {
 } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
+import { resolveIdentitySelector } from "./identity-selector.js";
 
 /** Dependencies used to build search-related action specs. */
 export interface SearchActionDeps {
@@ -40,40 +41,6 @@ interface ResourceSearchHit {
   readonly type: "operator" | "policy" | "credential" | "conversation";
   readonly id: string;
   readonly label: string;
-}
-
-/**
- * Resolve an identity by label, or fall back to the first identity
- * in the store when no label is provided.
- */
-async function resolveIdentity(
-  identityStore: SqliteIdentityStore,
-  label: string | undefined,
-): Promise<
-  Result<{ identityId: string; inboxId: string | null }, SignetError>
-> {
-  if (label) {
-    const identity = await identityStore.getByLabel(label);
-    if (!identity) {
-      return Result.err(NotFoundError.create("identity", label) as SignetError);
-    }
-    return Result.ok({
-      identityId: identity.id,
-      inboxId: identity.inboxId,
-    });
-  }
-
-  const identities = await identityStore.list();
-  const first = identities[0];
-  if (!first) {
-    return Result.err(
-      NotFoundError.create("identity", "(none)") as SignetError,
-    );
-  }
-  return Result.ok({
-    identityId: first.id,
-    inboxId: first.inboxId,
-  });
 }
 
 /**
@@ -251,7 +218,7 @@ export function createSearchActions(
         );
       }
 
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -453,7 +420,10 @@ export function createSearchActions(
       // credential results.  Only hard-fail when conversation was explicitly
       // requested via the `type` filter.
       if (shouldSearch("conversation")) {
-        const resolved = await resolveIdentity(deps.identityStore, undefined);
+        const resolved = await resolveIdentitySelector(
+          deps.identityStore,
+          undefined,
+        );
         if (Result.isError(resolved)) {
           if (input.type === "conversation") return resolved;
         } else {

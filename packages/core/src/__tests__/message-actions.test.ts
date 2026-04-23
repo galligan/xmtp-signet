@@ -187,6 +187,7 @@ describe("message actions", () => {
       client,
       groupIds: new Set<string>(),
     };
+    await identityStore.setInboxId(identity.id, client.inboxId);
     managedClients.set(identity.id, managed);
     return managed;
   }
@@ -218,6 +219,33 @@ describe("message actions", () => {
       if (Result.isOk(result)) {
         const val = result.value as { messageId: string; chatId: string };
         expect(val.messageId).toBe("msg-sent-1");
+        expect(val.chatId).toBe("g1");
+      }
+    });
+
+    test("resolves the acting identity from inbox ID", async () => {
+      const managed = await seedIdentity("sender", {
+        sentMessageId: "msg-sent-2",
+      });
+      setupDeps();
+
+      const actions = createMessageActions(deps);
+      const sendAction = actions.find((a) => a.id === "message.send");
+      expect(sendAction).toBeDefined();
+
+      const result = await sendAction!.handler(
+        {
+          chatId: "g1",
+          text: "Hello from inbox",
+          identityLabel: managed.inboxId,
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        const val = result.value as { messageId: string; chatId: string };
+        expect(val.messageId).toBe("msg-sent-2");
         expect(val.chatId).toBe("g1");
       }
     });

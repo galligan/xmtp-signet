@@ -75,6 +75,44 @@ export class SqliteIdentityStore {
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_label ON identities(label)",
       );
     }
+
+    const duplicateInboxCount = this.#db
+      .prepare(
+        `
+          SELECT COUNT(*) AS count
+          FROM (
+            SELECT inbox_id
+            FROM identities
+            WHERE inbox_id IS NOT NULL
+            GROUP BY inbox_id
+            HAVING COUNT(*) > 1
+          )
+        `,
+      )
+      .get() as { count: number };
+
+    if (duplicateInboxCount.count === 0) {
+      this.#db.run(
+        `
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_inbox_id
+          ON identities(inbox_id)
+          WHERE inbox_id IS NOT NULL
+        `,
+      );
+    } else {
+      // Pre-existing duplicate inbox_id rows block the unique index. Skip
+      // index creation so the migration completes, but warn loudly: without
+      // the index, setInboxId will silently allow further duplicates.
+      // Operators must clean up the duplicates and restart to enable
+      // uniqueness protection.
+      console.warn(
+        `[xmtp-signet] identities.inbox_id unique index skipped: ${duplicateInboxCount.count} duplicate inbox_id value(s) found. Clean up duplicates and restart to enable uniqueness protection.`,
+        {
+          duplicateInboxIdCount: duplicateInboxCount.count,
+          indexSkipped: "idx_identities_inbox_id",
+        },
+      );
+    }
   }
 
   /** Create a new identity with fresh key material. */
@@ -135,7 +173,9 @@ export class SqliteIdentityStore {
   /** Look up an identity by its XMTP inbox ID. */
   async getByInboxId(inboxId: string): Promise<AgentIdentity | null> {
     const row = this.#db
-      .prepare("SELECT * FROM identities WHERE inbox_id = ?")
+      .prepare(
+        "SELECT * FROM identities WHERE inbox_id = ? ORDER BY created_at ASC LIMIT 1",
+      )
       .get(inboxId) as IdentityRow | null;
     return row ? rowToIdentity(row) : null;
   }
@@ -152,15 +192,25 @@ export class SqliteIdentityStore {
   async setInboxId(
     id: string,
     inboxId: string,
-  ): Promise<Result<AgentIdentity, NotFoundError>> {
+  ): Promise<Result<AgentIdentity, NotFoundError | InternalError>> {
     const existing = await this.getById(id);
     if (existing === null) {
       return Result.err(NotFoundError.create("identity", id));
     }
 
-    this.#db
-      .prepare("UPDATE identities SET inbox_id = ? WHERE id = ?")
-      .run(inboxId, id);
+    try {
+      this.#db
+        .prepare("UPDATE identities SET inbox_id = ? WHERE id = ?")
+        .run(inboxId, id);
+    } catch (cause) {
+      return Result.err(
+        InternalError.create("Failed to persist inbox ID", {
+          identityId: id,
+          inboxId,
+          cause: String(cause),
+        }),
+      );
+    }
 
     return Result.ok({
       ...existing,

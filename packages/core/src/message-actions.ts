@@ -10,6 +10,7 @@ import type {
 } from "@xmtp/signet-schemas";
 import type { SqliteIdentityStore } from "./identity-store.js";
 import type { ManagedClient } from "./client-registry.js";
+import { resolveIdentitySelector } from "./identity-selector.js";
 import type { XmtpDecodedMessage } from "./xmtp-client-factory.js";
 
 /** Dependencies used to build message-related action specs. */
@@ -26,41 +27,6 @@ export interface MessageActionDeps {
         credentialId: string,
       ) => Promise<Result<CredentialRecordType, SignetError>>)
     | undefined;
-}
-
-/**
- * Resolve an identity by label, or fall back to the first identity
- * in the store when no label is provided.
- */
-async function resolveIdentity(
-  identityStore: SqliteIdentityStore,
-  label: string | undefined,
-): Promise<
-  Result<{ identityId: string; inboxId: string | null }, SignetError>
-> {
-  if (label) {
-    const identity = await identityStore.getByLabel(label);
-    if (!identity) {
-      return Result.err(NotFoundError.create("identity", label) as SignetError);
-    }
-    return Result.ok({
-      identityId: identity.id,
-      inboxId: identity.inboxId,
-    });
-  }
-
-  // Fall back to first identity
-  const identities = await identityStore.list();
-  const first = identities[0];
-  if (!first) {
-    return Result.err(
-      NotFoundError.create("identity", "(none)") as SignetError,
-    );
-  }
-  return Result.ok({
-    identityId: first.id,
-    inboxId: first.inboxId,
-  });
 }
 
 /**
@@ -193,7 +159,7 @@ export function createMessageActions(
       identityLabel: z.string().optional(),
     }),
     handler: async (input) => {
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -295,7 +261,7 @@ export function createMessageActions(
         }
       }
 
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -403,7 +369,7 @@ export function createMessageActions(
         }
       }
 
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -467,7 +433,7 @@ export function createMessageActions(
       identityLabel: z.string().optional(),
     }),
     handler: async (input) => {
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -529,7 +495,7 @@ export function createMessageActions(
       identityLabel: z.string().optional(),
     }),
     handler: async (input) => {
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -589,7 +555,7 @@ export function createMessageActions(
       identityLabel: z.string().optional(),
     }),
     handler: async (input) => {
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );

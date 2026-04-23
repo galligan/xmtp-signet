@@ -18,6 +18,7 @@ import type { SignetCoreConfig } from "./config.js";
 import { joinConversation } from "./schemes/join.js";
 import type { SignerProviderFactory } from "./identity-registration.js";
 import type { OnboardingScheme } from "./schemes/onboarding-scheme.js";
+import { resolveIdentitySelector } from "./identity-selector.js";
 
 const GroupInfoSchema = z.object({
   chatId: z.string().optional(),
@@ -103,41 +104,6 @@ export interface ConversationActionDeps {
 }
 
 /**
- * Resolve an identity by label, or fall back to the first identity
- * in the store when no label is provided.
- */
-async function resolveIdentity(
-  identityStore: SqliteIdentityStore,
-  label: string | undefined,
-): Promise<
-  Result<{ identityId: string; inboxId: string | null }, SignetError>
-> {
-  if (label) {
-    const identity = await identityStore.getByLabel(label);
-    if (!identity) {
-      return Result.err(NotFoundError.create("identity", label) as SignetError);
-    }
-    return Result.ok({
-      identityId: identity.id,
-      inboxId: identity.inboxId,
-    });
-  }
-
-  // Fall back to first identity
-  const identities = await identityStore.list();
-  const first = identities[0];
-  if (!first) {
-    return Result.err(
-      NotFoundError.create("identity", "(none)") as SignetError,
-    );
-  }
-  return Result.ok({
-    identityId: first.id,
-    inboxId: first.inboxId,
-  });
-}
-
-/**
  * Resolve a chatId (which may be a conv_ local ID or a raw groupId)
  * to the underlying network groupId using the mapping store.
  */
@@ -214,7 +180,10 @@ async function resolveManagedClientForGroup(
   identityLabel?: string,
 ): Promise<Result<ManagedClient, SignetError>> {
   if (identityLabel !== undefined) {
-    const resolved = await resolveIdentity(deps.identityStore, identityLabel);
+    const resolved = await resolveIdentitySelector(
+      deps.identityStore,
+      identityLabel,
+    );
     if (Result.isError(resolved)) return resolved;
 
     const managed = deps.getManagedClient(resolved.value.identityId);
@@ -234,7 +203,7 @@ async function resolveManagedClientForGroup(
     return Result.ok(byGroup);
   }
 
-  const fallback = await resolveIdentity(deps.identityStore, undefined);
+  const fallback = await resolveIdentitySelector(deps.identityStore, undefined);
   if (Result.isError(fallback)) return fallback;
 
   const managed = deps.getManagedClient(fallback.value.identityId);
@@ -304,7 +273,7 @@ export function createConversationActions(
       creatorIdentityLabel: z.string().optional(),
     }),
     handler: async (input) => {
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.creatorIdentityLabel,
       );
@@ -359,7 +328,7 @@ export function createConversationActions(
       identityLabel: z.string().optional(),
     }),
     handler: async (input) => {
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
@@ -582,7 +551,7 @@ export function createConversationActions(
       }
 
       // Resolve identity
-      const resolved = await resolveIdentity(
+      const resolved = await resolveIdentitySelector(
         deps.identityStore,
         input.identityLabel,
       );
