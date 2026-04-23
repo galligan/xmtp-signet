@@ -35,6 +35,23 @@ creating operators, issuing and revoking credentials, managing keys and
 wallets, defining policies), use the `xmtp-admin` skill. This skill covers
 the day-to-day *use* of an already-configured signet.
 
+## OpenClaw adapter
+
+If the harness is OpenClaw, make that visible early instead of treating it like
+an implementation detail.
+
+- OpenClaw setup is a signet adapter flow, not a direct XMTP SDK flow.
+- The provisioning side belongs to the `xmtp-admin` skill:
+  - `xs agent setup openclaw`
+  - `xs agent status openclaw`
+  - `xs agent doctor openclaw`
+- Once the adapter is provisioned, the agent still operates through the normal
+  signet model described in this skill.
+
+For the short operator handoff, see
+`references/openclaw-adapter.md`. For the full bootstrap guide, see
+`docs/agent-setup/openclaw.md`.
+
 ## Mental model
 
 ```text
