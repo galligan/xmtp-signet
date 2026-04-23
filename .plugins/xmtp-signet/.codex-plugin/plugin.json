@@ -1,0 +1,21 @@
+{
+  "name": "xmtp-signet",
+  "version": "0.1.0",
+  "description": "Skills for using and administering the xmtp-signet. Covers the v1 credential model, the `xs` CLI surface, and the harness protocol.",
+  "author": {
+    "name": "Matt Galligan",
+    "email": "matt.galligan@gmail.com",
+    "url": "https://github.com/galligan"
+  },
+  "homepage": "https://github.com/galligan/xmtp-signet",
+  "repository": "https://github.com/galligan/xmtp-signet",
+  "license": "MIT",
+  "keywords": ["xmtp", "signet", "agents", "messaging"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "XMTP Signet",
+    "shortDescription": "Use and administer the xmtp-signet",
+    "longDescription": "Two skills that teach agents and orchestrators how to work with the xmtp-signet: `xmtp` for day-to-day use (messaging, reading, harness connection) and `xmtp-admin` for orchestrator-side setup (operators, credentials, policies, keys, wallets, seals).",
+    "category": "Productivity"
+  }
+}

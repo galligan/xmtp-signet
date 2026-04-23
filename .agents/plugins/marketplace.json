@@ -1,0 +1,20 @@
+{
+  "name": "xmtp-signet",
+  "interface": {
+    "displayName": "XMTP Signet"
+  },
+  "plugins": [
+    {
+      "name": "xmtp-signet",
+      "source": {
+        "source": "local",
+        "path": "./.plugins/xmtp-signet"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
