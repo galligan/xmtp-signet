@@ -71,10 +71,15 @@ curl -fsSL \
 That installer clones the repo, runs `bun run bootstrap`, and writes `xs`
 wrappers into an XDG-aware bin directory.
 
-If `xs` is still not found in a new shell, add this to your shell profile:
+If `xs` is still not found in a new shell, add the installer's printed wrapper
+path to your shell profile. Common defaults are:
 
 ```bash
+# Linux / XDG
 export PATH="$HOME/.local/bin:$PATH"
+
+# macOS fallback (only if the installer chose ~/bin)
+export PATH="$HOME/bin:$PATH"
 ```
 
 ## Trust boundary at a glance
