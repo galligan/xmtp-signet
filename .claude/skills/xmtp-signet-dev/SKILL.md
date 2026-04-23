@@ -192,8 +192,9 @@ Stage 3: Visibility resolver — resolveVisibility() produces visibility state
 Stage 4: Content projector   — projectContent() passes or redacts
 ```
 
-Six visibility states: `visible`, `historical`, `revealed`, `redacted`,
-`hidden`, `dropped`. Harness sees only the first four.
+Five internal visibility states: `visible`, `historical`, `revealed`,
+`redacted`, `hidden`. Harness sees only the first four; `hidden` stays
+internal to the daemon.
 
 If a change affects what a harness can see, start in `policy` and work outward.
 
