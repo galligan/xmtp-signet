@@ -7,6 +7,7 @@ DEFAULT_REPO_URL="https://github.com/galligan/xmtp-signet.git"
 REF="${XMTP_SIGNET_REF:-main}"
 LINK_BIN=1
 UPDATE=0
+BUN_CMD=""
 
 default_install_dir() {
   if [[ -n "${XDG_DATA_HOME:-}" ]]; then
@@ -126,7 +127,6 @@ require_tool() {
 }
 
 require_tool git "Install Git first, then re-run this installer."
-require_tool bun "Install Bun from https://bun.sh, then re-run this installer."
 
 ensure_checkout() {
   if [[ ! -e "$INSTALL_DIR" ]]; then
@@ -158,16 +158,62 @@ ensure_checkout() {
   fi
 }
 
-warn_on_bun_version_mismatch() {
+resolve_expected_bun_version() {
   local version_file="$INSTALL_DIR/.bun-version"
-  if [[ -f "$version_file" ]]; then
-    local expected current
-    expected="$(< "$version_file")"
-    current="$(bun --version)"
-    if [[ "$current" != "$expected" ]]; then
-      echo "warning: expected Bun $expected, found $current" >&2
-    fi
+  if [[ ! -f "$version_file" ]]; then
+    echo "missing Bun version pin: $version_file" >&2
+    exit 1
   fi
+
+  tr -d '[:space:]' < "$version_file"
+}
+
+install_bun_version() {
+  local expected="$1"
+  local bun_install_root="${BUN_INSTALL:-$HOME/.bun}"
+
+  require_tool curl "Install curl first, then re-run this installer."
+
+  echo "==> Installing Bun $expected"
+  env BUN_INSTALL="$bun_install_root" bash -c \
+    "$(curl -fsSL https://bun.sh/install)" -- "bun-v$expected"
+
+  export BUN_INSTALL="$bun_install_root"
+  export PATH="$BUN_INSTALL/bin:$PATH"
+  hash -r
+}
+
+ensure_bun_runtime() {
+  local expected current
+  expected="$(resolve_expected_bun_version)"
+
+  if command -v bun >/dev/null 2>&1; then
+    current="$(bun --version)"
+  else
+    current=""
+  fi
+
+  if [[ "$current" != "$expected" ]]; then
+    if [[ -z "$current" ]]; then
+      echo "==> Bun $expected is required and not installed"
+    else
+      echo "==> Replacing Bun $current with pinned version $expected"
+    fi
+    install_bun_version "$expected"
+  fi
+
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "bun is still unavailable after installation" >&2
+    exit 1
+  fi
+
+  current="$(bun --version)"
+  if [[ "$current" != "$expected" ]]; then
+    echo "installed Bun version mismatch: expected $expected, found $current" >&2
+    exit 1
+  fi
+
+  BUN_CMD="$(command -v bun)"
 }
 
 write_wrapper() {
@@ -177,18 +223,18 @@ write_wrapper() {
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$INSTALL_DIR"
-exec bun packages/cli/src/bin.ts "\$@"
+exec "$BUN_CMD" packages/cli/src/bin.ts "\$@"
 EOF
   chmod +x "$wrapper_path"
 }
 
 ensure_checkout
-warn_on_bun_version_mismatch
+ensure_bun_runtime
 
 echo "==> Bootstrapping checkout"
 (
   cd "$INSTALL_DIR"
-  bun run bootstrap
+  "$BUN_CMD" run bootstrap
 )
 
 if [[ "$LINK_BIN" == "1" ]]; then

@@ -50,6 +50,7 @@ curl -fsSL \
 That script:
 
 - clones `xmtp-signet` into an XDG-aware checkout path
+- installs or upgrades Bun to the repo-pinned version from `.bun-version` when needed
 - runs `bun run bootstrap`
 - installs `xs` and `xmtp-signet` wrappers into an XDG-aware bin path
 
