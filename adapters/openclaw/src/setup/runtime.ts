@@ -8,7 +8,7 @@ import {
   type AdminClient,
   type CliConfig,
   type ResolvedPaths,
-} from "@xmtp/signet-cli";
+} from "@xmtp/signet-cli/adapter-support";
 
 /** Context available to OpenClaw adapter setup/status/doctor handlers. */
 export interface OpenClawAdminContext {

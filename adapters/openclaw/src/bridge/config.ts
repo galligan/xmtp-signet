@@ -14,7 +14,7 @@ import {
   resolvePaths,
   type CliConfig,
   type ResolvedPaths,
-} from "@xmtp/signet-cli";
+} from "@xmtp/signet-cli/adapter-support";
 import { OPENCLAW_ADAPTER_NAME } from "../config/index.js";
 
 /** Local delivery modes supported by the first bridge spike. */
