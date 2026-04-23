@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
-  "name": "xmtp-fyi-install",
+  "name": "xmtp-signet-install-cli",
   "main": "worker.js",
   "compatibility_date": "2026-04-23",
   "workers_dev": true,

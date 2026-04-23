@@ -21,7 +21,7 @@ URL stays stable even if the repo layout or bootstrap story changes.
 From this repo:
 
 ```bash
-cd apps/xmtp-fyi-install
+cd apps/install-cli
 npx wrangler deploy
 ```
 

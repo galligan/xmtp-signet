@@ -31,7 +31,7 @@ async function proxyInstallScript(env) {
   const upstreamUrl = installScriptUrl(env);
   const upstream = await fetch(upstreamUrl, {
     headers: {
-      "user-agent": "xmtp-fyi-install-worker",
+      "user-agent": "xmtp-signet-install-cli-worker",
     },
   });
 

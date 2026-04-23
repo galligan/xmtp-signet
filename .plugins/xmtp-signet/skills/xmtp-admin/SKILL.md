@@ -33,54 +33,12 @@ credential/seal, projection pipeline, event types, harness lifecycle) and
 for day-to-day agent use (messaging, inspecting, harness connection), use
 the `xmtp` skill. This skill focuses on the *privileged* half of the CLI.
 
-## If `xs` is not installed yet
+## Prerequisite: `xs` must be installed
 
-Before you can provision operators, credentials, or adapters, the machine needs
-an `xmtp-signet` checkout and a runnable CLI.
-
-### Canonical path: clone and bootstrap
-
-```bash
-git clone https://github.com/galligan/xmtp-signet.git
-cd xmtp-signet
-bun run bootstrap
-bun packages/cli/src/bin.ts --help
-```
-
-From a plain clone, the repo entrypoint is the reliable path. If you want
-`xs` as a shell command, create an alias for the current session:
-
-```bash
-alias xs='bun packages/cli/src/bin.ts'
-```
-
-### Convenience path: one-shot installer
-
-```bash
-curl -fsSL https://xmtp.fyi/install.sh | bash
-```
-
-Repo-backed fallback:
-
-```bash
-curl -fsSL \
-  https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh \
-  | bash
-```
-
-That installer clones the repo, runs `bun run bootstrap`, and writes `xs`
-wrappers into an XDG-aware bin directory.
-
-If `xs` is still not found in a new shell, add the installer's printed wrapper
-path to your shell profile. Common defaults are:
-
-```bash
-# Linux / XDG
-export PATH="$HOME/.local/bin:$PATH"
-
-# macOS fallback (only if the installer chose ~/bin)
-export PATH="$HOME/bin:$PATH"
-```
+Everything in this skill assumes `xs` is already on the machine. If it is not,
+or if `xs` commands are failing with "command not found" or a stale binary,
+stop here and load the `xmtp` skill — it owns the install and bootstrap story
+for both agents and orchestrators. Come back once `xs --help` runs.
 
 ## Trust boundary at a glance
 
