@@ -20,8 +20,9 @@ description: >
 
 > [!IMPORTANT]
 > This is a legacy compatibility skill. The canonical end-user skills now live
-> under `skills/xmtp` and `skills/xmtp-admin`; keep this file aligned with
-> those newer surfaces.
+> under `.plugins/xmtp-signet/skills/xmtp` and
+> `.plugins/xmtp-signet/skills/xmtp-admin`; keep this file aligned with those
+> newer surfaces.
 
 The signet is the primary way to connect agents to XMTP without handing the
 agent raw signer material, database access, or direct SDK control.
