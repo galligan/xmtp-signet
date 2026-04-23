@@ -49,9 +49,14 @@ curl -fsSL \
 
 That script:
 
-- clones `xmtp-signet` into `~/.local/share/xmtp-signet`
+- clones `xmtp-signet` into an XDG-aware checkout path
 - runs `bun run bootstrap`
-- installs `xs` and `xmtp-signet` wrappers into `~/.local/bin`
+- installs `xs` and `xmtp-signet` wrappers into an XDG-aware bin path
+
+Default locations:
+
+- Linux / XDG: `${XDG_DATA_HOME:-~/.local/share}/xmtp-signet` and `${XDG_BIN_HOME:-~/.local/bin}`
+- macOS fallback: `~/Library/Application Support/xmtp-signet` and either `~/.local/bin` or `~/bin`
 
 Safer inspect-first variant:
 
@@ -74,8 +79,6 @@ This script is designed so you can later publish it behind a stable redirect or
 proxy such as `https://xmtp.fyi/install.sh` without changing the script itself.
 The minimal hosting setup is just a tiny Vercel or Cloudflare project that
 redirects or proxies `/install.sh` to this script's raw GitHub URL.
-It is XDG-aware on Linux and uses macOS-friendly fallbacks for the checkout
-path as well.
 
 ## Install the skills
 
