@@ -3,6 +3,11 @@
 This document describes the live `xs` command surface on `main`. For config
 layout and path resolution, see [configuration.md](./configuration.md).
 
+If `xs` is not already on your `PATH`, either:
+
+- run the repo entrypoint directly with `bun packages/cli/src/bin.ts ...`, or
+- install the wrapper script from `scripts/install.sh`
+
 ## Command Map
 
 Top-level commands:

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "xmtp-fyi-install",
+  "main": "worker.js",
+  "compatibility_date": "2026-04-23",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "xmtp.fyi",
+      "custom_domain": true,
+    },
+  ],
+  "vars": {
+    "GITHUB_REPO": "galligan/xmtp-signet",
+    "GITHUB_REF": "main",
+  },
+}

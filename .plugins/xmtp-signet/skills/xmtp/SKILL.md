@@ -35,6 +35,48 @@ creating operators, issuing and revoking credentials, managing keys and
 wallets, defining policies), use the `xmtp-admin` skill. This skill covers
 the day-to-day *use* of an already-configured signet.
 
+## First check: is `xs` available?
+
+Before using this skill, check whether `xs` is already available:
+
+```bash
+if command -v xs >/dev/null 2>&1; then
+  xs --help >/dev/null
+else
+  echo "xs is not installed yet"
+fi
+```
+
+If `xs` is not installed yet:
+
+- preferred public installer: `curl -fsSL https://xmtp.fyi/install.sh | bash`
+- repo-backed fallback:
+  `curl -fsSL https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh | bash`
+- if you already have a local clone, use the repo entrypoint directly:
+  `bun packages/cli/src/bin.ts --help`
+
+Then hand off to `xmtp-admin` for `xs init`, daemon startup, operator setup,
+credential issuance, and adapter provisioning.
+
+## OpenClaw adapter
+
+If the harness is OpenClaw, make that visible early instead of treating it like
+an implementation detail.
+
+- OpenClaw setup is a signet adapter flow, not a direct XMTP SDK flow.
+- The happy-path provisioning command is `xs agent setup openclaw`.
+- The provisioning side still belongs to the `xmtp-admin` skill.
+- `xs agent status openclaw` is a follow-up verification command, not a
+  required setup step.
+- `xs agent doctor openclaw` is the repair/diagnostic path when setup or wiring
+  looks wrong.
+- Once the adapter is provisioned, the agent still operates through the normal
+  signet model described in this skill.
+
+For the short operator handoff, see
+`references/openclaw-adapter.md`. For the full bootstrap guide, see
+`docs/agent-setup/openclaw.md`.
+
 ## Mental model
 
 ```text
