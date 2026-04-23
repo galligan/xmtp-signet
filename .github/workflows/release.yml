@@ -46,6 +46,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build workspace packages
+        # build:binary follows workspace exports.default -> dist/index.js,
+        # so the workspace packages need their dist/ populated first.
+        run: bun run build
+
       - name: Resolve short target name
         id: target
         run: |
@@ -92,6 +97,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: bun run build
 
       - name: Build xs binary (ad-hoc codesigned by build script)
         run: bun run --cwd packages/cli build:binary -- --target bun-darwin-arm64
