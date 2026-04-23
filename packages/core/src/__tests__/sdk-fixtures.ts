@@ -143,8 +143,11 @@ export function createMockSdkNativeClient(
       listGroups: () => groups,
       createDm: async (_inboxId: string) =>
         createMockGroup({ id: `dm-${Date.now()}` }),
-      createGroup: async (inboxIds: string[], opts?: { name?: string }) =>
-        createMockGroup({ id: `group-${Date.now()}`, name: opts?.name }),
+      createGroup: async (inboxIds: string[], opts?: { groupName?: string }) =>
+        createMockGroup({
+          id: `group-${Date.now()}`,
+          name: opts?.groupName,
+        }),
       sync: async () => {},
       syncAll: async () => ({ numConversations: groups.length }),
       stream: async () => createMockAsyncStreamProxy<SdkGroupShape>([]),

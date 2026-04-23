@@ -386,10 +386,14 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
 
     async createGroup(
       memberInboxIds: readonly string[],
-      options?: { name?: string },
+      options?: { name?: string; groupName?: string },
     ): Promise<Result<XmtpGroupInfo, SignetError>> {
       return wrapSdkCall(async () => {
-        const opts = options?.name !== undefined ? { name: options.name } : {};
+        const requestedGroupName = options?.groupName ?? options?.name;
+        const opts =
+          requestedGroupName !== undefined
+            ? { groupName: requestedGroupName }
+            : {};
         const group = await client.conversations.createGroup(
           [...memberInboxIds],
           opts,

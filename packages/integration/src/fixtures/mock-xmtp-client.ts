@@ -177,7 +177,7 @@ export function createMockXmtpClient(options?: MockXmtpClientOptions): {
       const groupId = `group_${crypto.randomUUID()}`;
       const info: XmtpGroupInfo = {
         groupId,
-        name: opts?.name ?? "",
+        name: opts?.groupName ?? opts?.name ?? "",
         description: "",
         imageUrl: undefined,
         memberInboxIds: [inboxId, ...memberInboxIds],

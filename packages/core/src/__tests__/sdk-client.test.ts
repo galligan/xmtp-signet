@@ -330,6 +330,32 @@ describe("createSdkClient", () => {
     });
   });
 
+  describe("createGroup", () => {
+    test("maps name to groupName for the SDK create call", async () => {
+      let capturedOptions: { name?: string; groupName?: string } | undefined;
+      const createdGroup = createMockGroup({
+        id: "g-created",
+        name: "Named Group",
+      });
+      const native = createMockSdkNativeClient();
+      native.conversations.createGroup = async (_inboxIds, options) => {
+        capturedOptions = options;
+        return createdGroup;
+      };
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.createGroup(["inbox-a", "inbox-b"], {
+        name: "Named Group",
+      });
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.name).toBe("Named Group");
+      }
+      expect(capturedOptions).toEqual({ groupName: "Named Group" });
+    });
+  });
+
   describe("addMembers", () => {
     test("delegates to group.addMembers", async () => {
       let addedIds: string[] = [];
