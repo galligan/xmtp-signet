@@ -6,6 +6,61 @@ touch raw credentials, raw databases, or the XMTP SDK directly. They connect
 through a controlled interface with scoped credentials, policy-based permission
 sets, and public seals that disclose what an agent can do.
 
+## Install the skills
+
+If you mainly want to use the signet from an agent harness, the fastest path is
+to install the packaged skills first. This repo currently ships two bundled
+skills:
+
+- `xmtp` for day-to-day signet use
+- `xmtp-admin` for privileged setup, provisioning, and policy work
+
+### Claude Code
+
+For Claude Code, the install flow is two steps:
+
+1. Add the marketplace
+2. Install the `xmtp-signet` plugin from that marketplace
+
+From inside Claude Code:
+
+```text
+/plugin marketplace add galligan/xmtp-signet
+/plugin install xmtp-signet@xmtp-signet
+```
+
+From your shell:
+
+```bash
+claude plugin marketplace add galligan/xmtp-signet
+claude plugin install xmtp-signet@xmtp-signet
+```
+
+If you want the marketplace declaration scoped somewhere other than the default
+user scope, `claude plugin marketplace add` also supports `--scope project` and
+`--scope local`.
+
+### Other agents
+
+For other platforms, use [`npx skills`](https://skills.sh/) to install the
+packaged skill bundle directly.
+
+From a local clone:
+
+```bash
+npx skills add ./.plugins/xmtp-signet \
+  --agent codex \
+  --agent openclaw \
+  --skill xmtp \
+  --skill xmtp-admin
+```
+
+Useful variants:
+
+- Preview the packaged skills first with `npx skills add ./.plugins/xmtp-signet --list`
+- Add `-g` for a global install instead of a project-local install
+- Swap the `--agent` flags to match the harnesses you actually use
+
 ## Why a signet?
 
 Without a signet, an XMTP agent is usually a full client: it holds wallet
