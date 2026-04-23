@@ -109,6 +109,112 @@ describe("createSdkClient", () => {
       }
       expect(capturedPayload).toBe(customEncoded);
     });
+
+    test("encodes reply content with the SDK reply helper", async () => {
+      let capturedReply: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.sendReply = async (reply) => {
+        capturedReply = reply;
+        return "msg-id-reply";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.sendMessage(
+        "g1",
+        {
+          reference: "msg-aaa",
+          referenceInboxId: "inbox-original",
+          text: "Reply text",
+        },
+        "reply",
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-reply");
+      }
+      expect(capturedReply).toMatchObject({
+        reference: "msg-aaa",
+        referenceInboxId: "inbox-original",
+      });
+      expect(capturedReply).not.toBeNull();
+      if (capturedReply && typeof capturedReply === "object") {
+        const replyContent = (capturedReply as { content?: unknown }).content;
+        expect(replyContent).not.toBe("Reply text");
+        // Mirror @xmtp/node-bindings encodeText shape: xmtp.org/text:1.0,
+        // UTF-8 encoded body. Locally constructed to keep sdk-client.ts
+        // free of @xmtp/node-sdk runtime imports.
+        expect(replyContent).toMatchObject({
+          type: {
+            authorityId: "xmtp.org",
+            typeId: "text",
+            versionMajor: 1,
+            versionMinor: 0,
+          },
+          parameters: { encoding: "UTF-8" },
+        });
+        const encodedBytes = (replyContent as { content?: unknown }).content;
+        expect(encodedBytes).toBeInstanceOf(Uint8Array);
+        expect(new TextDecoder().decode(encodedBytes as Uint8Array)).toBe(
+          "Reply text",
+        );
+      }
+    });
+
+    test("uses the SDK reaction helper", async () => {
+      let capturedReaction: unknown = null;
+      const group = createMockGroup({ id: "g1" });
+      group.sendReaction = async (reaction) => {
+        capturedReaction = reaction;
+        return "msg-id-reaction";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.sendMessage(
+        "g1",
+        {
+          reference: "msg-aaa",
+          referenceInboxId: "inbox-original",
+          action: "added",
+          content: "👍",
+          schema: "unicode",
+        },
+        "reaction",
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-reaction");
+      }
+      expect(capturedReaction).toEqual({
+        reference: "msg-aaa",
+        referenceInboxId: "inbox-original",
+        action: "added",
+        content: "👍",
+        schema: "unicode",
+      });
+    });
+
+    test("uses the SDK read-receipt helper", async () => {
+      let readReceiptCalled = false;
+      const group = createMockGroup({ id: "g1" });
+      group.sendReadReceipt = async () => {
+        readReceiptCalled = true;
+        return "msg-id-read-receipt";
+      };
+      const native = createMockSdkNativeClient({ groups: [group] });
+      const client = createSdkClient({ client: native, syncTimeoutMs: 5000 });
+
+      const result = await client.sendMessage("g1", {}, "readReceipt");
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBe("msg-id-read-receipt");
+      }
+      expect(readReceiptCalled).toBe(true);
+    });
   });
 
   describe("syncAll", () => {

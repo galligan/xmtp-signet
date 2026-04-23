@@ -63,6 +63,25 @@ export interface SdkGroupShape {
   sync(): Promise<void>;
   sendText(text: string): Promise<string>;
   send(encoded: unknown): Promise<string>;
+  sendReaction(
+    reaction: {
+      reference: string;
+      referenceInboxId?: string;
+      action: "added" | "removed";
+      content: string;
+      schema: "unicode" | "shortcode" | "custom";
+    },
+    isOptimistic?: boolean,
+  ): Promise<string>;
+  sendReadReceipt(isOptimistic?: boolean): Promise<string>;
+  sendReply(
+    reply: {
+      reference: string;
+      referenceInboxId?: string;
+      content: unknown;
+    },
+    isOptimistic?: boolean,
+  ): Promise<string>;
   addMembers(inboxIds: string[]): Promise<void>;
   removeMembers(inboxIds: string[]): Promise<void>;
   updateName(name: string): Promise<void>;

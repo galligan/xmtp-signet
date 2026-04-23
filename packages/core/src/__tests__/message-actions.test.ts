@@ -783,6 +783,7 @@ describe("message actions", () => {
     test("sends reply content type with reference", async () => {
       const managed = await seedIdentity("replier", {
         sentMessageId: "msg-reply-1",
+        messages: sampleMessages,
       });
       setupDeps();
 
@@ -827,12 +828,14 @@ describe("message actions", () => {
       expect(sendCalls[0]!.content).toEqual({
         text: "Reply text",
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
       });
     });
 
     test("resolves msg_ local ID to network ID in reference", async () => {
       const managed = await seedIdentity("replier", {
         sentMessageId: "msg-reply-2",
+        messages: sampleMessages,
       });
       idMappings.set("msg-aaa", "msg_0123456789abcdef", "message");
       setupDeps();
@@ -871,6 +874,43 @@ describe("message actions", () => {
       expect(sendCalls[0]!.content).toEqual({
         text: "Reply text",
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
+      });
+    });
+
+    test("allows replies when the referenced message is not cached locally", async () => {
+      const managed = await seedIdentity("replier", {
+        sentMessageId: "msg-reply-3",
+      });
+      setupDeps();
+
+      const actions = createMessageActions(deps);
+      const replyAction = actions.find((a) => a.id === "message.reply");
+
+      const result = await replyAction!.handler(
+        {
+          chatId: "g1",
+          messageId: "msg-remote-only",
+          text: "Reply without cache",
+          identityLabel: "replier",
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+
+      const sendCalls = (
+        managed.client as unknown as {
+          _sendCalls: {
+            groupId: string;
+            content: unknown;
+            contentType?: string;
+          }[];
+        }
+      )._sendCalls;
+      expect(sendCalls[0]!.content).toEqual({
+        text: "Reply without cache",
+        reference: "msg-remote-only",
       });
     });
   });
@@ -879,6 +919,7 @@ describe("message actions", () => {
     test("sends reaction content type with reference", async () => {
       const managed = await seedIdentity("reactor", {
         sentMessageId: "msg-react-1",
+        messages: sampleMessages,
       });
       setupDeps();
 
@@ -922,6 +963,7 @@ describe("message actions", () => {
       expect(sendCalls[0]!.contentType).toBe("reaction");
       expect(sendCalls[0]!.content).toEqual({
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
         action: "added",
         content: "👍",
         schema: "unicode",
@@ -931,6 +973,7 @@ describe("message actions", () => {
     test("resolves msg_ local ID to network ID in reference", async () => {
       const managed = await seedIdentity("reactor", {
         sentMessageId: "msg-react-2",
+        messages: sampleMessages,
       });
       idMappings.set("msg-aaa", "msg_0123456789abcdef", "message");
       setupDeps();
@@ -959,8 +1002,47 @@ describe("message actions", () => {
       )._sendCalls;
       expect(sendCalls[0]!.content).toEqual({
         reference: "msg-aaa",
+        referenceInboxId: "inbox-a",
         action: "added",
         content: "🎉",
+        schema: "unicode",
+      });
+    });
+
+    test("allows reactions when the referenced message is not cached locally", async () => {
+      const managed = await seedIdentity("reactor", {
+        sentMessageId: "msg-react-3",
+      });
+      setupDeps();
+
+      const actions = createMessageActions(deps);
+      const reactAction = actions.find((a) => a.id === "message.react");
+
+      const result = await reactAction!.handler(
+        {
+          chatId: "g1",
+          messageId: "msg-remote-only",
+          reaction: "👍",
+          identityLabel: "reactor",
+        },
+        stubCtx(),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+
+      const sendCalls = (
+        managed.client as unknown as {
+          _sendCalls: {
+            groupId: string;
+            content: unknown;
+            contentType?: string;
+          }[];
+        }
+      )._sendCalls;
+      expect(sendCalls[0]!.content).toEqual({
+        reference: "msg-remote-only",
+        action: "added",
+        content: "👍",
         schema: "unicode",
       });
     });

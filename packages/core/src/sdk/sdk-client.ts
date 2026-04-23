@@ -29,6 +29,7 @@ import { createConvosOnboardingScheme } from "../schemes/default-onboarding-sche
 import type { OnboardingScheme } from "../schemes/onboarding-scheme.js";
 import type {
   SdkClientShape,
+  SdkContentTypeIdShape,
   SdkGroupShape,
   SdkConsentEntityType,
   SdkConsentState,
@@ -67,6 +68,33 @@ async function getGroup(
 }
 
 /**
+ * Build an EncodedContent payload for the `xmtp.org/text:1.0` content type.
+ *
+ * Mirrors `encodeText` from `@xmtp/node-bindings` (re-exported by
+ * `@xmtp/node-sdk`) without taking a runtime dependency on the SDK,
+ * preserving this module's structural-typing-only boundary against the
+ * SDK. The shape is fixed by the XMTP text content-type spec
+ * (authority `xmtp.org`, type `text`, version `1.0`, UTF-8 encoded body)
+ * and matches the existing generic encoded-content construction below.
+ */
+function encodeTextContent(text: string): {
+  type: SdkContentTypeIdShape;
+  parameters: Record<string, string>;
+  content: Uint8Array;
+} {
+  return {
+    type: {
+      authorityId: "xmtp.org",
+      typeId: "text",
+      versionMajor: 1,
+      versionMinor: 0,
+    },
+    parameters: { encoding: "UTF-8" },
+    content: new TextEncoder().encode(text),
+  };
+}
+
+/**
  * Extract text from message content. Handles plain strings, objects
  * with a `text` property (text content type), and falls back to JSON
  * serialization for other structured payloads.
@@ -83,6 +111,48 @@ function resolveTextContent(content: unknown): string {
     }
   }
   return JSON.stringify(content);
+}
+
+function isReplyContent(content: unknown): content is {
+  reference: string;
+  text: string;
+  referenceInboxId?: string;
+} {
+  if (typeof content !== "object" || content === null) {
+    return false;
+  }
+
+  const record = content as Record<string, unknown>;
+  return (
+    typeof record["reference"] === "string" &&
+    typeof record["text"] === "string" &&
+    (record["referenceInboxId"] === undefined ||
+      typeof record["referenceInboxId"] === "string")
+  );
+}
+
+function isReactionContent(content: unknown): content is {
+  reference: string;
+  referenceInboxId?: string;
+  action: "added" | "removed";
+  content: string;
+  schema: "unicode" | "shortcode" | "custom";
+} {
+  if (typeof content !== "object" || content === null) {
+    return false;
+  }
+
+  const record = content as Record<string, unknown>;
+  const action = record["action"];
+  const schema = record["schema"];
+  return (
+    typeof record["reference"] === "string" &&
+    (record["referenceInboxId"] === undefined ||
+      typeof record["referenceInboxId"] === "string") &&
+    typeof record["content"] === "string" &&
+    (action === "added" || action === "removed") &&
+    (schema === "unicode" || schema === "shortcode" || schema === "custom")
+  );
 }
 
 /** Map our consent entity types to SDK enum string equivalents. */
@@ -156,6 +226,59 @@ export function createSdkClient(options: SdkClientOptions): XmtpClient {
         ) {
           return wrapSdkCall(async () => group.send(content), "sendMessage");
         }
+
+        if (contentType === "reply" || contentType === "xmtp.org/reply:1.0") {
+          if (!isReplyContent(content)) {
+            return Result.err(
+              ValidationError.create(
+                "content",
+                "Reply messages require text and reference fields",
+              ),
+            );
+          }
+
+          return wrapSdkCall(
+            async () =>
+              group.sendReply({
+                reference: content.reference,
+                ...(content.referenceInboxId
+                  ? { referenceInboxId: content.referenceInboxId }
+                  : {}),
+                content: encodeTextContent(content.text),
+              }),
+            "sendMessage",
+          );
+        }
+
+        if (
+          contentType === "reaction" ||
+          contentType === "xmtp.org/reaction:1.0"
+        ) {
+          if (!isReactionContent(content)) {
+            return Result.err(
+              ValidationError.create(
+                "content",
+                "Reaction messages require reference, action, content, and schema fields",
+              ),
+            );
+          }
+
+          return wrapSdkCall(
+            async () => group.sendReaction(content),
+            "sendMessage",
+          );
+        }
+
+        if (
+          contentType === "readReceipt" ||
+          contentType === "xmtp.org/readReceipt:1.0"
+        ) {
+          return wrapSdkCall(
+            async () => group.sendReadReceipt(),
+            "sendMessage",
+          );
+        }
+
         // Parse "authority/type:major.minor" format
         const slashIdx = contentType.indexOf("/");
         const colonIdx = contentType.indexOf(":");
