@@ -1,19 +1,20 @@
 {
   "name": "xmtp-signet",
-  "owner": {
-    "name": "Matt Galligan",
-    "email": "matt.galligan@gmail.com"
+  "interface": {
+    "displayName": "XMTP Signet"
   },
-  "strict": false,
   "plugins": [
     {
       "name": "xmtp-signet",
-      "source": "./.plugins/xmtp-signet",
-      "version": "0.1.0",
-      "description": "Skills for using and administering the xmtp-signet. Covers the v1 credential model, the `xs` CLI surface, and the harness protocol.",
-      "license": "MIT",
-      "homepage": "https://github.com/galligan/xmtp-signet",
-      "keywords": ["xmtp", "signet", "agents", "messaging"]
+      "source": {
+        "source": "local",
+        "path": "./.plugins/xmtp-signet"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
     }
   ]
 }
