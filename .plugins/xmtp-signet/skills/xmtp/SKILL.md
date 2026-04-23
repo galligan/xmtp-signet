@@ -49,12 +49,12 @@ fi
 
 If `xs` is not installed yet:
 
-- **fastest for agents** — fetch the prebuilt binary (macOS arm64, Linux
-  x64, Linux arm64). No `bun` or `git` required on the machine:
-  `curl -fsSL https://xmtp.fyi/install.sh | bash -s -- --binary`
-- source install (clone + `bun run bootstrap`):
+- **fastest for agents** — fetch the prebuilt binary (macOS arm64, Linux x64,
+  Linux arm64). No `bun` or `git` required on the machine:
   `curl -fsSL https://xmtp.fyi/install.sh | bash`
-- repo-backed fallback (source):
+- source install (clone + `bun run bootstrap`):
+  `curl -fsSL https://xmtp.fyi/install.sh | bash -s -- --source`
+- repo-backed fallback:
   `curl -fsSL https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh | bash`
 - if you already have a local clone, use the repo entrypoint directly:
   `bun packages/cli/src/bin.ts --help`

@@ -8,8 +8,11 @@ DEFAULT_RELEASE_REPO="galligan/xmtp-signet"
 REF="${XMTP_SIGNET_REF:-main}"
 LINK_BIN=1
 UPDATE=0
-BINARY=0
+BINARY=1
+BINARY_EXPLICIT=0
+SOURCE_EXPLICIT=0
 RELEASE="${XMTP_SIGNET_RELEASE:-latest}"
+RELEASE_EXPLICIT=0
 REF_EXPLICIT=0
 REPO_EXPLICIT=0
 
@@ -58,16 +61,18 @@ usage() {
 Install xmtp-signet and create an `xs` wrapper.
 
 Two install modes:
-  source (default) — clone the repo and bootstrap with Bun
-  binary (--binary) — download a prebuilt single-file binary from GitHub Releases
+  binary (default) — download a prebuilt single-file binary from GitHub Releases
+  source (--source) — clone the repo and bootstrap with Bun
 
 Usage:
   install.sh [options]
 
 Options:
-  --binary           Install a prebuilt binary from GitHub Releases instead of
-                     cloning the source. Skips Bun + git requirements.
-  --release <tag>    Release tag to download when --binary is set (default: latest)
+  --binary           Install a prebuilt binary from GitHub Releases. This is the
+                     default mode and skips Bun + git requirements.
+  --source           Clone the repo and bootstrap with Bun instead of installing
+                     a prebuilt binary.
+  --release <tag>    Release tag to download in binary mode (default: latest)
   --dir <path>       Install path (default: XDG-aware per-platform path)
   --bin-dir <path>   Wrapper install path (default: XDG-aware per-platform path)
   --repo <url>       (source mode) Git repository to clone (default: official GitHub repo)
@@ -76,8 +81,8 @@ Options:
   --no-link-bin      Skip creating xs/xmtp-signet wrapper scripts
   -h, --help         Show this help
 
-Binary mode supports: darwin-arm64, linux-x64, linux-arm64. Other platforms
-must use the default source install.
+Binary mode supports: darwin-arm64, linux-x64, linux-arm64. Other platforms can
+use source mode with --source.
 
 Once `xs` is on PATH, see the xmtp-admin skill for next steps:
   .plugins/xmtp-signet/skills/xmtp-admin/SKILL.md
@@ -100,10 +105,17 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --binary)
       BINARY=1
+      BINARY_EXPLICIT=1
+      shift
+      ;;
+    --source)
+      BINARY=0
+      SOURCE_EXPLICIT=1
       shift
       ;;
     --release)
       RELEASE="$2"
+      RELEASE_EXPLICIT=1
       shift 2
       ;;
     --dir)
@@ -117,11 +129,17 @@ while [[ $# -gt 0 ]]; do
     --repo)
       REPO_URL="$2"
       REPO_EXPLICIT=1
+      if [[ "$BINARY_EXPLICIT" != "1" ]]; then
+        BINARY=0
+      fi
       shift 2
       ;;
     --ref)
       REF="$2"
       REF_EXPLICIT=1
+      if [[ "$BINARY_EXPLICIT" != "1" ]]; then
+        BINARY=0
+      fi
       shift 2
       ;;
     --update)
@@ -144,6 +162,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$BINARY_EXPLICIT" == "1" && "$SOURCE_EXPLICIT" == "1" ]]; then
+  echo "--binary and --source select different install modes; choose one." >&2
+  exit 1
+fi
+
 if [[ "$BINARY" == "1" ]]; then
   if [[ "$REF_EXPLICIT" == "1" ]]; then
     echo "--ref is a source-install option; it cannot be combined with --binary." >&2
@@ -155,6 +178,9 @@ if [[ "$BINARY" == "1" ]]; then
     echo "Binary downloads always come from the official release at github.com/$DEFAULT_RELEASE_REPO." >&2
     exit 1
   fi
+elif [[ "$RELEASE_EXPLICIT" == "1" ]]; then
+  echo "--release is a binary-install option; it cannot be combined with --source." >&2
+  exit 1
 fi
 
 require_tool() {
@@ -246,7 +272,7 @@ detect_target() {
     *)
       echo "Binary install is not available for: $(uname -sm)" >&2
       echo "Supported targets: darwin-arm64, linux-x64, linux-arm64." >&2
-      echo "Fall back to source install by omitting --binary." >&2
+      echo "Use source install with --source." >&2
       exit 1
       ;;
   esac
@@ -290,7 +316,7 @@ ensure_binary() {
     elif [[ -d "$INSTALL_DIR/.git" ]]; then
       echo "install directory is an existing source checkout: $INSTALL_DIR" >&2
       echo "Refusing to overwrite with a binary install. Choose a different --dir," >&2
-      echo "or remove that directory first, or re-run without --binary." >&2
+      echo "or remove that directory first, or re-run with --source." >&2
       exit 1
     elif [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null || true)" ]]; then
       echo "install directory is not empty: $INSTALL_DIR" >&2
