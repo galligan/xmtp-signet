@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 const repoRoot = resolve(import.meta.dir, "../../../..");
 const tempDirs: string[] = [];
 const backgroundProcesses: Bun.Subprocess[] = [];
+const detachedPids: number[] = [];
 
 afterEach(async () => {
   await Promise.all(
@@ -19,6 +20,12 @@ afterEach(async () => {
       } catch {}
     }),
   );
+
+  for (const pid of detachedPids.splice(0)) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {}
+  }
 
   await Promise.all(
     tempDirs.splice(0).map((dir) =>
@@ -235,6 +242,55 @@ describe("Phase 2B smoke tests", () => {
 
     daemon.kill("SIGTERM");
     expect(await daemon.exited).toBe(0);
+  });
+
+  test("daemon start --daemon --json exits promptly and reports the bound ws endpoint", async () => {
+    const workspace = await makeWorkspace();
+
+    const initResult = await runCli([
+      "init",
+      "--config",
+      workspace.configPath,
+      "--json",
+    ]);
+    expect(initResult.exitCode).toBe(0);
+
+    const startResult = await runCli([
+      "daemon",
+      "start",
+      "--daemon",
+      "--config",
+      workspace.configPath,
+      "--json",
+    ]);
+    expect(startResult.exitCode).toBe(0);
+
+    const started = JSON.parse(startResult.stdout) as {
+      status: string;
+      pid: number;
+      ws: string;
+    };
+    detachedPids.push(started.pid);
+
+    expect(started.status).toBe("running");
+    expect(started.ws).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/);
+    expect(started.ws).not.toBe("ws://127.0.0.1:0");
+
+    await waitFor(async () => existsSync(workspace.adminSocket));
+
+    const stopResult = await runCli([
+      "daemon",
+      "stop",
+      "--config",
+      workspace.configPath,
+      "--json",
+    ]);
+    expect(stopResult.exitCode).toBe(0);
+
+    const pidIndex = detachedPids.indexOf(started.pid);
+    if (pidIndex >= 0) {
+      detachedPids.splice(pidIndex, 1);
+    }
   });
 
   test("credentialed daemon flow issues a credential, authenticates over WS, enforces scope/auth checks, binds heartbeat to the authenticated credential, and stops cleanly", async () => {

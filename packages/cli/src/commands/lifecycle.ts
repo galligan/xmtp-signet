@@ -11,6 +11,8 @@ import { exitCodeFromCategory } from "../output/exit-codes.js";
 import { createSignetRuntime } from "../runtime.js";
 import { createProductionDeps } from "../start.js";
 import { setupSignalHandlers } from "../daemon/signals.js";
+import { daemonizeCurrentProcess } from "../daemon/background-start.js";
+import { redirectChildStdioToLogFile } from "../daemon/child-log.js";
 import {
   createWithDaemonClient,
   type WithDaemonClient,
@@ -22,6 +24,7 @@ export interface SignetLifecycleCommandDeps {
   readonly resolvePaths: typeof resolvePaths;
   readonly createSignetRuntime: typeof createSignetRuntime;
   readonly createProductionDeps: typeof createProductionDeps;
+  readonly daemonizeCurrentProcess: typeof daemonizeCurrentProcess;
   readonly setupSignalHandlers: typeof setupSignalHandlers;
   readonly withDaemonClient: WithDaemonClient;
   readonly writeStdout: (message: string) => void;
@@ -34,6 +37,7 @@ const defaultDeps: SignetLifecycleCommandDeps = {
   resolvePaths,
   createSignetRuntime,
   createProductionDeps,
+  daemonizeCurrentProcess,
   setupSignalHandlers,
   withDaemonClient: createWithDaemonClient(),
   writeStdout(message) {
@@ -68,6 +72,7 @@ export function createLifecycleCommands(
     .option("--json", "JSON output")
     .action(async (options) => {
       const json = Boolean(options.json);
+      const daemonChild = process.env["XMTP_SIGNET_DAEMON_CHILD"] === "1";
       const write = (msg: string, stream: "stdout" | "stderr" = "stdout") => {
         const target =
           stream === "stderr"
@@ -75,6 +80,28 @@ export function createLifecycleCommands(
             : resolvedDeps.writeStdout;
         target(msg + "\n");
       };
+
+      if (Boolean(options.daemon) && !daemonChild) {
+        const daemonResult = await resolvedDeps.daemonizeCurrentProcess();
+        if (Result.isError(daemonResult)) {
+          write(
+            formatOutput(
+              {
+                error: "Startup failed",
+                message: daemonResult.error.message,
+              },
+              { json },
+            ),
+            "stderr",
+          );
+          resolvedDeps.exit(exitCodeFromCategory(daemonResult.error.category));
+          return;
+        }
+
+        write(formatOutput(daemonResult.value, { json }));
+        resolvedDeps.exit(0);
+        return;
+      }
 
       const configOptions: Parameters<typeof loadConfig>[0] =
         typeof options.config === "string"
@@ -181,12 +208,15 @@ export function createLifecycleCommands(
         resolvedDeps.exit(0);
       });
 
+      const status = await runtime.status();
+      const wsPort = status.wsPort ?? config.ws.port;
+
       write(
         formatOutput(
           {
             status: "running",
-            pid: process.pid,
-            ws: `ws://${config.ws.host}:${config.ws.port}`,
+            pid: status.pid,
+            ws: `ws://${config.ws.host}:${wsPort}`,
             adminSocket: paths.adminSocket,
             env: config.signet.env,
             dataDir: paths.dataDir,
@@ -194,6 +224,17 @@ export function createLifecycleCommands(
           { json },
         ),
       );
+
+      if (daemonChild) {
+        // The parent (`daemonizeCurrentProcess`) destroys its read end of
+        // our stdout/stderr pipes as soon as it parses the startup JSON
+        // line above. Any subsequent write from this detached daemon —
+        // most notably `console.error` from `daemon/signals.ts` during a
+        // SIGTERM/SIGINT shutdown — would EPIPE and silently crash the
+        // process. Redirect both streams to a log file in the data dir
+        // before that race can happen.
+        redirectChildStdioToLogFile(paths.dataDir);
+      }
     });
 
   const stop = new Command("stop")
