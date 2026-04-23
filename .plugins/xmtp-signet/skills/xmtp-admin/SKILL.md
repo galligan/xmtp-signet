@@ -87,6 +87,15 @@ xs agent doctor           # diagnose keys, daemon, credential, seal health
 Use `agent setup` for happy-path provisioning and `agent doctor` as the
 first thing you run when something feels off.
 
+For OpenClaw specifically, the happy-path adapter bootstrap is:
+
+```bash
+xs agent setup openclaw
+```
+
+Follow with `xs agent status openclaw` only when you want a verification pass,
+and `xs agent doctor openclaw` when setup or wiring looks wrong.
+
 ## Keys
 
 Keys are per-operator. `xs key init` is not redundant with `xs init` —

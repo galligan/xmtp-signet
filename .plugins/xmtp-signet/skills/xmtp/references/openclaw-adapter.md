@@ -20,14 +20,34 @@ run an OpenClaw-managed agent against XMTP, the shape is:
 - **`docs/agent-setup/openclaw.md`**
   - use for the full operator-facing bootstrap guide and artifact layout
 
+## Happy path
+
+If the signet is already initialized and the daemon is running, the setup
+command to start with is:
+
+```bash
+xs agent setup openclaw
+```
+
+That is the main setup flow. It provisions or reuses the OpenClaw operator and
+policy templates, verifies daemon and websocket readiness, and writes the
+adapter bundle under the signet data directory.
+
+## Follow-up commands
+
+Use these only when you want confirmation or troubleshooting:
+
+```bash
+xs agent status openclaw   # verify the provisioned adapter bundle
+xs agent doctor openclaw   # diagnose missing prerequisites or broken wiring
+```
+
 ## Minimum OpenClaw setup flow
 
 The OpenClaw adapter uses the generic harness surface:
 
 ```bash
 xs agent setup openclaw
-xs agent status openclaw
-xs agent doctor openclaw
 ```
 
 Provisioning writes the adapter bundle under the signet data directory:
@@ -48,7 +68,8 @@ Important generated artifacts:
 ## What to tell an agent or operator
 
 If the question is "how do I get OpenClaw wired up?" then route to the
-`xmtp-admin` skill and `docs/agent-setup/openclaw.md`.
+`xmtp-admin` skill and `docs/agent-setup/openclaw.md`, and start with
+`xs agent setup openclaw`.
 
 If the question is "how does the agent behave once OpenClaw is connected?" then
 stay in the main `xmtp` skill. The harness still talks to the signet over the

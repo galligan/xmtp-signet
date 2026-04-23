@@ -16,6 +16,24 @@ and currently supports:
 - `xs agent status openclaw`
 - `xs agent doctor openclaw`
 
+## Happy path
+
+If signet is already initialized and the daemon is running, the main command to
+start with is:
+
+```bash
+xs agent setup openclaw
+```
+
+That is the actual provisioning step. It checks prerequisites, ensures the
+OpenClaw operator and policy templates exist, and writes the adapter bundle
+under the signet data directory.
+
+Use the other commands only when you need follow-up inspection:
+
+- `xs agent status openclaw` to verify the generated bundle
+- `xs agent doctor openclaw` to diagnose a broken or partial setup
+
 ## Prerequisites
 
 - `xs` is configured and initialized (`xs init`) so an admin key exists.
@@ -44,30 +62,30 @@ xs status --json
 2. Run OpenClaw provisioning:
 
 ```bash
-xs agent setup openclaw --json
+xs agent setup openclaw
 ```
 
 Use a custom config path with:
 
 ```bash
-xs agent setup openclaw --config /path/to/config.toml --json
+xs agent setup openclaw --config /path/to/config.toml
 ```
 
 3. If you need to rewrite generated files (for example after a bad manual edit),
 re-run with force:
 
 ```bash
-xs agent setup openclaw --config /path/to/config.toml --force --json
+xs agent setup openclaw --config /path/to/config.toml --force
 ```
 
-Successful setup returns a structured result with:
+With `--json`, successful setup returns a structured result with:
 
 - `created`: newly created operators, policies, and artifacts.
 - `reused`: already-existing resources and artifacts.
 - `artifacts`: map of artifact label to absolute path.
 - `nextSteps`: follow-up commands.
 
-Typical output shape:
+Typical JSON output shape:
 
 ```json
 {
@@ -180,13 +198,13 @@ export SIGNET_DATA_DIR="/absolute/path/to/dataDir"
 ls -la "${SIGNET_DATA_DIR}/adapters/openclaw"
 ```
 
-2. Inspect adapter status:
+2. If you want a verification pass after setup, inspect adapter status:
 
 ```bash
-xs agent status openclaw --json
+xs agent status openclaw
 ```
 
-Expected post-setup shape:
+Expected post-setup shape when using `--json`:
 
 - `details.phase: "runtime"`
 - `details.bridgePhase: "read-only"`
@@ -206,10 +224,10 @@ Expected post-setup shape:
 - `degraded` when setup is partially present
 - `missing` when the adapter root is not provisioned yet
 
-3. Run doctor for installation diagnostics:
+3. If setup or wiring looks wrong, run doctor for installation diagnostics:
 
 ```bash
-xs agent doctor openclaw --json
+xs agent doctor openclaw
 ```
 
 Expected doctor behavior:
@@ -264,7 +282,7 @@ If setup is incomplete, doctor calls out:
 
 - You need to verify the bridge runtime itself
   - The adapter now ships the first read-only bridge slice.
-  - `xs agent status openclaw --json` confirms the provisioned adapter bundle
+  - `xs agent status openclaw` confirms the provisioned adapter bundle
     and bridge prerequisites, but it does not prove a live bridge process is
     currently connected to signet.
   - Bridge checkpoint files will appear under `checkpoints/` once a runtime

@@ -41,10 +41,12 @@ If the harness is OpenClaw, make that visible early instead of treating it like
 an implementation detail.
 
 - OpenClaw setup is a signet adapter flow, not a direct XMTP SDK flow.
-- The provisioning side belongs to the `xmtp-admin` skill:
-  - `xs agent setup openclaw`
-  - `xs agent status openclaw`
-  - `xs agent doctor openclaw`
+- The happy-path provisioning command is `xs agent setup openclaw`.
+- The provisioning side still belongs to the `xmtp-admin` skill.
+- `xs agent status openclaw` is a follow-up verification command, not a
+  required setup step.
+- `xs agent doctor openclaw` is the repair/diagnostic path when setup or wiring
+  looks wrong.
 - Once the adapter is provisioned, the agent still operates through the normal
   signet model described in this skill.
 
