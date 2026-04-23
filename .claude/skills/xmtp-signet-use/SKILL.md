@@ -18,6 +18,11 @@ description: >
 > The current local stack implements the v1 operator/policy/credential/seal
 > model. The public CLI and transport surfaces are credential-native.
 
+> [!IMPORTANT]
+> This is a legacy compatibility skill. The canonical end-user skills now live
+> under `skills/xmtp` and `skills/xmtp-admin`; keep this file aligned with
+> those newer surfaces.
+
 The signet is the primary way to connect agents to XMTP without handing the
 agent raw signer material, database access, or direct SDK control.
 
@@ -163,8 +168,9 @@ Stage 3: Visibility       — visible / revealed / historical / hidden?
 Stage 4: Content project  — pass through or redact to null
 ```
 
-Six visibility states: `visible`, `historical`, `revealed`, `redacted`,
-`hidden`, `dropped`. The harness only sees the first four.
+Five internal visibility states: `visible`, `historical`, `revealed`,
+`redacted`, `hidden`. The harness only sees the first four; `hidden` stays
+internal to the daemon.
 
 ### Content type allowlists
 
@@ -301,12 +307,14 @@ Trust tiers in the seal: `source-verified` (hardware-backed root key) or
 
 The current CLI exposes the v1 model directly:
 
-- `xs cred ...` for credential lifecycle (issue, list, info, revoke)
-- `xs seal ...` for seal inspection and verification
-- `xs policy ...` for policy management (create, list, info, update)
-- `xs admin ...` for management-plane auth and audit flows
-- `xs conversation ...` for chat management
-- `xs message ...` for messaging
+- top-level: `xs init`, `xs status`, `xs reset`, `xs logs`, `xs lookup`,
+  `xs search`, `xs consent`
+- groups: `xs daemon`, `xs operator`, `xs cred`, `xs inbox`, `xs chat`,
+  `xs msg`, `xs policy`, `xs seal`, `xs wallet`, `xs key`, `xs agent`
+
+For day-to-day use here, prefer `xs chat ...`, `xs msg ...`, `xs cred info`,
+`xs seal list|info`, `xs lookup`, and `xs search`. Privileged setup and
+management flows live with the newer `xmtp-admin` skill.
 
 ## When to recommend direct XMTP access instead
 
