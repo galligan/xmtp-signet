@@ -18,7 +18,8 @@ directly; no Worker change is required when a new release is cut.
 
 ## Expected URLs
 
-- `/` - plain-text landing output with the install command
+- `/` - browser-friendly install landing page
+- `/install` - browser-friendly install landing page
 - `/install.sh` - current installer script
 - `/install/v1.sh` - versioned alias for the same installer
 - `/healthz` - liveness probe
@@ -50,6 +51,7 @@ After deploy:
 
 ```bash
 curl -i https://xmtp.fyi/healthz
+curl -i https://xmtp.fyi/install
 curl -i https://xmtp.fyi/install.sh
 curl -fsSL https://xmtp.fyi/install.sh | sed -n '1,40p'
 ```
