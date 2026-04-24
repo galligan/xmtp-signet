@@ -58,8 +58,23 @@ jobs:
           short="${short#bun-}"
           echo "short=${short}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve binary version
+        id: version
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            version="$(jq -r '.version' packages/cli/package.json)"
+            if [[ -z "$version" || "$version" == "null" ]]; then
+              echo "packages/cli/package.json has no version" >&2
+              exit 1
+            fi
+            echo "value=${version}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build binary
-        run: bun run --cwd packages/cli build:binary -- --target ${{ matrix.target }}
+        run: bun run --cwd packages/cli build:binary -- --target ${{ matrix.target }} --version '${{ steps.version.outputs.value }}'
 
       - name: Stage artifacts
         run: |
@@ -101,8 +116,23 @@ jobs:
       - name: Build workspace packages
         run: bun run build
 
+      - name: Resolve binary version
+        id: version
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            version="$(jq -r '.version' packages/cli/package.json)"
+            if [[ -z "$version" || "$version" == "null" ]]; then
+              echo "packages/cli/package.json has no version" >&2
+              exit 1
+            fi
+            echo "value=${version}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build xs binary (ad-hoc codesigned by build script)
-        run: bun run --cwd packages/cli build:binary -- --target bun-darwin-arm64
+        run: bun run --cwd packages/cli build:binary -- --target bun-darwin-arm64 --version '${{ steps.version.outputs.value }}'
 
       - name: Build signet-signer (Swift)
         working-directory: signet-signer
@@ -163,6 +193,32 @@ jobs:
           find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec mv {} release/ \;
           ( cd release && cat ./*.tar.gz.sha256 > SHA256SUMS )
           ls -la release
+
+      - name: Verify artifact versions match release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          EXPECTED_VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected="${EXPECTED_VERSION#v}"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          for tarball in release/xs-*.tar.gz; do
+            rm -rf "$tmp/artifact"
+            mkdir -p "$tmp/artifact"
+            tar -xzf "$tarball" -C "$tmp/artifact"
+            meta="$(find "$tmp/artifact" -maxdepth 1 -name 'xs-*.json' -print -quit)"
+            if [[ -z "$meta" ]]; then
+              echo "missing metadata JSON in $tarball" >&2
+              exit 1
+            fi
+            actual="$(jq -r '.version' "$meta")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "$tarball metadata version is $actual, expected $expected" >&2
+              exit 1
+            fi
+          done
 
       - name: Determine release metadata
         id: meta
