@@ -18,16 +18,16 @@ REPO_EXPLICIT=0
 
 default_install_dir() {
   if [[ -n "${XDG_DATA_HOME:-}" ]]; then
-    printf '%s/xmtp-signet\n' "$XDG_DATA_HOME"
+    printf '%s/xmtp-signet/install\n' "$XDG_DATA_HOME"
     return
   fi
 
   case "$UNAME" in
     Darwin)
-      printf '%s/Library/Application Support/xmtp-signet\n' "$HOME"
+      printf '%s/Library/Application Support/xmtp-signet/install\n' "$HOME"
       ;;
     *)
-      printf '%s/.local/share/xmtp-signet\n' "$HOME"
+      printf '%s/.local/share/xmtp-signet/install\n' "$HOME"
       ;;
   esac
 }
