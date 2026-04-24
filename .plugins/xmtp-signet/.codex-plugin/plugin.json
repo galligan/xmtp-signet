@@ -1,6 +1,6 @@
 {
   "name": "xmtp-signet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skills for using and administering the xmtp-signet. Covers the v1 credential model, the `xs` CLI surface, and the harness protocol.",
   "author": {
     "name": "Matt Galligan",
