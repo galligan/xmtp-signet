@@ -194,6 +194,8 @@ require_tool() {
 }
 
 ensure_checkout() {
+  warn_on_legacy_install
+
   if [[ ! -e "$INSTALL_DIR" ]]; then
     mkdir -p "$(dirname "$INSTALL_DIR")"
     echo "==> Cloning xmtp-signet into $INSTALL_DIR"
@@ -313,7 +315,16 @@ warn_on_legacy_install() {
     return
   fi
 
-  if [[ -f "$legacy_dir/xs-$TARGET" || -f "$legacy_dir/xs-$TARGET.json" || -d "$legacy_dir/.git" ]]; then
+  local legacy_binary=0
+  local candidate
+  for candidate in "$legacy_dir"/xs-*; do
+    if [[ -e "$candidate" ]]; then
+      legacy_binary=1
+      break
+    fi
+  done
+
+  if [[ "$legacy_binary" == "1" || -d "$legacy_dir/.git" ]]; then
     echo "warning: found a legacy install at $legacy_dir" >&2
     echo "The wrapper will be updated to use $INSTALL_DIR." >&2
     echo "After verifying xs works, you can remove old binary/source install artifacts from the legacy path." >&2
