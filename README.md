@@ -51,14 +51,14 @@ curl -fsSL \
 That script:
 
 - downloads the latest `xs-<target>.tar.gz` release artifact for the current
-  platform
+  platform into an `install/` subdirectory separate from runtime data
 - verifies the adjacent `.sha256` checksum before extracting
 - installs `xs` and `xmtp-signet` wrappers into an XDG-aware bin path
 
 Default locations:
 
-- Linux / XDG: `${XDG_DATA_HOME:-~/.local/share}/xmtp-signet` and `${XDG_BIN_HOME:-~/.local/bin}`
-- macOS fallback: `~/Library/Application Support/xmtp-signet` and either `~/.local/bin` or `~/bin`
+- Linux / XDG: `${XDG_DATA_HOME:-~/.local/share}/xmtp-signet/install` and `${XDG_BIN_HOME:-~/.local/bin}`
+- macOS fallback: `~/Library/Application Support/xmtp-signet/install` and either `~/.local/bin` or `~/bin`
 
 Safer inspect-first variant:
 

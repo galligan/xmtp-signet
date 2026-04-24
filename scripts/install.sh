@@ -18,16 +18,16 @@ REPO_EXPLICIT=0
 
 default_install_dir() {
   if [[ -n "${XDG_DATA_HOME:-}" ]]; then
-    printf '%s/xmtp-signet\n' "$XDG_DATA_HOME"
+    printf '%s/xmtp-signet/install\n' "$XDG_DATA_HOME"
     return
   fi
 
   case "$UNAME" in
     Darwin)
-      printf '%s/Library/Application Support/xmtp-signet\n' "$HOME"
+      printf '%s/Library/Application Support/xmtp-signet/install\n' "$HOME"
       ;;
     *)
-      printf '%s/.local/share/xmtp-signet\n' "$HOME"
+      printf '%s/.local/share/xmtp-signet/install\n' "$HOME"
       ;;
   esac
 }
@@ -194,6 +194,8 @@ require_tool() {
 }
 
 ensure_checkout() {
+  warn_on_legacy_install
+
   if [[ ! -e "$INSTALL_DIR" ]]; then
     mkdir -p "$(dirname "$INSTALL_DIR")"
     echo "==> Cloning xmtp-signet into $INSTALL_DIR"
@@ -305,9 +307,34 @@ sha_verify() {
   fi
 }
 
+warn_on_legacy_install() {
+  local legacy_dir
+  legacy_dir="$(dirname "$INSTALL_DIR")"
+
+  if [[ "$(basename "$INSTALL_DIR")" != "install" || ! -d "$legacy_dir" ]]; then
+    return
+  fi
+
+  local legacy_binary=0
+  local candidate
+  for candidate in "$legacy_dir"/xs-*; do
+    if [[ -e "$candidate" ]]; then
+      legacy_binary=1
+      break
+    fi
+  done
+
+  if [[ "$legacy_binary" == "1" || -d "$legacy_dir/.git" ]]; then
+    echo "warning: found a legacy install at $legacy_dir" >&2
+    echo "The wrapper will be updated to use $INSTALL_DIR." >&2
+    echo "After verifying xs works, you can remove old binary/source install artifacts from the legacy path." >&2
+  fi
+}
+
 ensure_binary() {
   detect_target
   resolve_release_urls
+  warn_on_legacy_install
 
   if [[ -e "$INSTALL_DIR" ]]; then
     if [[ "$UPDATE" == "1" ]]; then
