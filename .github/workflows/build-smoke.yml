@@ -21,9 +21,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - bun-linux-x64
-          - bun-linux-arm64
+        include:
+          - target: bun-linux-x64
+            file_pattern: 'ELF.*x86-64'
+          - target: bun-linux-arm64
+            file_pattern: 'ELF.*ARM aarch64'
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +52,7 @@ jobs:
           bin="packages/cli/dist/xs-${short}"
           test -x "$bin"
           file "$bin" | tee /tmp/file.out
-          grep -q 'ELF.*executable' /tmp/file.out
+          grep -q '${{ matrix.file_pattern }}' /tmp/file.out
 
       - name: Smoke test --help in minimal ubuntu container
         if: matrix.target == 'bun-linux-x64'
