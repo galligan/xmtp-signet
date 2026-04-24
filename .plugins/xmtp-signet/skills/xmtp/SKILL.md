@@ -8,9 +8,10 @@ description: >
   inspection, credential inspection, policy inspection), and how harnesses
   connect over WebSocket or MCP without direct XMTP access. Use this skill
   whenever someone asks what the signet is, how to run an agent on top of it,
-  how to send or read messages through it, how to inspect seals or
-  credentials, how reveals work, how trust is surfaced, or how a harness
-  should stream and respond to XMTP traffic through the signet. For
+  how to send or read messages through it, how to join or host Convos
+  conversations, how to inspect seals or credentials, how reveals work,
+  how trust is surfaced, or how a harness should stream and respond to XMTP
+  traffic through the signet. For
   orchestrator-side setup — bootstrapping the daemon, creating operators,
   issuing credentials, managing keys and wallets — use the `xmtp-admin`
   skill.
@@ -83,6 +84,99 @@ an implementation detail.
 For the short operator handoff, see
 `references/openclaw-adapter.md`. For the full bootstrap guide, see
 `docs/agent-setup/openclaw.md`.
+
+## Convos interop
+
+Convos is the human-facing XMTP app and onboarding scheme, not a harness
+adapter. Do not look for or invent `xs agent setup convos`. The agent still
+connects through the normal signet transport or harness adapter (WebSocket,
+MCP, OpenClaw, etc.); Convos interop happens by joining or creating an XMTP
+chat with the Convos-shaped `xs chat` flows, then issuing a credential scoped
+to that `conv_...`.
+
+The usual layering is:
+
+1. The orchestrator bootstraps the signet, daemon, operator, and harness
+   adapter. Use `xmtp-admin` for these privileged setup steps.
+2. The signet joins or hosts a Convos-compatible chat through `xs chat`.
+3. The orchestrator issues the agent a credential for the resulting `conv_...`.
+4. The agent sends, reads, replies, and reacts through signet using that
+   credential; the human participant sees the same group in Convos.
+
+### Join a Convos-created chat
+
+Use this when a human already has a Convos conversation and wants to invite the
+agent into it.
+
+```bash
+# Privileged setup: use xmtp-admin for the exact policy and operator choices.
+xs init --env production --label owner
+xs daemon start
+xs operator create --label support-agent --scope per-chat
+
+# Human provides a Convos invite URL, usually popup.convos.org/v2?i=...
+xs chat join "<convos-invite-url>" \
+  --as support-agent \
+  --profile-name "Support Agent"
+
+xs chat list
+xs cred issue \
+  --op op_... \
+  --chat conv_... \
+  --allow send,reply,react,read-messages,stream-messages
+```
+
+After the credential is issued, the harness connects with that credential over
+the normal signet transport. For OpenClaw, provision the adapter separately:
+
+```bash
+xs agent setup openclaw
+xs agent status openclaw
+```
+
+### Host a chat for a Convos user
+
+Use this when the agent or orchestrator should create the group and hand a
+Convos-compatible invite to the human.
+
+```bash
+xs init --env production --label owner
+xs daemon start
+xs operator create --label host-agent --scope per-chat
+
+xs chat create \
+  --name "Agent Room" \
+  --invite \
+  --profile-name "Host Agent" \
+  --format both
+
+# Human opens the link or scans the QR code shown by the command.
+
+xs chat list
+xs cred issue \
+  --op op_... \
+  --chat conv_... \
+  --allow send,reply,react,read-messages,stream-messages
+```
+
+Use `xs chat invite conv_... --format both` to regenerate the Convos-compatible
+invite output for an existing chat.
+
+### Useful checks
+
+```bash
+xs status --json
+xs chat info conv_...
+xs chat member list conv_...
+xs msg send "hello from the agent" --to conv_...
+xs msg list --from conv_...
+```
+
+If the agent can send but cannot see inbound messages, inspect the credential
+with `xs cred info cred_...`, confirm the chat is in scope, and verify the
+effective scopes/content-type allowlist. If the human never appears in the
+group, check `xs chat member list conv_...` first; that is a Convos/XMTP join
+issue, not a harness adapter issue.
 
 ## Mental model
 
