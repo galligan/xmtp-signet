@@ -16,8 +16,14 @@ permissions:
 
 jobs:
   build-linux-smoke:
-    name: Build smoke (bun-linux-x64)
+    name: Build smoke (${{ matrix.target }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - bun-linux-x64
+          - bun-linux-arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -34,17 +40,20 @@ jobs:
         run: bun run build
 
       - name: Build binary
-        run: bun run --cwd packages/cli build:binary -- --target bun-linux-x64
+        run: bun run --cwd packages/cli build:binary -- --target ${{ matrix.target }}
 
       - name: Verify ELF executable
         run: |
           set -euo pipefail
-          bin="packages/cli/dist/xs-linux-x64"
+          short="${{ matrix.target }}"
+          short="${short#bun-}"
+          bin="packages/cli/dist/xs-${short}"
           test -x "$bin"
           file "$bin" | tee /tmp/file.out
           grep -q 'ELF.*executable' /tmp/file.out
 
       - name: Smoke test --help in minimal ubuntu container
+        if: matrix.target == 'bun-linux-x64'
         run: |
           set -euo pipefail
           docker run --rm \
