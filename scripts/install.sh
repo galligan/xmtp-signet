@@ -305,9 +305,25 @@ sha_verify() {
   fi
 }
 
+warn_on_legacy_install() {
+  local legacy_dir
+  legacy_dir="$(dirname "$INSTALL_DIR")"
+
+  if [[ "$(basename "$INSTALL_DIR")" != "install" || ! -d "$legacy_dir" ]]; then
+    return
+  fi
+
+  if [[ -f "$legacy_dir/xs-$TARGET" || -f "$legacy_dir/xs-$TARGET.json" || -d "$legacy_dir/.git" ]]; then
+    echo "warning: found a legacy install at $legacy_dir" >&2
+    echo "The wrapper will be updated to use $INSTALL_DIR." >&2
+    echo "After verifying xs works, you can remove old binary/source install artifacts from the legacy path." >&2
+  fi
+}
+
 ensure_binary() {
   detect_target
   resolve_release_urls
+  warn_on_legacy_install
 
   if [[ -e "$INSTALL_DIR" ]]; then
     if [[ "$UPDATE" == "1" ]]; then
