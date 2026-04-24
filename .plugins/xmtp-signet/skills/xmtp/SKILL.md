@@ -169,14 +169,17 @@ xs status --json
 xs chat info conv_...
 xs chat member list conv_...
 xs msg send "hello from the agent" --to conv_...
-xs msg list --from conv_...
+xs msg list --from conv_... --dangerously-allow-message-read
 ```
 
 If the agent can send but cannot see inbound messages, inspect the credential
 with `xs cred info cred_...`, confirm the chat is in scope, and verify the
-effective scopes/content-type allowlist. If the human never appears in the
-group, check `xs chat member list conv_...` first; that is a Convos/XMTP join
-issue, not a harness adapter issue.
+effective scopes/content-type allowlist. The `xs msg list` check is an
+admin-side diagnostic, so it needs the explicit message-read elevation flag; a
+harness using a credential should read through the normal credential-scoped
+transport instead. If the human never appears in the group, check
+`xs chat member list conv_...` first; that is a Convos/XMTP join issue, not a
+harness adapter issue.
 
 ## Mental model
 
