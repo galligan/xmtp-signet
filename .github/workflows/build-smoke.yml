@@ -60,3 +60,39 @@ jobs:
             -v "$GITHUB_WORKSPACE/packages/cli/dist:/dist:ro" \
             ubuntu:22.04 \
             /dist/xs-linux-x64 --help
+
+  build-macos-smoke:
+    name: Build smoke (bun-darwin-arm64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build workspace packages
+        # build:binary follows workspace exports.default -> dist/index.js,
+        # so the workspace packages need their dist/ populated first.
+        run: bun run build
+
+      - name: Build xs binary
+        run: bun run --cwd packages/cli build:binary -- --target bun-darwin-arm64
+
+      - name: Build signet-signer
+        working-directory: signet-signer
+        run: swift build -c release
+
+      - name: Verify macOS arm64 artifacts
+        run: |
+          set -euo pipefail
+          file packages/cli/dist/xs-darwin-arm64 | tee /tmp/xs-file.out
+          grep -q 'Mach-O.*arm64' /tmp/xs-file.out
+          file signet-signer/.build/release/signet-signer | tee /tmp/signet-signer-file.out
+          grep -q 'Mach-O.*arm64' /tmp/signet-signer-file.out
+
+      - name: Smoke test --help
+        run: packages/cli/dist/xs-darwin-arm64 --help
