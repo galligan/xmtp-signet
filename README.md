@@ -33,7 +33,8 @@ installer script below or create your own alias/wrapper.
 
 ### One-shot installer
 
-If you want a stable installer URL, the preferred public path is:
+If you want a stable installer URL, the preferred public path installs the
+latest prebuilt `xs` binary from GitHub Releases:
 
 ```bash
 curl -fsSL https://xmtp.fyi/install.sh | bash
@@ -49,8 +50,9 @@ curl -fsSL \
 
 That script:
 
-- clones `xmtp-signet` into an XDG-aware checkout path
-- runs `bun run bootstrap`
+- downloads the latest `xs-<target>.tar.gz` release artifact for the current
+  platform
+- verifies the adjacent `.sha256` checksum before extracting
 - installs `xs` and `xmtp-signet` wrappers into an XDG-aware bin path
 
 Default locations:
@@ -70,10 +72,27 @@ bash /tmp/xmtp-signet-install.sh
 
 Useful installer flags:
 
-- `--dir <path>` to choose the checkout path
+- `--binary` download a prebuilt binary from the latest GitHub Release. This is
+  the default mode. Supported on macOS arm64, Linux x64, and Linux arm64. Skips
+  `bun` / `git` requirements on the user's machine.
+- `--source` clone the repo and run `bun run bootstrap` instead of installing a
+  binary. Use this for development installs or unsupported binary platforms.
+- `--release <tag>` pin the binary install to a specific release tag
+  (defaults to `latest`). Only meaningful in binary mode.
+- `--dir <path>` to choose the checkout (or binary install) path
 - `--bin-dir <path>` to choose where the wrappers are written
-- `--ref <branch-or-tag>` to pin what gets cloned
-- `--update` to fast-forward an existing checkout before bootstrapping
+- `--ref <branch-or-tag>` to pin what gets cloned (source mode only)
+- `--update` to refresh an existing install before re-running
+
+The fastest path for a new machine or agent:
+
+```bash
+curl -fsSL https://xmtp.fyi/install.sh | bash
+```
+
+Binary tarballs live at
+`https://github.com/galligan/xmtp-signet/releases/latest/download/xs-<target>.tar.gz`,
+each with an adjacent `.sha256` the installer verifies before extracting.
 
 This script is designed so you can later publish it behind a stable redirect or
 proxy such as `https://xmtp.fyi/install.sh` without changing the script itself.

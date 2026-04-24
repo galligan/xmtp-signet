@@ -49,11 +49,18 @@ fi
 
 If `xs` is not installed yet:
 
-- preferred public installer: `curl -fsSL https://xmtp.fyi/install.sh | bash`
+- **fastest for agents** — fetch the prebuilt binary (macOS arm64, Linux x64,
+  Linux arm64). No `bun` or `git` required on the machine:
+  `curl -fsSL https://xmtp.fyi/install.sh | bash`
+- source install (clone + `bun run bootstrap`):
+  `curl -fsSL https://xmtp.fyi/install.sh | bash -s -- --source`
 - repo-backed fallback:
   `curl -fsSL https://raw.githubusercontent.com/galligan/xmtp-signet/main/scripts/install.sh | bash`
 - if you already have a local clone, use the repo entrypoint directly:
   `bun packages/cli/src/bin.ts --help`
+
+`xs --version` reports the version, short commit, and build timestamp for
+binary installs; source installs show `dev (dev)`.
 
 Then hand off to `xmtp-admin` for `xs init`, daemon startup, operator setup,
 credential issuance, and adapter provisioning.

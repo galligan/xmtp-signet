@@ -1,0 +1,213 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to build from (defaults to the ref the workflow is run on)'
+        required: false
+        type: string
+      draft:
+        description: 'Create a draft GitHub Release at the end'
+        required: false
+        type: boolean
+        default: true
+      include_macos:
+        description: 'Run the macOS build job (costs macOS minutes)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - bun-linux-x64
+          - bun-linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build workspace packages
+        # build:binary follows workspace exports.default -> dist/index.js,
+        # so the workspace packages need their dist/ populated first.
+        run: bun run build
+
+      - name: Resolve short target name
+        id: target
+        run: |
+          short="${{ matrix.target }}"
+          short="${short#bun-}"
+          echo "short=${short}" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        run: bun run --cwd packages/cli build:binary -- --target ${{ matrix.target }}
+
+      - name: Stage artifacts
+        run: |
+          set -euo pipefail
+          short='${{ steps.target.outputs.short }}'
+          mkdir -p artifacts
+          cp "packages/cli/dist/xs-${short}" "artifacts/xs-${short}"
+          cp "packages/cli/dist/xs-${short}.json" "artifacts/xs-${short}.json"
+          tar -czf "artifacts/xs-${short}.tar.gz" -C packages/cli/dist "xs-${short}" "xs-${short}.json"
+          ( cd artifacts && shasum -a 256 "xs-${short}.tar.gz" > "xs-${short}.tar.gz.sha256" )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xs-${{ steps.target.outputs.short }}
+          path: |
+            artifacts/xs-${{ steps.target.outputs.short }}.tar.gz
+            artifacts/xs-${{ steps.target.outputs.short }}.tar.gz.sha256
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS (darwin-arm64)
+    runs-on: macos-latest
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.include_macos)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: bun run build
+
+      - name: Build xs binary (ad-hoc codesigned by build script)
+        run: bun run --cwd packages/cli build:binary -- --target bun-darwin-arm64
+
+      - name: Build signet-signer (Swift)
+        working-directory: signet-signer
+        run: swift build -c release
+
+      - name: Stage artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/staging
+          cp packages/cli/dist/xs-darwin-arm64 artifacts/staging/xs-darwin-arm64
+          cp packages/cli/dist/xs-darwin-arm64.json artifacts/staging/xs-darwin-arm64.json
+          cp signet-signer/.build/release/signet-signer artifacts/staging/signet-signer
+          tar -czf artifacts/xs-darwin-arm64.tar.gz -C artifacts/staging \
+            xs-darwin-arm64 xs-darwin-arm64.json signet-signer
+          ( cd artifacts && shasum -a 256 xs-darwin-arm64.tar.gz > xs-darwin-arm64.tar.gz.sha256 )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xs-darwin-arm64
+          path: |
+            artifacts/xs-darwin-arm64.tar.gz
+            artifacts/xs-darwin-arm64.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    needs:
+      - build-linux
+      - build-macos
+    runs-on: ubuntu-latest
+    if: >-
+      always()
+      && needs.build-linux.result == 'success'
+      && (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped')
+      && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Resolve checked-out commit
+        id: checkout
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: xs-*
+
+      - name: Flatten artifacts and build SHA256SUMS
+        id: stage
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # download-artifact@v4 places each artifact under artifacts/<name>/
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec mv {} release/ \;
+          ( cd release && cat ./*.tar.gz.sha256 > SHA256SUMS )
+          ls -la release
+
+      - name: Determine release metadata
+        id: meta
+        env:
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+            {
+              echo "tag=${tag}"
+              echo "name=${tag}"
+              echo "draft=false"
+              echo "prerelease=false"
+            } >> "$GITHUB_OUTPUT"
+          else
+            short_sha="${CHECKOUT_SHA::7}"
+            tag="manual-${GITHUB_RUN_ID}-${short_sha}"
+            {
+              echo "tag=${tag}"
+              echo "name=${tag}"
+              echo "draft=${{ inputs.draft }}"
+              echo "prerelease=true"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          NAME: ${{ steps.meta.outputs.name }}
+          DRAFT: ${{ steps.meta.outputs.draft }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.sha }}
+        run: |
+          set -euo pipefail
+          args=(--generate-notes --title "$NAME")
+          if [[ "$DRAFT" == "true" ]]; then
+            args+=(--draft)
+          fi
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          # For manual runs the tag doesn't exist yet; --target pins it to the current sha.
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
+            args+=(--target "$CHECKOUT_SHA")
+          fi
+          gh release create "$TAG" "${args[@]}" release/*.tar.gz release/*.sha256 release/SHA256SUMS

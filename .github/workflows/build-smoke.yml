@@ -1,0 +1,100 @@
+name: Build Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/cli/**'
+      - 'scripts/install.sh'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/build-smoke.yml'
+      - '.bun-version'
+      - 'bun.lock'
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-smoke:
+    name: Build smoke (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-linux-x64
+            file_pattern: 'ELF.*x86-64'
+          - target: bun-linux-arm64
+            file_pattern: 'ELF.*ARM aarch64'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build workspace packages
+        # build:binary follows workspace exports.default -> dist/index.js,
+        # so the workspace packages need their dist/ populated first.
+        run: bun run build
+
+      - name: Build binary
+        run: bun run --cwd packages/cli build:binary -- --target ${{ matrix.target }}
+
+      - name: Verify ELF executable
+        run: |
+          set -euo pipefail
+          short="${{ matrix.target }}"
+          short="${short#bun-}"
+          bin="packages/cli/dist/xs-${short}"
+          test -x "$bin"
+          file "$bin" | tee /tmp/file.out
+          grep -q '${{ matrix.file_pattern }}' /tmp/file.out
+
+      - name: Smoke test --help in minimal ubuntu container
+        if: matrix.target == 'bun-linux-x64'
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/packages/cli/dist:/dist:ro" \
+            ubuntu:22.04 \
+            /dist/xs-linux-x64 --help
+
+  build-macos-smoke:
+    name: Build smoke (bun-darwin-arm64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build workspace packages
+        # build:binary follows workspace exports.default -> dist/index.js,
+        # so the workspace packages need their dist/ populated first.
+        run: bun run build
+
+      - name: Build xs binary
+        run: bun run --cwd packages/cli build:binary -- --target bun-darwin-arm64
+
+      - name: Build signet-signer
+        working-directory: signet-signer
+        run: swift build -c release
+
+      - name: Verify macOS arm64 artifacts
+        run: |
+          set -euo pipefail
+          file packages/cli/dist/xs-darwin-arm64 | tee /tmp/xs-file.out
+          grep -q 'Mach-O.*arm64' /tmp/xs-file.out
+          file signet-signer/.build/release/signet-signer | tee /tmp/signet-signer-file.out
+          grep -q 'Mach-O.*arm64' /tmp/signet-signer-file.out
+
+      - name: Smoke test --help
+        run: packages/cli/dist/xs-darwin-arm64 --help

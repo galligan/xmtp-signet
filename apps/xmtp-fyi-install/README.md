@@ -9,6 +9,13 @@ https://xmtp.fyi/install.sh
 The Worker proxies the repo-backed installer script from GitHub so the public
 URL stays stable even if the repo layout or bootstrap story changes.
 
+The installer supports prebuilt-binary installs by default and source installs
+with `--source`. The Worker itself is transport-only — it proxies
+`scripts/install.sh` from `main` and does not serve binaries. Binary tarballs
+(`xs-<target>.tar.gz` + `.sha256`) live at GitHub Releases:
+`https://github.com/galligan/xmtp-signet/releases`. The installer fetches them
+directly; no Worker change is required when a new release is cut.
+
 ## Expected URLs
 
 - `/` - plain-text landing output with the install command
