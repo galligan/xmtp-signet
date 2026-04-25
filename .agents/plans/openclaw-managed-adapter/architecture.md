@@ -23,6 +23,69 @@ to other harnesses later.
   credentials, seals, or subagent delegation policy.
 - Do not let agents self-increase permissions.
 
+## Adapter Kit
+
+Create a shared `packages/adapter-kit` package before deepening the OpenClaw
+implementation.
+
+The current OpenClaw adapter already has setup, status, doctor, artifact,
+bridge config, checkpoint, envelope, and runtime pieces under
+`adapters/openclaw/src`. The Hermes reference runtime under
+`.reference/convos-agents/runtime-hermes` has a different harness shape, but it
+also needs setup lifecycle, pending invite state, active conversation status,
+inbound event normalization, outbound message routing, and session-bound
+runtime control. Those common needs should not be copied into every adapter.
+
+`packages/adapter-kit` should own harness-agnostic primitives:
+
+- adapter descriptor and managed-state contracts
+- adapter artifact install/update plans and manifest checks
+- XDG adapter path resolution for `~/.local/share/xmtp-signet/adapters/<name>`
+- config projection planning, dry-run output, backups, writes, and drift
+  diagnostics
+- conflict detection for managed versus user-authored config blocks
+- setup plan/apply result shapes, including pending-or-ready setup status
+- selector parse/resolve request and result contracts
+- owner bootstrap state, code expiry, and diagnosable pending owner link state
+- session credential lifecycle hooks and revocation/reacquire contracts
+- normalized channel event classes and activation/ingestion/search decisions
+- common status and doctor result shapes
+- redaction helpers so output never leaks credential or private state
+- fixtures and test helpers for first-party adapters
+
+The kit should not own harness-specific details:
+
+- OpenClaw `plugins` and `channels.xmtp` config shape
+- Hermes HTTP routes or runtime process shape
+- concrete agent/session naming rules
+- XMTP SDK custody or raw signer access
+- CLI command dispatch or process spawning
+
+Ownership should be:
+
+```text
+packages/adapter-kit
+  Shared lifecycle, projection, descriptor, selector, event, session, and
+  diagnostic contracts.
+
+adapters/openclaw
+  OpenClaw plugin packaging, OpenClaw config projection, OpenClaw session/event
+  translation, and OpenClaw-facing status language.
+
+adapters/hermes
+  Hermes runtime integration, Convos/Hermes setup endpoints or equivalent
+  bridge control, Hermes session naming, and Hermes-facing status language.
+
+packages/cli
+  `xs agent <verb> <adapter>` registry, dispatch, config loading, output, and
+  user prompts.
+```
+
+The first implementation pass should be conservative: define contracts and
+small helpers only where OpenClaw and Hermes both exert pressure. The package
+should make duplication harder, not introduce a framework that adapters have to
+fight.
+
 ## Managed Projection
 
 OpenClaw config should be a managed projection, but editable in familiar

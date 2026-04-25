@@ -53,16 +53,24 @@ Signet owns the durable and sensitive state:
 The OpenClaw adapter/plugin acts as a harness projection over signet's
 canonical model. It must not become a second XMTP runtime.
 
+The shared implementation should start in `packages/adapter-kit`, not inside
+`adapters/openclaw`. OpenClaw is the first concrete harness, but Hermes-style
+agents and later harnesses should reuse the same setup, descriptor, projection,
+status, doctor, selector, event, and session credential primitives.
+
 ## Plan Docs
 
 - `architecture.md` - managed adapter boundary, selectors, contacts, events,
   and status/doctor model.
+- `adapter-kit.md` - reusable `packages/adapter-kit` boundary and
+  OpenClaw/Hermes research snapshot.
 - `stack.md` - natural PR stack and verification checkpoints.
 - `issue-plan.md` - tracking issue and subissue bodies.
 
 ## GitHub Issues
 
 - Tracking: #375
+- Adapter foundation: #390, #391
 - Setup stack: #376, #377, #378, #379
 - Channel model stack: #380, #381, #382, #384
 - Runtime/action stack: #383, #385, #386
@@ -87,3 +95,6 @@ canonical model. It must not become a second XMTP runtime.
 - Do not let agents self-increase permissions.
 - Prefer additive, diagnosable slices. Every PR should either add a contract,
   a dry-run surface, a status/doctor check, or one clear runtime capability.
+- Before adding OpenClaw-specific setup, status, doctor, selector, event, or
+  session logic, decide whether the reusable contract belongs in
+  `packages/adapter-kit`.

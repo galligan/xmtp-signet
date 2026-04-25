@@ -7,9 +7,10 @@ Parent issue: #375
 ## Goal
 
 Build the managed OpenClaw adapter in a natural stacked sequence. The first
-stack should get to a diagnosable setup flow. The second stack should get to a
-working read-only channel. Later stacks add outbound actions, contacts, and
-delegation.
+stack should establish `packages/adapter-kit` as the reusable foundation. The
+second stack should get to a diagnosable OpenClaw setup flow. The third stack
+should get to a working read-only channel. Later stacks add outbound actions,
+contacts, and delegation.
 
 ## Stack Invariants
 
@@ -20,6 +21,9 @@ delegation.
 - Never place raw keys, raw signet private state, or broad credential secrets
   into OpenClaw config.
 - Generated OpenClaw config is a projection. Signet remains source of truth.
+- Shared lifecycle, descriptor, config projection, selector, event, session,
+  status, and doctor contracts belong in `packages/adapter-kit` unless they are
+  truly OpenClaw-specific.
 - Every runtime slice must have at least one status or doctor hook so partial
   setup is explainable.
 
@@ -28,19 +32,46 @@ delegation.
 | Order | Issue | Slice | PR title |
 |---:|---:|---|---|
 | 0 | #375 | Plan packet | `docs(openclaw): add managed adapter execution plan` |
-| 1 | #376 | Plugin artifact install | `feat(adapter): install OpenClaw plugin artifacts from xs` |
-| 2 | #377 | Managed config projection | `feat(cli): write managed OpenClaw channel config` |
-| 3 | #378 | Descriptor schemas/state | `feat(schemas): define OpenClaw adapter descriptor state` |
-| 4 | #379 | Owner bootstrap | `feat(adapter): add OpenClaw owner bootstrap flow` |
-| 5 | #380 | Selector resolution | `feat(policy): resolve OpenClaw adapter selectors` |
-| 6 | #381 | Contacts primitives | `feat(contacts): model scoped contact links and groups` |
-| 7 | #382 | Session credentials | `feat(adapter): issue OpenClaw session-scoped credentials` |
-| 8 | #384 | Normalized events | `feat(adapter): normalize signet events for OpenClaw` |
-| 9 | #386 | Outbound actions | `feat(openclaw): send through signet credentials` |
-| 10 | #383 | Delegation | `feat(openclaw): delegate subagent credentials explicitly` |
-| 11 | #385 | Group creation | `feat(openclaw): create groups through owner side channel` |
-| 12 | #387 | Full status/doctor | `feat(cli): expand OpenClaw adapter status and doctor` |
-| 13 | #388 | Docs and smoke | `docs(openclaw): document managed setup and smoke flow` |
+| 1 | #390 | Adapter kit foundation | `feat(adapter-kit): add shared harness adapter foundation` |
+| 2 | #391 | Hermes consumer check | `docs(adapter-kit): map Hermes requirements to shared adapter contracts` |
+| 3 | #376 | Plugin artifact install | `feat(adapter): install OpenClaw plugin artifacts from xs` |
+| 4 | #377 | Managed config projection | `feat(cli): write managed OpenClaw channel config` |
+| 5 | #378 | Descriptor schemas/state | `feat(schemas): define OpenClaw adapter descriptor state` |
+| 6 | #379 | Owner bootstrap | `feat(adapter): add OpenClaw owner bootstrap flow` |
+| 7 | #380 | Selector resolution | `feat(policy): resolve OpenClaw adapter selectors` |
+| 8 | #381 | Contacts primitives | `feat(contacts): model scoped contact links and groups` |
+| 9 | #382 | Session credentials | `feat(adapter): issue OpenClaw session-scoped credentials` |
+| 10 | #384 | Normalized events | `feat(adapter): normalize signet events for OpenClaw` |
+| 11 | #386 | Outbound actions | `feat(openclaw): send through signet credentials` |
+| 12 | #383 | Delegation | `feat(openclaw): delegate subagent credentials explicitly` |
+| 13 | #385 | Group creation | `feat(openclaw): create groups through owner side channel` |
+| 14 | #387 | Full status/doctor | `feat(cli): expand OpenClaw adapter status and doctor` |
+| 15 | #388 | Docs and smoke | `docs(openclaw): document managed setup and smoke flow` |
+
+## Phase 0: Adapter Kit Stack
+
+Purpose: make OpenClaw the first consumer of a reusable adapter foundation, not
+the place where reusable harness logic becomes trapped.
+
+Includes:
+
+- `packages/adapter-kit` workspace package
+- shared descriptor and managed-state contracts
+- shared artifact path, install plan, and manifest helpers
+- shared config projection operations for dry-run, backup, write, drift, and
+  redacted output
+- shared setup/status/doctor result contracts
+- shared selector resolution request/result contracts
+- shared normalized event and session credential lifecycle contracts
+- a Hermes requirements mapping to validate the kit against a second harness
+
+Exit criteria:
+
+- OpenClaw follow-on issues can depend on adapter-kit primitives instead of
+  duplicating setup/config/status/doctor logic.
+- The kit exports harness-agnostic primitives only.
+- Hermes mapping calls out any OpenClaw-specific assumptions before package
+  implementation proceeds too far.
 
 ## Phase 1: Setup Stack
 
@@ -110,6 +141,14 @@ Exit criteria:
   returns invite material.
 
 ## Verification Checkpoints
+
+After phase 0:
+
+- adapter-kit package tests
+- OpenClaw fixture tests for projection/diagnostics
+- Hermes mapping note reviewed against `.reference/convos-agents/runtime-hermes`
+- `bun run typecheck`
+- `bun run docs:check`
 
 After phase 1:
 

@@ -3,8 +3,9 @@
 Status: planning
 Last updated: 2026-04-25
 
-Created GitHub issues: #375 through #388. Subissues #376 through #388 are linked
-under tracking issue #375.
+Created GitHub issues: #375 through #388, plus adapter-kit issues #390 and
+#391. Subissues #376 through #388, #390, and #391 are linked under tracking
+issue #375.
 
 ## Tracking Issue
 
@@ -74,6 +75,100 @@ breakdown.
 ```
 
 ## Subissues
+
+### 0. Define shared adapter-kit foundation
+
+Issue: #390
+
+Title:
+
+```text
+adapter-kit: define shared harness adapter foundation
+```
+
+Body:
+
+```markdown
+## Summary
+
+Create `packages/adapter-kit` as the shared foundation for first-party harness
+adapters such as OpenClaw, Hermes, and future agent runtimes.
+
+OpenClaw should consume this kit instead of embedding reusable setup, config,
+identity, session, event, and diagnostic logic inside `adapters/openclaw`.
+
+## Requirements
+
+- Add workspace package `@xmtp/signet-adapter-kit` under
+  `packages/adapter-kit`.
+- Define shared contracts for:
+  - adapter descriptors
+  - managed adapter state
+  - setup plan/apply results
+  - artifact install manifests
+  - config projection operations
+  - drift diagnostics
+  - status/doctor results
+  - normalized channel events
+  - selector resolution requests/results
+  - owner bootstrap state
+  - session credential lifecycle hooks
+- Provide helpers for XDG adapter paths, atomic backup/write,
+  dry-run/print-config planning, managed block conflict detection, and
+  redacted output.
+- Keep harness-specific config shapes out of the kit; adapters provide
+  harness-specific projection adapters.
+- Keep CLI dispatch in `packages/cli`, not the kit.
+- Include focused tests and a README showing how OpenClaw and Hermes should
+  consume the kit.
+
+## Acceptance Criteria
+
+- `packages/adapter-kit` exports only harness-agnostic primitives.
+- OpenClaw setup/status/doctor follow-on issues can depend on the kit rather
+  than duplicating lifecycle logic.
+- A Hermes adapter spike can map its runtime requirements to the same contracts
+  without OpenClaw-specific names leaking into the kit.
+```
+
+### 0.1. Map Hermes runtime requirements onto adapter-kit
+
+Issue: #391
+
+Title:
+
+```text
+hermes: map runtime adapter requirements onto adapter-kit
+```
+
+Body:
+
+```markdown
+## Summary
+
+Use `.reference/convos-agents/runtime-hermes` to validate that
+`packages/adapter-kit` can support a second harness/runtime shape without
+becoming OpenClaw-specific.
+
+This is a design validation issue, not the full Hermes implementation.
+
+## Requirements
+
+- Inventory Hermes runtime setup/config/session/event expectations from
+  `.reference/convos-agents/runtime-hermes`.
+- Identify which needs are satisfied by `packages/adapter-kit` primitives.
+- Identify Hermes-specific adapter responsibilities.
+- Produce a short plan note under `.agents/plans/openclaw-managed-adapter/` or
+  a future `.agents/plans/hermes-adapter/`.
+- Do not implement full Hermes support in this issue.
+
+## Acceptance Criteria
+
+- The adapter-kit plan has at least one non-OpenClaw consumer check.
+- Any OpenClaw-specific assumptions in shared contracts are called out before
+  implementation.
+- Follow-up Hermes implementation issues can be created from the mapping.
+```
 
 ### 1. Package and install OpenClaw plugin artifacts from `xs`
 
